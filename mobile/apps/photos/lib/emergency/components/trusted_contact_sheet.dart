@@ -1,22 +1,19 @@
+import "package:ente_components/ente_components.dart";
 import "package:flutter/material.dart";
 import "package:photos/emergency/components/recovery_date_selector.dart";
 import "package:photos/emergency/model.dart";
 import "package:photos/generated/l10n.dart";
-import "package:photos/theme/ente_theme.dart";
-import "package:photos/ui/components/base_bottom_sheet.dart";
-import "package:photos/ui/components/buttons/button_widget_v2.dart";
 
 Future<TrustedContactResult?> showTrustedContactSheet(
   BuildContext context, {
   required EmergencyContact contact,
 }) {
-  return showBaseBottomSheet<TrustedContactResult>(
-    context,
-    title: contact.emergencyContact.email,
-    headerSpacing: 20,
-    padding: const EdgeInsets.all(16),
-    backgroundColor: getEnteColorScheme(context).backgroundColour,
-    child: TrustedContactSheet(contact: contact),
+  return showBottomSheetComponent<TrustedContactResult>(
+    context: context,
+    builder: (_) => BottomSheetComponent(
+      title: contact.emergencyContact.email,
+      content: TrustedContactSheet(contact: contact),
+    ),
   );
 }
 
@@ -53,8 +50,6 @@ class _TrustedContactSheetState extends State<TrustedContactSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = getEnteColorScheme(context);
-    final textTheme = getEnteTextTheme(context);
     final l10n = AppLocalizations.of(context);
 
     final isPending = widget.contact.isPendingInvite();
@@ -70,9 +65,11 @@ class _TrustedContactSheetState extends State<TrustedContactSheet> {
       children: [
         Text(
           description,
-          style: textTheme.small.copyWith(color: colorScheme.textMuted),
+          style: TextStyles.body.copyWith(
+            color: context.componentColors.textLight,
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: Spacing.xl),
         RecoveryDateSelector(
           selectedDays: _selectedRecoveryDays,
           onDaysChanged: (days) {
@@ -81,10 +78,9 @@ class _TrustedContactSheetState extends State<TrustedContactSheet> {
             });
           },
         ),
-        const SizedBox(height: 20),
-        ButtonWidgetV2(
-          buttonType: ButtonTypeV2.primary,
-          labelText: l10n.updateTime,
+        const SizedBox(height: Spacing.xl),
+        ButtonComponent(
+          label: l10n.updateTime,
           isDisabled: !_hasChanges,
           onTap: !_hasChanges
               ? null
@@ -96,18 +92,20 @@ class _TrustedContactSheetState extends State<TrustedContactSheet> {
                     ),
                   );
                 },
+          shouldShowSuccessState: false,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: Spacing.lg),
         Center(
-          child: ButtonWidgetV2(
-            buttonType: ButtonTypeV2.tertiaryCritical,
-            labelText: removeLabel,
+          child: ButtonComponent(
+            variant: ButtonComponentVariant.tertiaryCritical,
+            size: ButtonComponentSize.small,
+            label: removeLabel,
             onTap: () async {
               Navigator.of(context).pop(
                 const TrustedContactResult(action: TrustedContactAction.revoke),
               );
             },
-            shouldSurfaceExecutionStates: false,
+            shouldShowSuccessState: false,
           ),
         ),
       ],

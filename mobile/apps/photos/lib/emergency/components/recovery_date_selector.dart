@@ -1,8 +1,6 @@
+import "package:ente_components/ente_components.dart";
 import "package:flutter/material.dart";
 import "package:photos/l10n/l10n.dart";
-import "package:photos/theme/colors.dart";
-import "package:photos/theme/ente_theme.dart";
-import "package:photos/theme/text_style.dart";
 
 class RecoveryDateSelector extends StatelessWidget {
   final int selectedDays;
@@ -16,75 +14,22 @@ class RecoveryDateSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = getEnteColorScheme(context);
-    final textTheme = getEnteTextTheme(context);
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        _DayChip(
-          label: context.l10n.trashDaysLeft(count: 7),
-          isSelected: selectedDays == 7,
-          onTap: () => onDaysChanged(7),
-          colorScheme: colorScheme,
-          textTheme: textTheme,
-        ),
-        const SizedBox(width: 12),
-        _DayChip(
-          label: context.l10n.trashDaysLeft(count: 14),
-          isSelected: selectedDays == 14,
-          onTap: () => onDaysChanged(14),
-          colorScheme: colorScheme,
-          textTheme: textTheme,
-        ),
-        const SizedBox(width: 12),
-        _DayChip(
-          label: context.l10n.trashDaysLeft(count: 30),
-          isSelected: selectedDays == 30,
-          onTap: () => onDaysChanged(30),
-          colorScheme: colorScheme,
-          textTheme: textTheme,
-        ),
-      ],
-    );
-  }
-}
-
-class _DayChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final EnteColorScheme colorScheme;
-  final EnteTextTheme textTheme;
-
-  const _DayChip({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-    required this.colorScheme,
-    required this.textTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? colorScheme.greenBase : colorScheme.fillFaint,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: textTheme.bodyBold.copyWith(
-            color: isSelected ? Colors.white : colorScheme.textBase,
-          ),
-        ),
-      ),
+    return Wrap(
+      spacing: Spacing.sm,
+      runSpacing: Spacing.sm,
+      children: [7, 14, 30]
+          .map((days) {
+            final isSelected = selectedDays == days;
+            return FilterChipComponent(
+              label: context.l10n.trashDaysLeft(count: days),
+              state: isSelected
+                  ? FilterChipComponentState.selected
+                  : FilterChipComponentState.unselected,
+              trailing: isSelected ? const Icon(Icons.check_rounded) : null,
+              onChanged: (_) => onDaysChanged(days),
+            );
+          })
+          .toList(growable: false),
     );
   }
 }

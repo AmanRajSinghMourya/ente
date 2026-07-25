@@ -7,6 +7,7 @@ import "package:ente_crypto/ente_crypto.dart";
 import "package:flutter/cupertino.dart";
 import "package:logging/logging.dart";
 import "package:photos/core/configuration.dart";
+import "package:photos/emergency/components/email_action_sheet.dart";
 import "package:photos/emergency/model.dart";
 import "package:photos/gateways/emergency/emergency_gateway.dart";
 import "package:photos/gateways/users/models/key_attributes.dart";
@@ -15,8 +16,6 @@ import "package:photos/gateways/users/models/srp.dart";
 import "package:photos/generated/l10n.dart";
 import "package:photos/service_locator.dart";
 import "package:photos/services/account/user_service.dart";
-import "package:photos/ui/common/user_dialogs.dart";
-import "package:photos/ui/components/alert_bottom_sheet.dart";
 import "package:photos/utils/email_util.dart";
 import "package:pointycastle/pointycastle.dart";
 import "package:pointycastle/random/fortuna_random.dart";
@@ -48,27 +47,25 @@ class EmergencyContactService {
   }) async {
     if (!isValidEmail(email)) {
       if (context == null || !context.mounted) return false;
-      await showAlertBottomSheet(
+      await showLegacyAlertSheet(
         context,
         title: AppLocalizations.of(context).letsTryThatAgain,
         message: AppLocalizations.of(context).enterValidEmail,
-        assetPath: "assets/warning-grey.png",
       );
       return false;
     } else if (email.trim() == Configuration.instance.getEmail()) {
       if (context == null || !context.mounted) return false;
-      await showAlertBottomSheet(
+      await showLegacyAlertSheet(
         context,
         title: AppLocalizations.of(context).oops,
         message: AppLocalizations.of(context).youCannotShareWithYourself,
-        assetPath: "assets/warning-grey.png",
       );
       return false;
     }
     final String? publicKey = await _userService.getPublicKey(email);
     if (publicKey == null) {
       if (context == null || !context.mounted) return false;
-      await showInviteDialog(context, email);
+      await showLegacyInviteSheet(context, email: email);
       return false;
     }
     final Uint8List recoveryKey = Configuration.instance.getRecoveryKey();
