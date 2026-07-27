@@ -7,13 +7,14 @@ import "package:ente_crypto/ente_crypto.dart";
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:password_strength/password_strength.dart';
-import "package:photos/emergency/components/email_action_sheet.dart";
 import "package:photos/emergency/emergency_service.dart";
 import "package:photos/emergency/model.dart";
 import "package:photos/gateways/users/models/key_attributes.dart";
 import "package:photos/gateways/users/models/set_keys_request.dart";
 import "package:photos/generated/l10n.dart";
+import "package:photos/ui/notification/toast.dart";
 import "package:photos/ui/settings/components/settings_page_scaffold.dart";
+import "package:photos/utils/dialog_util.dart";
 
 class RecoverOthersAccount extends StatefulWidget {
   final String recoveryKey;
@@ -45,7 +46,6 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
   bool _passwordsMatch = false;
   bool _isPasswordValid = false;
   bool _showPasswordStrength = false;
-  bool _isProgressSheetOpen = false;
   Timer? _passwordStrengthTimer;
 
   @override
@@ -201,7 +201,11 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
   }
 
   Future<void> _updatePassword() async {
-    _showProgressSheet();
+    final dialog = createProgressDialog(
+      context,
+      AppLocalizations.of(context).generatingEncryptionKeys,
+    );
+    await dialog.show();
     try {
       final String password = _passwordController1.text;
       final KeyAttributes attributes = widget.attributes;
@@ -251,74 +255,19 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
         setKeyRequest,
         widget.sessions,
       );
-      _closeProgressSheet();
+      await dialog.hide();
       if (!mounted) return;
-      await showBottomSheetComponent<void>(
-        context: context,
-        builder: (_) => BottomSheetComponent(
-          title: AppLocalizations.of(context).passwordChangedSuccessfully,
-          actions: [
-            ButtonComponent(
-              label: AppLocalizations.of(context).ok,
-              dismissModalOnSuccess: true,
-              shouldShowSuccessState: false,
-              onTap: () async {},
-            ),
-          ],
-        ),
+      showShortToast(
+        context,
+        AppLocalizations.of(context).passwordChangedSuccessfully,
       );
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e, s) {
       _logger.severe("Failed to recover account", e, s);
-      _closeProgressSheet();
+      await dialog.hide();
       if (!mounted) return;
-      await showLegacyErrorSheet(context, error: e);
+      showGenericErrorBottomSheet(context: context, error: e).ignore();
     }
-  }
-
-  void _showProgressSheet() {
-    _isProgressSheetOpen = true;
-    unawaited(
-      showBottomSheetComponent<void>(
-        context: context,
-        isDismissible: false,
-        enableDrag: false,
-        builder: (_) => BottomSheetComponent(
-          title: AppLocalizations.of(context).generatingEncryptionKeys,
-          showCloseButton: false,
-          content: Row(
-            children: [
-              SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: context.componentColors.primary,
-                ),
-              ),
-              const SizedBox(width: Spacing.md),
-              Expanded(
-                child: Text(
-                  AppLocalizations.of(context).pleaseWait,
-                  style: TextStyles.body.copyWith(
-                    color: context.componentColors.textLight,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ).whenComplete(() {
-        _isProgressSheetOpen = false;
-      }),
-    );
-  }
-
-  void _closeProgressSheet() {
-    if (!_isProgressSheetOpen || !mounted) {
-      return;
-    }
-    _isProgressSheetOpen = false;
-    Navigator.of(context).pop();
   }
 }

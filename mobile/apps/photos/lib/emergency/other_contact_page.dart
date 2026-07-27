@@ -1,5 +1,3 @@
-import "dart:async";
-
 import "package:collection/collection.dart";
 import "package:ente_components/ente_components.dart";
 import "package:ente_pure_utils/ente_pure_utils.dart";
@@ -13,6 +11,7 @@ import "package:photos/emergency/recover_others_account.dart";
 import "package:photos/gateways/users/models/key_attributes.dart";
 import "package:photos/l10n/l10n.dart";
 import "package:photos/ui/settings/components/settings_page_scaffold.dart";
+import "package:photos/utils/dialog_util.dart";
 
 // OtherContactPage is used to start recovery process for other user's account
 // Based on the state of the contact & recovery session, it will show
@@ -37,42 +36,16 @@ class _OtherContactPageState extends State<OtherContactPage> {
   String? waitTill;
   final Logger _logger = Logger("_OtherContactPageState");
   late EmergencyInfo emergencyInfo = widget.emergencyInfo;
-  bool _isFetching = false;
-  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     recoverySession = widget.emergencyInfo.othersRecoverySession
         .firstWhereOrNull((session) => session.user.email == accountEmail);
-    unawaited(_fetchData(showError: false));
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
-        unawaited(_fetchData(showError: false));
-      }
-    });
+    _fetchData();
   }
 
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<bool> _fetchData({
-    bool showError = true,
-    bool waitForFreshResult = false,
-  }) async {
-    if (_isFetching) {
-      if (!waitForFreshResult) {
-        return false;
-      }
-      while (_isFetching) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        if (!mounted) return false;
-      }
-    }
-    _isFetching = true;
+  Future<void> _fetchData() async {
     try {
       final result = await EmergencyContactService.instance.getInfo();
       if (mounted) {
@@ -82,15 +55,8 @@ class _OtherContactPageState extends State<OtherContactPage> {
           );
         });
       }
-      return true;
     } catch (e) {
       _logger.severe("Error fetching data", e);
-      if (mounted && showError) {
-        await showLegacyErrorSheet(context, error: e);
-      }
-      return false;
-    } finally {
-      _isFetching = false;
     }
   }
 
@@ -184,7 +150,7 @@ class _OtherContactPageState extends State<OtherContactPage> {
   }
 
   Future<void> _startRecovery() async {
-    final confirmed = await showLegacyAlertSheet<bool>(
+    final confirmed = await showRecoveryAlertSheet<bool>(
       context,
       title: context.l10n.startRecovery,
       message: context.l10n.startRecoveryDesc(email: accountEmail),
@@ -202,9 +168,9 @@ class _OtherContactPageState extends State<OtherContactPage> {
     try {
       await EmergencyContactService.instance.startRecovery(widget.contact);
       if (!mounted) return;
-      await _fetchData(showError: false, waitForFreshResult: true);
+      await _fetchData();
       if (!mounted) return;
-      await showLegacyAlertSheet(
+      await showRecoveryAlertSheet(
         context,
         title: context.l10n.recoveryInitiated,
         message: context.l10n.recoveryInitiatedDesc(
@@ -214,7 +180,7 @@ class _OtherContactPageState extends State<OtherContactPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      await showLegacyErrorSheet(context, error: e);
+      await showGenericErrorBottomSheet(context: context, error: e);
     }
   }
 
@@ -232,16 +198,16 @@ class _OtherContactPageState extends State<OtherContactPage> {
         RecoverOthersAccount(key, attributes, recoverySession!),
       );
       if (mounted) {
-        await _fetchData(showError: false, waitForFreshResult: true);
+        await _fetchData();
       }
     } catch (e) {
       if (!mounted) return;
-      await showLegacyErrorSheet(context, error: e);
+      await showGenericErrorBottomSheet(context: context, error: e);
     }
   }
 
   Future<void> _showCancelRecoverySheet() async {
-    final confirmed = await showLegacyAlertSheet<bool>(
+    final confirmed = await showRecoveryAlertSheet<bool>(
       context,
       title: context.l10n.cancelRecovery,
       message: context.l10n.cancelRecoveryDesc(email: accountEmail),
@@ -260,17 +226,17 @@ class _OtherContactPageState extends State<OtherContactPage> {
         if (mounted) {
           recoverySession = null;
           setState(() {});
-          await _fetchData(showError: false, waitForFreshResult: true);
+          await _fetchData();
         }
       } catch (e) {
         if (!mounted) return;
-        await showLegacyErrorSheet(context, error: e);
+        await showGenericErrorBottomSheet(context: context, error: e);
       }
     }
   }
 
   Future<void> showRemoveSheet() async {
-    final confirmed = await showLegacyAlertSheet<bool>(
+    final confirmed = await showRecoveryAlertSheet<bool>(
       context,
       title: context.l10n.removeContact,
       message: context.l10n.removeYourselfDesc(email: accountEmail),
@@ -294,7 +260,7 @@ class _OtherContactPageState extends State<OtherContactPage> {
         }
       } catch (e) {
         if (!mounted) return;
-        await showLegacyErrorSheet(context, error: e);
+        await showGenericErrorBottomSheet(context: context, error: e);
       }
     }
   }

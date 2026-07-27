@@ -14,7 +14,9 @@ import "package:photos/emergency/select_contact_page.dart";
 import "package:photos/generated/l10n.dart";
 import "package:photos/l10n/l10n.dart";
 import "package:photos/services/contacts/contact_identity_resolver.dart";
+import "package:photos/ui/notification/toast.dart";
 import "package:photos/ui/sharing/user_avator_widget.dart";
+import "package:photos/utils/dialog_util.dart";
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -26,9 +28,6 @@ class EmergencyPage extends StatefulWidget {
 class _EmergencyPageState extends State<EmergencyPage> {
   late int currentUserID;
   EmergencyInfo? info;
-  bool _hasLoadError = false;
-  bool _isFetching = false;
-  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -37,54 +36,19 @@ class _EmergencyPageState extends State<EmergencyPage> {
     Future.delayed(const Duration(seconds: 0), () async {
       unawaited(_fetchData());
     });
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
-        unawaited(_fetchData(showError: false));
-      }
-    });
   }
 
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<bool> _fetchData({
-    bool showError = true,
-    bool waitForFreshResult = false,
-  }) async {
-    if (_isFetching) {
-      if (!waitForFreshResult) {
-        return false;
-      }
-      while (_isFetching) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        if (!mounted) return false;
-      }
-    }
-    _isFetching = true;
+  Future<void> _fetchData() async {
     try {
       final result = await EmergencyContactService.instance.getInfo();
       if (mounted) {
         setState(() {
           info = result;
-          _hasLoadError = false;
         });
       }
-      return true;
     } catch (e) {
-      if (!mounted) return false;
-      if (info == null) {
-        setState(() {
-          _hasLoadError = true;
-        });
-      } else if (showError) {
-        await showLegacyErrorSheet(context, error: e);
-      }
-      return false;
-    } finally {
-      _isFetching = false;
+      if (!mounted) return;
+      showShortToast(context, AppLocalizations.of(context).somethingWentWrong);
     }
   }
 
@@ -111,34 +75,11 @@ class _EmergencyPageState extends State<EmergencyPage> {
               ),
             ),
           ),
-          if (info == null && !_hasLoadError)
+          if (info == null)
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
                 child: CircularProgressIndicator(color: colors.primary),
-              ),
-            ),
-          if (info == null && _hasLoadError)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Padding(
-                padding: const EdgeInsets.all(Spacing.xl),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      AppLocalizations.of(context).somethingWentWrong,
-                      textAlign: TextAlign.center,
-                      style: TextStyles.body.copyWith(color: colors.textLight),
-                    ),
-                    const SizedBox(height: Spacing.lg),
-                    ButtonComponent(
-                      label: AppLocalizations.of(context).retry,
-                      shouldShowSuccessState: false,
-                      onTap: () => _fetchData(waitForFreshResult: true),
-                    ),
-                  ],
-                ),
               ),
             ),
           if (info != null && info!.recoverSessions.isNotEmpty)
@@ -329,7 +270,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
   Future<void> _addTrustedContact() async {
     final result = await showAddContactSheet(context, emergencyInfo: info!);
     if (result == true && mounted) {
-      await _fetchData(showError: false, waitForFreshResult: true);
+      await _fetchData();
     }
   }
 
@@ -345,7 +286,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
       ),
     );
     if (mounted) {
-      await _fetchData(showError: false, waitForFreshResult: true);
+      await _fetchData();
     }
   }
 
@@ -383,7 +324,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
     if (actionResult.action == TrustedContactAction.revoke) {
       final isPending = contact.isPendingInvite();
       if (!context.mounted) return;
-      final confirmed = await showLegacyAlertSheet<bool>(
+      final confirmed = await showRecoveryAlertSheet<bool>(
         context,
         title: isPending
             ? context.l10n.cancelInvite
@@ -412,11 +353,11 @@ class _EmergencyPageState extends State<EmergencyPage> {
           info?.contacts.remove(contact);
           if (mounted) {
             setState(() {});
-            await _fetchData(showError: false, waitForFreshResult: true);
+            await _fetchData();
           }
         } catch (e) {
           if (!context.mounted) return;
-          await showLegacyErrorSheet(context, error: e);
+          await showGenericErrorBottomSheet(context: context, error: e);
         }
       }
       return;
@@ -445,12 +386,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
         }
         if (mounted) {
           setState(() {});
-          await _fetchData(showError: false, waitForFreshResult: true);
+          await _fetchData();
         }
       } else {
         if (mounted) {
           if (!context.mounted) return;
-          await showLegacyAlertSheet(
+          await showRecoveryAlertSheet(
             context,
             title: context.l10n.cannotUpdateRecoveryTime,
             message: context.l10n.cannotUpdateRecoveryTimeMessage,
@@ -459,7 +400,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
       }
     } catch (e) {
       if (!context.mounted) return;
-      await showLegacyErrorSheet(context, error: e);
+      await showGenericErrorBottomSheet(context: context, error: e);
     }
   }
 
@@ -506,11 +447,11 @@ class _EmergencyPageState extends State<EmergencyPage> {
       }
       if (mounted) {
         setState(() {});
-        await _fetchData(showError: false, waitForFreshResult: true);
+        await _fetchData();
       }
     } catch (e) {
       if (!context.mounted) return;
-      await showLegacyErrorSheet(context, error: e);
+      await showGenericErrorBottomSheet(context: context, error: e);
     }
   }
 
@@ -538,11 +479,11 @@ class _EmergencyPageState extends State<EmergencyPage> {
               try {
                 await EmergencyContactService.instance.approveRecovery(session);
                 if (mounted) {
-                  await _fetchData(showError: false, waitForFreshResult: true);
+                  await _fetchData();
                 }
               } catch (e) {
                 if (!mounted) return;
-                await showLegacyErrorSheet(context, error: e);
+                await showGenericErrorBottomSheet(context: context, error: e);
               }
             },
           ),
@@ -557,11 +498,11 @@ class _EmergencyPageState extends State<EmergencyPage> {
         );
         if (mounted) {
           setState(() {});
-          await _fetchData(showError: false, waitForFreshResult: true);
+          await _fetchData();
         }
       } catch (e) {
         if (!mounted) return;
-        await showLegacyErrorSheet(context, error: e);
+        await showGenericErrorBottomSheet(context: context, error: e);
       }
     }
   }

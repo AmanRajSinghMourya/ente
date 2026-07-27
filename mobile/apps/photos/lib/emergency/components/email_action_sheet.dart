@@ -2,8 +2,6 @@ import "package:ente_components/ente_components.dart";
 import "package:flutter/material.dart";
 import "package:hugeicons/hugeicons.dart";
 import "package:photos/generated/l10n.dart";
-import "package:photos/utils/dialog_util.dart";
-import "package:photos/utils/email_util.dart";
 import "package:photos/utils/share_util.dart";
 
 Future<T?> showEmailActionSheet<T>(
@@ -28,7 +26,7 @@ Future<T?> showEmailActionSheet<T>(
   );
 }
 
-Future<T?> showLegacyAlertSheet<T>(
+Future<T?> showRecoveryAlertSheet<T>(
   BuildContext context, {
   required String title,
   required String message,
@@ -46,34 +44,7 @@ Future<T?> showLegacyAlertSheet<T>(
   );
 }
 
-Future<void> showLegacyErrorSheet(
-  BuildContext context, {
-  required Object? error,
-}) async {
-  final l10n = AppLocalizations.of(context);
-  final errorBody = parseErrorForUI(
-    context,
-    l10n.itLooksLikeSomethingWentWrongPleaseRetryAfterSome,
-    error: error,
-  );
-  await showErrorBottomSheetComponent<void>(
-    context: context,
-    title: l10n.error,
-    message: errorBody,
-    illustration: Image.asset("assets/warning-grey.png"),
-    actionLabel: l10n.contactSupport,
-    onActionTap: () async {
-      await sendLogs(
-        context,
-        l10n.contactSupport,
-        "support@ente.com",
-        postShare: () {},
-      );
-    },
-  );
-}
-
-Future<void> showLegacyInviteSheet(
+Future<void> showRecoveryContactInviteSheet(
   BuildContext context, {
   required String email,
 }) async {

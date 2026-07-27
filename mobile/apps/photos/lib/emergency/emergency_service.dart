@@ -47,7 +47,7 @@ class EmergencyContactService {
   }) async {
     if (!isValidEmail(email)) {
       if (context == null || !context.mounted) return false;
-      await showLegacyAlertSheet(
+      await showRecoveryAlertSheet(
         context,
         title: AppLocalizations.of(context).letsTryThatAgain,
         message: AppLocalizations.of(context).enterValidEmail,
@@ -55,7 +55,7 @@ class EmergencyContactService {
       return false;
     } else if (email.trim() == Configuration.instance.getEmail()) {
       if (context == null || !context.mounted) return false;
-      await showLegacyAlertSheet(
+      await showRecoveryAlertSheet(
         context,
         title: AppLocalizations.of(context).oops,
         message: AppLocalizations.of(context).youCannotShareWithYourself,
@@ -65,7 +65,7 @@ class EmergencyContactService {
     final String? publicKey = await _userService.getPublicKey(email);
     if (publicKey == null) {
       if (context == null || !context.mounted) return false;
-      await showLegacyInviteSheet(context, email: email);
+      await showRecoveryContactInviteSheet(context, email: email);
       return false;
     }
     final Uint8List recoveryKey = Configuration.instance.getRecoveryKey();

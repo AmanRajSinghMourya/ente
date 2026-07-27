@@ -227,7 +227,7 @@ class _AddContactSheetState extends State<AddContactSheet> {
     if (hasSuccess && mounted) {
       Navigator.of(context).pop(true);
     } else if (failures.isNotEmpty && mounted) {
-      await showLegacyAlertSheet(
+      await showRecoveryAlertSheet(
         context,
         title: AppLocalizations.of(context).error,
         message: AppLocalizations.of(context).somethingWentWrong,
@@ -250,7 +250,7 @@ class _AddContactSheetState extends State<AddContactSheet> {
             numOfDays: recoveryDays,
           );
 
-    return showLegacyAlertSheet<bool>(
+    return showRecoveryAlertSheet<bool>(
       context,
       title: l10n.warning,
       message: message,
@@ -267,7 +267,7 @@ class _AddContactSheetState extends State<AddContactSheet> {
 
   Future<void> _onVerifyTap(String emailToAdd) async {
     if (!_emailsToAdd.contains(emailToAdd)) {
-      await showLegacyAlertSheet(
+      await showRecoveryAlertSheet(
         context,
         title: AppLocalizations.of(context).invalidEmailAddress,
         message: AppLocalizations.of(context).enterValidEmail,
