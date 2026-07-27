@@ -1,3 +1,4 @@
+import "package:ente_components/ente_components.dart";
 import "package:ente_pure_utils/ente_pure_utils.dart";
 import "package:flutter/material.dart";
 import "package:photos/generated/l10n.dart";
@@ -40,25 +41,27 @@ class WidgetSettingsScreen extends StatelessWidget {
     return SettingsPageScaffold(
       title: l10n.widgets,
       children: [
-        SettingsItem(
-          title: l10n.people,
-          svgIconPath: "assets/icons/people-widget-icon.svg",
-          showOnlyLoadingState: true,
-          onTap: () => onPeopleTapped(context),
-        ),
-        const SizedBox(height: 8),
-        SettingsItem(
-          title: l10n.albums,
-          svgIconPath: "assets/icons/albums-widget-icon.svg",
-          showOnlyLoadingState: true,
-          onTap: () => onAlbumsTapped(context),
-        ),
-        const SizedBox(height: 8),
-        SettingsItem(
-          title: l10n.memories,
-          svgIconPath: "assets/icons/memories-widget-icon.svg",
-          showOnlyLoadingState: true,
-          onTap: () => onMemoriesTapped(context),
+        MenuGroupComponent(
+          items: [
+            SettingsItem(
+              title: l10n.people,
+              svgIconPath: "assets/icons/people-widget-icon.svg",
+              showOnlyLoadingState: true,
+              onTap: () => onPeopleTapped(context),
+            ),
+            SettingsItem(
+              title: l10n.albums,
+              svgIconPath: "assets/icons/albums-widget-icon.svg",
+              showOnlyLoadingState: true,
+              onTap: () => onAlbumsTapped(context),
+            ),
+            SettingsItem(
+              title: l10n.memories,
+              svgIconPath: "assets/icons/memories-widget-icon.svg",
+              showOnlyLoadingState: true,
+              onTap: () => onMemoriesTapped(context),
+            ),
+          ],
         ),
       ],
     );

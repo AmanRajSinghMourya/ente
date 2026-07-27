@@ -1,0 +1,1 @@
+- Refreshes the widget settings screens.
