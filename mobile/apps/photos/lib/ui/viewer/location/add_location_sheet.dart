@@ -1,4 +1,6 @@
+import "package:ente_components/ente_components.dart";
 import 'package:flutter/material.dart';
+import "package:hugeicons/hugeicons.dart";
 import "package:intl/intl.dart";
 import "package:modal_bottom_sheet/modal_bottom_sheet.dart";
 import "package:photos/core/constants.dart";
@@ -7,16 +9,10 @@ import "package:photos/models/location/location.dart";
 import "package:photos/service_locator.dart";
 import 'package:photos/states/location_state.dart';
 import "package:photos/theme/colors.dart";
-import "package:photos/theme/ente_theme.dart";
 import "package:photos/ui/common/loading_widget.dart";
-import "package:photos/ui/components/bottom_of_title_bar_widget.dart";
-import "package:photos/ui/components/buttons/button_widget.dart";
 import "package:photos/ui/components/divider_widget.dart";
 import 'package:photos/ui/components/keyboard/keyboard_oveylay.dart';
 import "package:photos/ui/components/keyboard/keyboard_top_button.dart";
-import "package:photos/ui/components/models/button_type.dart";
-import "package:photos/ui/components/text_input_widget.dart";
-import "package:photos/ui/components/title_bar_title_widget.dart";
 import 'package:photos/ui/viewer/location/dynamic_location_gallery_widget.dart';
 import "package:photos/ui/viewer/location/radius_picker_widget.dart";
 
@@ -40,7 +36,7 @@ void showAddLocationSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
     ),
     topControl: const SizedBox.shrink(),
-    backgroundColor: getEnteColorScheme(context).backgroundElevated,
+    backgroundColor: context.componentColors.backgroundBase,
     barrierColor: backdropFaintDark,
   );
 }
@@ -64,9 +60,6 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
   //memories count section which also means the gallery is loading.
   final ValueNotifier<int?> _memoriesCountNotifier = ValueNotifier(null);
 
-  //The value of this notifier has no significance.
-  final ValueNotifier<bool> _submitNotifer = ValueNotifier(false);
-
   final ValueNotifier<bool> _cancelNotifier = ValueNotifier(false);
   late ValueNotifier<double> _selectedRadiusNotifier;
   final _focusNode = FocusNode();
@@ -88,7 +81,6 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
   @override
   void dispose() {
     _focusNode.removeListener(_focusNodeListener);
-    _submitNotifer.dispose();
     _cancelNotifier.dispose();
     _selectedRadiusNotifier.dispose();
     super.dispose();
@@ -96,17 +88,25 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = getEnteTextTheme(context);
-    final colorScheme = getEnteColorScheme(context);
+    final colors = context.componentColors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 32, 0, 8),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: BottomOfTitleBarWidget(
-              title: TitleBarTitleWidget(
-                title: AppLocalizations.of(context).addLocation,
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.lg,
+              Spacing.xs,
+              Spacing.lg,
+              Spacing.lg,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                AppLocalizations.of(context).addLocation,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyles.h2.copyWith(color: colors.textBase),
               ),
             ),
           ),
@@ -125,18 +125,17 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
                         Row(
                           children: [
                             Expanded(
-                              child: TextInputWidget(
+                              child: TextInputComponent(
+                                controller: _textEditingController,
                                 hintText: AppLocalizations.of(
                                   context,
                                 ).locationName,
                                 focusNode: _focusNode,
-                                submitNotifier: _submitNotifer,
                                 cancelNotifier: _cancelNotifier,
                                 popNavAfterSubmission: false,
                                 shouldUnfocusOnClearOrSubmit: true,
-                                alwaysShowSuccessState: true,
+                                isClearable: true,
                                 textCapitalization: TextCapitalization.words,
-                                textEditingController: _textEditingController,
                                 isEmptyNotifier: _isEmptyNotifier,
                               ),
                             ),
@@ -144,23 +143,20 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
                             ValueListenableBuilder(
                               valueListenable: _isEmptyNotifier,
                               builder: (context, bool value, _) {
-                                return AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 250),
-                                  switchInCurve: Curves.easeInOut,
-                                  switchOutCurve: Curves.easeInOut,
-                                  child: ButtonWidget(
-                                    key: ValueKey(value),
-                                    buttonType: ButtonType.secondary,
-                                    buttonSize: ButtonSize.small,
-                                    labelText: AppLocalizations.of(
-                                      context,
-                                    ).addLocationButton,
-                                    isDisabled: value,
-                                    onTap: () async {
-                                      _focusNode.unfocus();
-                                      await _addLocationTag();
-                                    },
+                                return IconButtonComponent(
+                                  variant: IconButtonComponentVariant.green,
+                                  tooltip: AppLocalizations.of(
+                                    context,
+                                  ).addLocationButton,
+                                  icon: const HugeIcon(
+                                    icon: HugeIcons.strokeRoundedPlusSign,
                                   ),
+                                  onTap: value
+                                      ? null
+                                      : () async {
+                                          _focusNode.unfocus();
+                                          await _addLocationTag();
+                                        },
                                 );
                               },
                             ),
@@ -174,7 +170,9 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
                             AppLocalizations.of(
                               context,
                             ).locationTagFeatureDescription,
-                            style: textTheme.smallMuted,
+                            style: TextStyles.body.copyWith(
+                              color: colors.textLight,
+                            ),
                           ),
                       ],
                     ),
@@ -194,7 +192,7 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
                           if (value == null) {
                             widget = EnteLoadingWidget(
                               size: 14,
-                              color: colorScheme.strokeMuted,
+                              color: colors.textLight,
                               alignment: Alignment.centerLeft,
                               padding: 3,
                             );
@@ -210,7 +208,9 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
                                       value,
                                     ),
                                   ),
-                                  style: textTheme.body,
+                                  style: TextStyles.body.copyWith(
+                                    color: colors.textBase,
+                                  ),
                                 ),
                                 if (value > 1000)
                                   Padding(
@@ -219,7 +219,9 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
                                       AppLocalizations.of(
                                         context,
                                       ).galleryMemoryLimitInfo,
-                                      style: textTheme.miniMuted,
+                                      style: TextStyles.mini.copyWith(
+                                        color: colors.textLight,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -269,9 +271,7 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
   void _focusNodeListener() {
     final bool hasFocus = _focusNode.hasFocus;
     _keyboardTopButtons ??= KeyboardTopButton(
-      onDoneTap: () {
-        _submitNotifer.value = !_submitNotifer.value;
-      },
+      onDoneTap: _focusNode.unfocus,
       onCancelTap: () {
         _cancelNotifier.value = !_cancelNotifier.value;
       },
