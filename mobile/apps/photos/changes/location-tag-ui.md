@@ -1,0 +1,1 @@
+- Refreshes the add location tag sheet with the latest Ente components.
