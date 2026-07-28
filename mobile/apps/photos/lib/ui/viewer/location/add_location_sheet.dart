@@ -33,7 +33,9 @@ void showAddLocationSheet(
     },
     shape: const RoundedRectangleBorder(
       side: BorderSide(width: 0),
-      borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(Radii.bottomSheet),
+      ),
     ),
     topControl: const SizedBox.shrink(),
     backgroundColor: context.componentColors.backgroundBase,
@@ -90,24 +92,43 @@ class _AddLocationSheetState extends State<AddLocationSheet> {
   Widget build(BuildContext context) {
     final colors = context.componentColors;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 32, 0, 8),
+      padding: const EdgeInsets.only(bottom: Spacing.sm),
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              Spacing.lg,
-              Spacing.xs,
-              Spacing.lg,
+              Spacing.xl,
+              Spacing.xl,
+              Spacing.xl,
               Spacing.lg,
             ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                AppLocalizations.of(context).addLocation,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyles.h2.copyWith(color: colors.textBase),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    AppLocalizations.of(context).addLocation,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyles.h2.copyWith(color: colors.textBase),
+                  ),
+                ),
+                const SizedBox(width: Spacing.md),
+                IconButtonComponent(
+                  tooltip: AppLocalizations.of(context).close,
+                  variant: IconButtonComponentVariant.circular,
+                  shouldSurfaceExecutionStates: false,
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedCancel01,
+                    size: IconSizes.small,
+                  ),
+                  onTap: () {
+                    final route = ModalRoute.of(context);
+                    if (route == null || route.isCurrent) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+              ],
             ),
           ),
           Expanded(

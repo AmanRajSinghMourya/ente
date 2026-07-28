@@ -6,21 +6,6 @@ import "package:photos/generated/l10n.dart";
 import "package:photos/states/location_state.dart";
 import "package:photos/utils/dialog_util.dart";
 
-class CustomTrackShape extends RoundedRectSliderTrackShape {
-  @override
-  Rect getPreferredRect({
-    required RenderBox parentBox,
-    Offset offset = Offset.zero,
-    required SliderThemeData sliderTheme,
-    bool isEnabled = false,
-    bool isDiscrete = false,
-  }) {
-    const trackHeight = 2.0;
-    final trackWidth = parentBox.size.width;
-    return Rect.fromLTWH(0, 0, trackWidth, trackHeight);
-  }
-}
-
 class RadiusPickerWidget extends StatefulWidget {
   ///This notifier can be listened from a parent widget to get the selected radius
   final ValueNotifier<double> selectedRadiusNotifier;
@@ -114,40 +99,18 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
                   style: TextStyles.body.copyWith(color: colors.textBase),
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  height: 16,
-                  child: SliderTheme(
-                    data: SliderThemeData(
-                      overlayColor: Colors.transparent,
-                      thumbColor: colors.textLighter,
-                      activeTrackColor: colors.textLighter,
-                      inactiveTrackColor: colors.strokeFaint,
-                      activeTickMarkColor: colors.textLight,
-                      inactiveTickMarkColor: colors.textLighter,
-                      trackShape: CustomTrackShape(),
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
-                        pressedElevation: 0,
-                        elevation: 0,
-                      ),
-                      tickMarkShape: const RoundSliderTickMarkShape(
-                        tickMarkRadius: 1,
-                      ),
-                    ),
-                    child: RepaintBoundary(
-                      child: Slider(
-                        value: radiusValues.indexOf(selectedRadius).toDouble(),
-                        onChanged: (value) {
-                          setState(() {
-                            widget.selectedRadiusNotifier.value =
-                                radiusValues[value.toInt()];
-                          });
-                        },
-                        min: 0,
-                        max: radiusValues.length - 1,
-                        divisions: radiusValues.length - 1,
-                      ),
-                    ),
+                RepaintBoundary(
+                  child: SliderComponent(
+                    value: radiusValues.indexOf(selectedRadius).toDouble(),
+                    onChanged: (value) {
+                      setState(() {
+                        widget.selectedRadiusNotifier.value =
+                            radiusValues[value.round()];
+                      });
+                    },
+                    min: 0,
+                    max: radiusValues.length - 1,
+                    divisions: radiusValues.length - 1,
                   ),
                 ),
               ],
