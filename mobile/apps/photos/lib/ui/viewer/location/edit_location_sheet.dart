@@ -1,4 +1,6 @@
+import "package:ente_components/ente_components.dart";
 import 'package:flutter/material.dart';
+import "package:hugeicons/hugeicons.dart";
 import "package:intl/intl.dart";
 import "package:modal_bottom_sheet/modal_bottom_sheet.dart";
 import "package:photos/core/constants.dart";
@@ -8,16 +10,10 @@ import "package:photos/models/location_tag/location_tag.dart";
 import "package:photos/service_locator.dart";
 import "package:photos/states/location_state.dart";
 import "package:photos/theme/colors.dart";
-import "package:photos/theme/ente_theme.dart";
 import "package:photos/ui/common/loading_widget.dart";
-import "package:photos/ui/components/bottom_of_title_bar_widget.dart";
-import "package:photos/ui/components/buttons/button_widget.dart";
 import "package:photos/ui/components/divider_widget.dart";
 import 'package:photos/ui/components/keyboard/keyboard_oveylay.dart';
 import "package:photos/ui/components/keyboard/keyboard_top_button.dart";
-import "package:photos/ui/components/models/button_type.dart";
-import "package:photos/ui/components/text_input_widget.dart";
-import "package:photos/ui/components/title_bar_title_widget.dart";
 import 'package:photos/ui/viewer/location/dynamic_location_gallery_widget.dart';
 import "package:photos/ui/viewer/location/edit_center_point_tile_widget.dart";
 import "package:photos/ui/viewer/location/radius_picker_widget.dart";
@@ -39,7 +35,7 @@ void showEditLocationSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
     ),
     topControl: const SizedBox.shrink(),
-    backgroundColor: getEnteColorScheme(context).backgroundElevated,
+    backgroundColor: context.componentColors.backgroundBase,
     barrierColor: backdropFaintDark,
   );
 }
@@ -56,7 +52,6 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
   //When memoriesCountNotifier is null, we show the loading widget in the
   //memories count section which also means the gallery is loading.
   final ValueNotifier<int?> _memoriesCountNotifier = ValueNotifier(null);
-  final ValueNotifier<bool> _submitNotifer = ValueNotifier(false);
   final ValueNotifier<bool> _cancelNotifier = ValueNotifier(false);
   final ValueNotifier<double> _selectedRadiusNotifier = ValueNotifier(
     defaultRadiusValue,
@@ -76,7 +71,6 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
   @override
   void dispose() {
     _focusNode.removeListener(_focusNodeListener);
-    _submitNotifer.dispose();
     _cancelNotifier.dispose();
     _selectedRadiusNotifier.dispose();
     super.dispose();
@@ -84,8 +78,7 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = getEnteTextTheme(context);
-    final colorScheme = getEnteColorScheme(context);
+    final colors = context.componentColors;
     final locationName = InheritedLocationTagData.of(
       context,
     ).locationTagEntity!.item.name;
@@ -94,10 +87,19 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: BottomOfTitleBarWidget(
-              title: TitleBarTitleWidget(
-                title: AppLocalizations.of(context).editLocationTagTitle,
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.lg,
+              Spacing.xs,
+              Spacing.lg,
+              Spacing.lg,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                AppLocalizations.of(context).editLocationTagTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyles.h2.copyWith(color: colors.textBase),
               ),
             ),
           ),
@@ -116,23 +118,21 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
                         Row(
                           children: [
                             Expanded(
-                              child: TextInputWidget(
+                              child: TextInputComponent(
+                                controller: _textEditingController,
                                 hintText: AppLocalizations.of(
                                   context,
                                 ).locationName,
                                 focusNode: _focusNode,
-                                submitNotifier: _submitNotifer,
                                 cancelNotifier: _cancelNotifier,
                                 popNavAfterSubmission: false,
                                 shouldUnfocusOnClearOrSubmit: true,
-                                alwaysShowSuccessState: true,
                                 initialValue: locationName,
                                 onCancel: () {
                                   _focusNode.unfocus();
                                   _textEditingController.value =
                                       TextEditingValue(text: locationName);
                                 },
-                                textEditingController: _textEditingController,
                                 isEmptyNotifier: _isEmptyNotifier,
                               ),
                             ),
@@ -140,23 +140,18 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
                             ValueListenableBuilder(
                               valueListenable: _isEmptyNotifier,
                               builder: (context, bool value, _) {
-                                return AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 250),
-                                  switchInCurve: Curves.easeInOut,
-                                  switchOutCurve: Curves.easeInOut,
-                                  child: ButtonWidget(
-                                    key: ValueKey(value),
-                                    buttonType: ButtonType.secondary,
-                                    buttonSize: ButtonSize.small,
-                                    labelText: AppLocalizations.of(
-                                      context,
-                                    ).save,
-                                    isDisabled: value,
-                                    onTap: () async {
-                                      _focusNode.unfocus();
-                                      await _editLocation();
-                                    },
+                                return IconButtonComponent(
+                                  variant: IconButtonComponentVariant.green,
+                                  tooltip: AppLocalizations.of(context).save,
+                                  icon: const HugeIcon(
+                                    icon: HugeIcons.strokeRoundedTick02,
                                   ),
+                                  onTap: value
+                                      ? null
+                                      : () async {
+                                          _focusNode.unfocus();
+                                          await _editLocation();
+                                        },
                                 );
                               },
                             ),
@@ -185,7 +180,7 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
                           if (value == null) {
                             widget = EnteLoadingWidget(
                               size: 14,
-                              color: colorScheme.strokeMuted,
+                              color: colors.textLight,
                               alignment: Alignment.centerLeft,
                               padding: 3,
                             );
@@ -201,7 +196,9 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
                                       value,
                                     ),
                                   ),
-                                  style: textTheme.body,
+                                  style: TextStyles.body.copyWith(
+                                    color: colors.textBase,
+                                  ),
                                 ),
                                 if (value > 1000)
                                   Padding(
@@ -210,7 +207,9 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
                                       AppLocalizations.of(
                                         context,
                                       ).galleryMemoryLimitInfo,
-                                      style: textTheme.miniMuted,
+                                      style: TextStyles.mini.copyWith(
+                                        color: colors.textLight,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -258,9 +257,7 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
   void _focusNodeListener() {
     final bool hasFocus = _focusNode.hasFocus;
     _keyboardTopButtons ??= KeyboardTopButton(
-      onDoneTap: () {
-        _submitNotifer.value = !_submitNotifer.value;
-      },
+      onDoneTap: _focusNode.unfocus,
       onCancelTap: () {
         _cancelNotifier.value = !_cancelNotifier.value;
       },
