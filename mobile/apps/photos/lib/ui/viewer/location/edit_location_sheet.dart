@@ -12,8 +12,6 @@ import "package:photos/states/location_state.dart";
 import "package:photos/theme/colors.dart";
 import "package:photos/ui/common/loading_widget.dart";
 import "package:photos/ui/components/divider_widget.dart";
-import 'package:photos/ui/components/keyboard/keyboard_oveylay.dart';
-import "package:photos/ui/components/keyboard/keyboard_top_button.dart";
 import 'package:photos/ui/viewer/location/dynamic_location_gallery_widget.dart';
 import "package:photos/ui/viewer/location/edit_center_point_tile_widget.dart";
 import "package:photos/ui/viewer/location/radius_picker_widget.dart";
@@ -54,26 +52,21 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
   //When memoriesCountNotifier is null, we show the loading widget in the
   //memories count section which also means the gallery is loading.
   final ValueNotifier<int?> _memoriesCountNotifier = ValueNotifier(null);
-  final ValueNotifier<bool> _cancelNotifier = ValueNotifier(false);
   final ValueNotifier<double> _selectedRadiusNotifier = ValueNotifier(
     defaultRadiusValue,
   );
   final _focusNode = FocusNode();
   final _textEditingController = TextEditingController();
   final _isEmptyNotifier = ValueNotifier(false);
-  Widget? _keyboardTopButtons;
 
   @override
   void initState() {
-    _focusNode.addListener(_focusNodeListener);
     _selectedRadiusNotifier.addListener(_selectedRadiusListener);
     super.initState();
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_focusNodeListener);
-    _cancelNotifier.dispose();
     _selectedRadiusNotifier.dispose();
     super.dispose();
   }
@@ -145,15 +138,9 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
                                   context,
                                 ).locationName,
                                 focusNode: _focusNode,
-                                cancelNotifier: _cancelNotifier,
                                 popNavAfterSubmission: false,
                                 shouldUnfocusOnClearOrSubmit: true,
                                 initialValue: locationName,
-                                onCancel: () {
-                                  _focusNode.unfocus();
-                                  _textEditingController.value =
-                                      TextEditingValue(text: locationName);
-                                },
                                 isEmptyNotifier: _isEmptyNotifier,
                               ),
                             ),
@@ -273,21 +260,6 @@ class _EditLocationSheetState extends State<EditLocationSheet> {
     );
     if (!mounted) return;
     Navigator.of(context).pop();
-  }
-
-  void _focusNodeListener() {
-    final bool hasFocus = _focusNode.hasFocus;
-    _keyboardTopButtons ??= KeyboardTopButton(
-      onDoneTap: _focusNode.unfocus,
-      onCancelTap: () {
-        _cancelNotifier.value = !_cancelNotifier.value;
-      },
-    );
-    if (hasFocus) {
-      KeyboardOverlay.showOverlay(context, _keyboardTopButtons!);
-    } else {
-      KeyboardOverlay.removeOverlay();
-    }
   }
 
   void _selectedRadiusListener() {
