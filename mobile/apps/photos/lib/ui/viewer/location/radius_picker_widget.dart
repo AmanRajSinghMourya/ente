@@ -1,9 +1,10 @@
-import "package:ente_components/ente_components.dart";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:logging/logging.dart";
 import "package:photos/generated/l10n.dart";
 import "package:photos/states/location_state.dart";
+import "package:photos/theme/colors.dart";
+import "package:photos/theme/ente_theme.dart";
 import "package:photos/utils/dialog_util.dart";
 
 class CustomTrackShape extends RoundedRectSliderTrackShape {
@@ -50,7 +51,8 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
   Widget build(BuildContext context) {
     final radiusValues = InheritedLocationTagData.of(context).radiusValues;
     final selectedRadius = widget.selectedRadiusNotifier.value;
-    final colors = context.componentColors;
+    final textTheme = getEnteTextTheme(context);
+    final colorScheme = getEnteColorScheme(context);
     final roundedRadius = roundRadius(selectedRadius);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,10 +63,10 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
             height: 52,
             width: 52,
             decoration: BoxDecoration(
-              color: colors.fillLight,
+              color: colorScheme.fillFaint,
               borderRadius: const BorderRadius.all(Radius.circular(2)),
               border: Border.all(
-                color: colors.strokeFaint,
+                color: colorScheme.strokeFainter,
                 width: 1,
                 strokeAlign: BorderSide.strokeAlignInside,
               ),
@@ -81,10 +83,8 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
                     child: Text(
                       roundedRadius,
                       style: double.parse(roundedRadius) < 1000
-                          ? TextStyles.large.copyWith(color: colors.textBase)
-                          : TextStyles.bodyBold.copyWith(
-                              color: colors.textBase,
-                            ),
+                          ? textTheme.largeBold
+                          : textTheme.bodyBold,
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -93,7 +93,7 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
                   flex: 5,
                   child: Text(
                     AppLocalizations.of(context).kiloMeterUnit,
-                    style: TextStyles.mini.copyWith(color: colors.textLight),
+                    style: textTheme.miniMuted,
                   ),
                 ),
               ],
@@ -111,7 +111,7 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
                 const SizedBox(height: 4),
                 Text(
                   AppLocalizations.of(context).radius,
-                  style: TextStyles.body.copyWith(color: colors.textBase),
+                  style: textTheme.body,
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -119,11 +119,11 @@ class _RadiusPickerWidgetState extends State<RadiusPickerWidget> {
                   child: SliderTheme(
                     data: SliderThemeData(
                       overlayColor: Colors.transparent,
-                      thumbColor: colors.textLighter,
-                      activeTrackColor: colors.textLighter,
-                      inactiveTrackColor: colors.strokeFaint,
-                      activeTickMarkColor: colors.textLight,
-                      inactiveTickMarkColor: colors.textLighter,
+                      thumbColor: strokeSolidMutedLight,
+                      activeTrackColor: strokeSolidMutedLight,
+                      inactiveTrackColor: colorScheme.strokeFaint,
+                      activeTickMarkColor: colorScheme.strokeMuted,
+                      inactiveTickMarkColor: strokeSolidMutedLight,
                       trackShape: CustomTrackShape(),
                       thumbShape: const RoundSliderThumbShape(
                         enabledThumbRadius: 6,
