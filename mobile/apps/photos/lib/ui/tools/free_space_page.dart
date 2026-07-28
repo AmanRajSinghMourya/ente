@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import "package:photos/generated/l10n.dart";
 import 'package:photos/models/freeable_space_info.dart';
-import 'package:photos/ui/common/gradient_button.dart';
 import "package:photos/ui/notification/toast.dart";
 import 'package:photos/utils/delete_file_util.dart';
 
@@ -151,11 +150,12 @@ class _FreeSpacePageState extends State<FreeSpacePage> {
           width: double.infinity,
           constraints: const BoxConstraints(minHeight: 64),
           padding: const EdgeInsets.fromLTRB(60, 0, 60, 0),
-          child: GradientButton(
+          child: ButtonComponent(
+            shouldSurfaceExecutionStates: false,
             onTap: () async {
               await _showConfirmFreeSpaceSheet(context, status);
             },
-            text: AppLocalizations.of(
+            label: AppLocalizations.of(
               context,
             ).freeUpAmount(sizeInMBorGB: formatBytes(status.size)),
           ),
