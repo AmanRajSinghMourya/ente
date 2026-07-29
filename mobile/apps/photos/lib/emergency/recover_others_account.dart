@@ -2,6 +2,7 @@ import "dart:async";
 import "dart:convert";
 import "dart:typed_data";
 
+import "package:ente_components/ente_components.dart";
 import "package:ente_crypto/ente_crypto.dart";
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
@@ -15,8 +16,6 @@ import "package:photos/theme/colors.dart";
 import "package:photos/theme/ente_theme.dart";
 import "package:photos/theme/text_style.dart";
 import "package:photos/ui/components/buttons/button_widget_v2.dart";
-import "package:photos/ui/components/models/text_input_type_v2.dart";
-import "package:photos/ui/components/text_input_widget_v2.dart";
 import 'package:photos/ui/notification/toast.dart';
 import 'package:photos/utils/dialog_util.dart';
 
@@ -107,32 +106,33 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
   Widget _getBody(EnteColorScheme colorScheme, EnteTextTheme textTheme) {
     final email = widget.sessions.user.email;
     String? passwordMessage;
-    TextInputMessageType passwordMessageType = TextInputMessageType.guide;
+    TextInputComponentMessageType passwordMessageType =
+        TextInputComponentMessageType.helper;
 
     if (_passwordInInputBox.isNotEmpty && _showPasswordStrength) {
       if (_passwordStrength > kStrongPasswordStrengthThreshold) {
         passwordMessage = AppLocalizations.of(context).strongPassword;
-        passwordMessageType = TextInputMessageType.success;
+        passwordMessageType = TextInputComponentMessageType.success;
       } else if (_passwordStrength <= kMildPasswordStrengthThreshold) {
         passwordMessage = AppLocalizations.of(context).weakStrength;
-        passwordMessageType = TextInputMessageType.alert;
+        passwordMessageType = TextInputComponentMessageType.alert;
       }
     }
 
     String? confirmPasswordMessage;
-    TextInputMessageType confirmPasswordMessageType =
-        TextInputMessageType.guide;
+    TextInputComponentMessageType confirmPasswordMessageType =
+        TextInputComponentMessageType.helper;
 
     if (_passwordInInputConfirmationBox.isNotEmpty &&
         _passwordInInputBox.isNotEmpty) {
       if (_passwordsMatch) {
         confirmPasswordMessage = AppLocalizations.of(context).passwordsMatch;
-        confirmPasswordMessageType = TextInputMessageType.success;
+        confirmPasswordMessageType = TextInputComponentMessageType.success;
       } else {
         confirmPasswordMessage = AppLocalizations.of(
           context,
         ).passwordsDontMatch;
-        confirmPasswordMessageType = TextInputMessageType.error;
+        confirmPasswordMessageType = TextInputComponentMessageType.error;
       }
     }
 
@@ -159,17 +159,18 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
                   textInputAction: TextInputAction.next,
                 ),
               ),
-              TextInputWidgetV2(
+              TextInputComponent(
                 label: AppLocalizations.of(context).password,
                 hintText: AppLocalizations.of(context).password,
-                textEditingController: _passwordController1,
+                controller: _passwordController1,
                 isPasswordInput: true,
                 isRequired: true,
-                autoCorrect: false,
+                autocorrect: false,
                 autofillHints: const [AutofillHints.newPassword],
+                shouldUnfocusOnTapOutside: false,
                 message: passwordMessage,
                 messageType: passwordMessageType,
-                onChange: (password) {
+                onChanged: (password) {
                   if (password != _passwordInInputBox) {
                     _passwordStrengthTimer?.cancel();
                     setState(() {
@@ -196,18 +197,19 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
                 },
               ),
               const SizedBox(height: 16),
-              TextInputWidgetV2(
+              TextInputComponent(
                 label: AppLocalizations.of(context).confirmPassword,
                 hintText: AppLocalizations.of(context).confirmPassword,
-                textEditingController: _passwordController2,
+                controller: _passwordController2,
                 isPasswordInput: true,
                 isRequired: true,
-                autoCorrect: false,
+                autocorrect: false,
                 autofillHints: const [AutofillHints.newPassword],
+                shouldUnfocusOnTapOutside: false,
                 finishAutofillContextOnEditingComplete: true,
                 message: confirmPasswordMessage,
                 messageType: confirmPasswordMessageType,
-                onChange: (confirmPassword) {
+                onChanged: (confirmPassword) {
                   setState(() {
                     _passwordInInputConfirmationBox = confirmPassword;
                     if (_passwordInInputBox.isNotEmpty) {

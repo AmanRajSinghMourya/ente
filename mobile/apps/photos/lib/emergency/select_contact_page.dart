@@ -1,4 +1,5 @@
 import 'package:email_validator/email_validator.dart';
+import "package:ente_components/ente_components.dart";
 import 'package:flutter/material.dart';
 import "package:logging/logging.dart";
 import 'package:photos/core/configuration.dart';
@@ -17,7 +18,6 @@ import "package:photos/ui/components/base_bottom_sheet.dart";
 import "package:photos/ui/components/buttons/button_widget_v2.dart";
 import "package:photos/ui/components/divider_widget.dart";
 import "package:photos/ui/components/menu_item_widget/menu_item_widget_new.dart";
-import "package:photos/ui/components/text_input_widget_v2.dart";
 import 'package:photos/ui/sharing/user_avator_widget.dart';
 import "package:photos/ui/sharing/verify_identity_dialog.dart";
 
@@ -78,16 +78,17 @@ class _AddContactSheetState extends State<AddContactSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextInputWidgetV2(
+          TextInputComponent(
             hintText: AppLocalizations.of(context).enterEmail,
-            textEditingController: _textController,
+            controller: _textController,
             focusNode: textFieldFocusNode,
             keyboardType: TextInputType.emailAddress,
-            autoCorrect: false,
+            autocorrect: false,
             isClearable: true,
             shouldUnfocusOnClearOrSubmit: true,
+            shouldUnfocusOnTapOutside: false,
             autofillHints: const [AutofillHints.email],
-            onChange: (value) {
+            onChanged: (value) {
               _email = value.trim();
               _emailIsValid = EmailValidator.validate(_email);
               setState(() {});
