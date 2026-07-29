@@ -55,7 +55,7 @@ class _ManageSharedLinkWidgetState extends State<ManageSharedLinkWidget> {
               Spacing.lg,
               Spacing.md,
               Spacing.lg,
-              Spacing.lg,
+              Spacing.md,
             ),
             sliver: SliverToBoxAdapter(
               child: Column(
@@ -94,7 +94,7 @@ class _ManageSharedLinkWidgetState extends State<ManageSharedLinkWidget> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: Spacing.xl),
+                  const SizedBox(height: Spacing.xxl),
                   MenuGroupComponent(
                     items: [
                       MenuComponent(
@@ -158,7 +158,7 @@ class _ManageSharedLinkWidgetState extends State<ManageSharedLinkWidget> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: Spacing.xl),
+                  const SizedBox(height: Spacing.xxl),
                   MenuGroupComponent(
                     items: [
                       if (url.isExpired)
@@ -207,7 +207,7 @@ class _ManageSharedLinkWidgetState extends State<ManageSharedLinkWidget> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: Spacing.xl),
+                  const SizedBox(height: Spacing.xxl),
                   MenuGroupComponent(
                     items: [
                       MenuComponent(
