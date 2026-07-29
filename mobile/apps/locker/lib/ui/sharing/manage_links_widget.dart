@@ -7,7 +7,6 @@ import "package:ente_pure_utils/ente_pure_utils.dart";
 import "package:ente_ui/components/captioned_text_widget_v2.dart";
 import "package:ente_ui/components/divider_widget.dart";
 import "package:ente_ui/components/menu_item_widget_v2.dart";
-import "package:ente_ui/components/toggle_switch_widget.dart";
 import "package:ente_ui/utils/dialog_util.dart";
 import "package:ente_ui/utils/toast_util.dart";
 import "package:ente_utils/share_utils.dart";
@@ -140,7 +139,7 @@ class _ManageSharedLinkWidgetState extends State<ManageSharedLinkWidget> {
                     alignCaptionedTextToLeft: true,
                     isTopBorderRadiusRemoved: true,
                     menuItemColor: colors.fillLight,
-                    trailingWidget: ToggleSwitchWidget(
+                    trailingWidget: ToggleSwitchComponent.async(
                       value: () => url.passwordEnabled,
                       onChanged: () async {
                         if (!url.passwordEnabled) {
