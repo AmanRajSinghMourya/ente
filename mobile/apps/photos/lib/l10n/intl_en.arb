@@ -1436,7 +1436,7 @@
       }
     }
   },
-  "filesSafelyOnEnte": "{count, plural, one {This file is safely on Ente; delete the device copy to free space without losing it.} other {All {formattedNumber} files are safely on Ente; delete device copies to free space without losing them.}}",
+  "filesSafelyOnEnte": "{count, plural, one {This item is backed up to Ente, delete the device copy to free space without losing it.} other {All {formattedNumber} items are backed up to Ente, delete device copies to free space without losing them.}}",
   "@filesSafelyOnEnte": {
     "description": "Explains that device copies can be deleted because the files are stored on Ente",
     "placeholders": {
@@ -1450,7 +1450,7 @@
       }
     }
   },
-  "filesInAlbumSafelyOnEnte": "{count, plural, one {This file in the album is safely on Ente; delete the device copy to free space without losing it.} other {All {formattedNumber} files in the album are safely on Ente; delete device copies to free space without losing them.}}",
+  "filesInAlbumSafelyOnEnte": "{count, plural, one {This item in the album is backed up to Ente, delete the device copy to free space without losing it.} other {All {formattedNumber} items in the album are backed up to Ente, delete device copies to free space without losing them.}}",
   "@filesInAlbumSafelyOnEnte": {
     "description": "Explains that device copies for files in an album can be deleted because the files are stored on Ente",
     "placeholders": {
