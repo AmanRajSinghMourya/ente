@@ -146,10 +146,8 @@ class _FreeSpacePageState extends State<FreeSpacePage> {
           ),
         ),
         const Padding(padding: EdgeInsets.all(24)),
-        Container(
+        SizedBox(
           width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 64),
-          padding: const EdgeInsets.fromLTRB(60, 0, 60, 0),
           child: ButtonComponent(
             shouldSurfaceExecutionStates: false,
             onTap: () async {
