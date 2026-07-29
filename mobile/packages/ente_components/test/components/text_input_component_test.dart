@@ -1,6 +1,7 @@
 import "dart:async";
 
 import "package:ente_components/ente_components.dart";
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_test/flutter_test.dart";
@@ -125,6 +126,44 @@ void main() {
     await tester.pump();
 
     expect(focusNode.hasFocus, isFalse);
+  });
+
+  testWidgets("TextInputComponent can retain focus when tapping outside", (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          Column(
+            children: [
+              TextInputComponent(
+                label: "Email",
+                focusNode: focusNode,
+                shouldUnfocusOnTapOutside: false,
+              ),
+              const SizedBox(height: 40),
+              const Text("Outside"),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isTrue);
+
+      await tester.tap(find.text("Outside"));
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isTrue);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets("TextInputComponent maps error and success states to borders", (

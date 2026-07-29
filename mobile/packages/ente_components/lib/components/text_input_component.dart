@@ -58,6 +58,7 @@ class TextInputComponent extends StatefulWidget {
     this.autofillHints,
     this.maxLines,
     this.minLines,
+    this.shouldUnfocusOnTapOutside = true,
     this.finishAutofillContextOnEditingComplete = false,
   });
 
@@ -121,6 +122,12 @@ class TextInputComponent extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final int? maxLines;
   final int? minLines;
+
+  /// Whether tapping outside the field should release focus.
+  ///
+  /// When false, Flutter's platform default applies. Touches retain focus on
+  /// mobile, while pointer interactions can still release it.
+  final bool shouldUnfocusOnTapOutside;
   final bool finishAutofillContextOnEditingComplete;
 
   @override
@@ -334,7 +341,9 @@ class _TextInputComponentState extends State<TextInputComponent> {
                                 ? TextAlignVertical.top
                                 : TextAlignVertical.center,
                             onEditingComplete: _handleEditingComplete,
-                            onTapOutside: (_) => _focusNode.unfocus(),
+                            onTapOutside: widget.shouldUnfocusOnTapOutside
+                                ? (_) => _focusNode.unfocus()
+                                : null,
                             style: TextStyles.body.copyWith(
                               color: _textColor(colors),
                             ),
