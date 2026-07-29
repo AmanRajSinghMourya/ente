@@ -1,11 +1,9 @@
 import "package:ente_components/ente_components.dart";
 import "package:ente_pure_utils/ente_pure_utils.dart";
-import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:hugeicons/hugeicons.dart";
 import "package:photos/core/event_bus.dart";
 import "package:photos/events/christmas_banner_event.dart";
-import "package:photos/gateways/storage_bonus/models/bonus.dart";
 import "package:photos/service_locator.dart";
 import "package:photos/theme/ente_theme.dart";
 import "package:photos/ui/components/menu_item_widget/menu_item_widget_new.dart";
@@ -15,7 +13,6 @@ import "package:photos/ui/growth/referral_screen.dart";
 import "package:photos/ui/home/christmas/christmas_utils.dart";
 import "package:photos/ui/notification/toast.dart";
 import "package:photos/ui/notification/update/change_log_page.dart";
-import "package:photos/ui/payment/add_on_page.dart";
 import "package:photos/ui/settings/debug/social_debug_screen.dart";
 
 class DebugSettingsPage extends StatefulWidget {
@@ -258,22 +255,6 @@ class _DebugSettingsPageState extends State<DebugSettingsPage> {
                               );
                             },
                           ),
-                          if (kDebugMode)
-                            MenuItemWidgetNew(
-                              title: "Preview add-ons page",
-                              leadingIconWidget: _buildIconWidget(
-                                context,
-                                HugeIcons.strokeRoundedGift,
-                              ),
-                              trailingIcon: Icons.chevron_right_outlined,
-                              trailingIconIsMuted: true,
-                              onTap: () async {
-                                await routeToPage(
-                                  context,
-                                  AddOnPage(_previewBonusData()),
-                                );
-                              },
-                            ),
                         ],
                       ),
                     ],
@@ -294,18 +275,5 @@ class _DebugSettingsPageState extends State<DebugSettingsPage> {
       color: colorScheme.menuItemIconStroke,
       size: 20,
     );
-  }
-
-  BonusData _previewBonusData() {
-    return BonusData([
-      Bonus(
-        50 * 1024 * 1024 * 1024,
-        "ADD_ON_BF_2024",
-        DateTime.now().add(const Duration(days: 365)).microsecondsSinceEpoch,
-        false,
-      ),
-      Bonus(20 * 1024 * 1024 * 1024, "ADD_ON_SUPPORT", 0, false),
-      Bonus(100 * 1024 * 1024 * 1024, "COMMUNITY_GRANT", 0, false),
-    ]);
   }
 }
