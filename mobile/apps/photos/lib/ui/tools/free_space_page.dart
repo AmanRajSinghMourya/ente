@@ -33,9 +33,12 @@ class _FreeSpacePageState extends State<FreeSpacePage> {
         title: AppLocalizations.of(context).freeUpDeviceSpace,
         backgroundColor: context.componentColors.backgroundBase,
         slivers: [
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _getBody(widget.status),
+          SliverSafeArea(
+            top: false,
+            sliver: SliverFillRemaining(
+              hasScrollBody: false,
+              child: _getBody(widget.status),
+            ),
           ),
         ],
       ),
@@ -43,12 +46,10 @@ class _FreeSpacePageState extends State<FreeSpacePage> {
   }
 
   Widget _getBody(FreeableSpaceInfo status) {
-    Logger("FreeSpacePage").info(
-      "Number of uploaded files: " + widget.status.localIDs.length.toString(),
-    );
     Logger(
       "FreeSpacePage",
-    ).info("Space consumed: " + widget.status.size.toString());
+    ).info("Number of uploaded files: " + status.localIDs.length.toString());
+    Logger("FreeSpacePage").info("Space consumed: " + status.size.toString());
     final count = status.localIDs.length;
     final formattedCount = NumberFormat().format(count);
     final formattedSize = formatBytes(status.size);
@@ -73,10 +74,15 @@ class _FreeSpacePageState extends State<FreeSpacePage> {
             SizedBox(
               width: 300,
               child: Text(
-                l10n.filesSafelyOnEnte(
-                  count: count,
-                  formattedNumber: formattedCount,
-                ),
+                widget.clearSpaceForFolder
+                    ? l10n.filesInAlbumSafelyOnEnte(
+                        count: count,
+                        formattedNumber: formattedCount,
+                      )
+                    : l10n.filesSafelyOnEnte(
+                        count: count,
+                        formattedNumber: formattedCount,
+                      ),
                 textAlign: TextAlign.center,
                 style: TextStyles.mini.copyWith(color: colors.textLight),
               ),

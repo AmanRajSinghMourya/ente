@@ -1450,6 +1450,20 @@
       }
     }
   },
+  "filesInAlbumSafelyOnEnte": "{count, plural, one {This file in the album is safely on Ente; delete the device copy to free space without losing it.} other {All {formattedNumber} files in the album are safely on Ente; delete device copies to free space without losing them.}}",
+  "@filesInAlbumSafelyOnEnte": {
+    "description": "Explains that device copies for files in an album can be deleted because the files are stored on Ente",
+    "placeholders": {
+      "count": {
+        "example": "395",
+        "type": "int"
+      },
+      "formattedNumber": {
+        "example": "395",
+        "type": "String"
+      }
+    }
+  },
   "freeUpSpaceSaving": "{count, plural, one {It can be deleted from the device to free up {formattedSize}} other {They can be deleted from the device to free up {formattedSize}}}",
   "filesBackedUpInAlbum": "{count, plural, one {{formattedNumber} file} other {{formattedNumber} files}} in this album has been backed up safely",
   "@filesBackedUpInAlbum": {
