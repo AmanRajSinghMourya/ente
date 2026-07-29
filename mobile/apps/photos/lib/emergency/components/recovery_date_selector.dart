@@ -1,8 +1,6 @@
+import "package:ente_components/ente_components.dart";
 import "package:flutter/material.dart";
 import "package:photos/l10n/l10n.dart";
-import "package:photos/theme/colors.dart";
-import "package:photos/theme/ente_theme.dart";
-import "package:photos/theme/text_style.dart";
 
 class RecoveryDateSelector extends StatelessWidget {
   final int selectedDays;
@@ -16,9 +14,6 @@ class RecoveryDateSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = getEnteColorScheme(context);
-    final textTheme = getEnteTextTheme(context);
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
@@ -26,24 +21,18 @@ class RecoveryDateSelector extends StatelessWidget {
           label: context.l10n.trashDaysLeft(count: 7),
           isSelected: selectedDays == 7,
           onTap: () => onDaysChanged(7),
-          colorScheme: colorScheme,
-          textTheme: textTheme,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: Spacing.md),
         _DayChip(
           label: context.l10n.trashDaysLeft(count: 14),
           isSelected: selectedDays == 14,
           onTap: () => onDaysChanged(14),
-          colorScheme: colorScheme,
-          textTheme: textTheme,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: Spacing.md),
         _DayChip(
           label: context.l10n.trashDaysLeft(count: 30),
           isSelected: selectedDays == 30,
           onTap: () => onDaysChanged(30),
-          colorScheme: colorScheme,
-          textTheme: textTheme,
         ),
       ],
     );
@@ -54,34 +43,32 @@ class _DayChip extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  final EnteColorScheme colorScheme;
-  final EnteTextTheme textTheme;
 
   const _DayChip({
     required this.label,
     required this.isSelected,
     required this.onTap,
-    required this.colorScheme,
-    required this.textTheme,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.componentColors;
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: Motion.standard,
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(Spacing.lg),
         decoration: BoxDecoration(
-          color: isSelected ? colorScheme.greenBase : colorScheme.fillFaint,
-          borderRadius: BorderRadius.circular(14),
+          color: isSelected ? colors.primary : colors.fillDark,
+          borderRadius: BorderRadius.circular(Radii.lg),
         ),
         child: Text(
           label,
           textAlign: TextAlign.center,
-          style: textTheme.bodyBold.copyWith(
-            color: isSelected ? Colors.white : colorScheme.textBase,
+          style: TextStyles.bodyBold.copyWith(
+            color: isSelected ? colors.specialWhite : colors.textBase,
           ),
         ),
       ),

@@ -12,12 +12,8 @@ import "package:photos/models/api/collection/user.dart";
 import "package:photos/services/account/user_service.dart";
 import 'package:photos/services/collections_service.dart';
 import "package:photos/services/contacts/contact_identity_resolver.dart";
-import 'package:photos/theme/ente_theme.dart';
 import "package:photos/ui/components/alert_bottom_sheet.dart";
-import "package:photos/ui/components/base_bottom_sheet.dart";
 import "package:photos/ui/components/buttons/button_widget_v2.dart";
-import "package:photos/ui/components/divider_widget.dart";
-import "package:photos/ui/components/menu_item_widget/menu_item_widget_new.dart";
 import 'package:photos/ui/sharing/user_avator_widget.dart';
 import "package:photos/ui/sharing/verify_identity_dialog.dart";
 
@@ -25,14 +21,15 @@ Future<bool?> showAddContactSheet(
   BuildContext context, {
   required EmergencyInfo emergencyInfo,
 }) {
-  return showBaseBottomSheet<bool>(
-    context,
-    title: context.l10n.addTrustedContact,
-    headerSpacing: 20,
-    padding: const EdgeInsets.all(16),
-    isKeyboardAware: true,
-    backgroundColor: getEnteColorScheme(context).backgroundColour,
-    child: AddContactSheet(emergencyInfo: emergencyInfo),
+  return showBottomSheetComponent<bool>(
+    context: context,
+    builder: (context) => BottomSheetComponent(
+      title: context.l10n.addTrustedContact,
+      padding: const EdgeInsets.all(16),
+      contentSpacing: 20,
+      isKeyboardAware: true,
+      content: AddContactSheet(emergencyInfo: emergencyInfo),
+    ),
   );
 }
 
@@ -66,8 +63,7 @@ class _AddContactSheetState extends State<AddContactSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = getEnteColorScheme(context);
-    final textTheme = getEnteTextTheme(context);
+    final colors = context.componentColors;
     final List<User> suggestedUsers = _getSuggestedUser();
     final List<String> emailsToAdd = _emailsToAdd;
     final bool canAdd = emailsToAdd.isNotEmpty;
@@ -86,7 +82,6 @@ class _AddContactSheetState extends State<AddContactSheet> {
             autocorrect: false,
             isClearable: true,
             shouldUnfocusOnClearOrSubmit: true,
-            shouldUnfocusOnTapOutside: false,
             autofillHints: const [AutofillHints.email],
             onChanged: (value) {
               _email = value.trim();
@@ -98,7 +93,7 @@ class _AddContactSheetState extends State<AddContactSheet> {
             const SizedBox(height: 20),
             Text(
               context.l10n.chooseFromAnExistingContact,
-              style: textTheme.bodyMuted,
+              style: TextStyles.body.copyWith(color: colors.textLight),
             ),
             const SizedBox(height: 8),
             ConstrainedBox(
@@ -108,55 +103,53 @@ class _AddContactSheetState extends State<AddContactSheet> {
                 thumbVisibility: suggestedUsers.length > 2,
                 thickness: 4,
                 radius: const Radius.circular(3),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: colorScheme.fillFaint,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: suggestedUsers.length,
-                    itemBuilder: (context, index) {
-                      final user = suggestedUsers[index];
-                      final isSelected = _selectedEmails.contains(user.email);
-                      final isLastItem = index == suggestedUsers.length - 1;
-                      return _buildGroupedSuggestionItem(
-                        listIndex: index,
-                        isLastItem: isLastItem,
-                        child: MenuItemWidgetNew(
-                          title: resolveDisplayName(user),
-                          titleColor: colorScheme.textMuted,
-                          leadingIconWidget: UserAvatarWidget(
-                            user,
-                            type: AvatarType.medium,
-                            currentUserID: Configuration.instance.getUserID()!,
+                child: ListView(
+                  controller: _scrollController,
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    MenuGroupComponent(
+                      showDividers: true,
+                      items: [
+                        for (final user in suggestedUsers)
+                          MenuComponent(
+                            title: resolveDisplayName(user),
+                            titleColor: colors.textLight,
+                            leading: UserAvatarWidget(
+                              user,
+                              type: AvatarType.medium,
+                              currentUserID: Configuration.instance
+                                  .getUserID()!,
+                            ),
+                            trailing: _selectedEmails.contains(user.email)
+                                ? Icon(
+                                    Icons.check_rounded,
+                                    color: colors.primary,
+                                    size: IconSizes.small,
+                                  )
+                                : null,
+                            onTap: () {
+                              textFieldFocusNode.unfocus();
+                              if (_selectedEmails.contains(user.email)) {
+                                _selectedEmails.remove(user.email);
+                              } else {
+                                _selectedEmails.add(user.email);
+                              }
+                              setState(() {});
+                            },
                           ),
-                          leadingIconSize: 24,
-                          menuItemColor: Colors.transparent,
-                          trailingIcon: isSelected ? Icons.check : null,
-                          trailingIconColor: colorScheme.greenBase,
-                          onTap: () async {
-                            textFieldFocusNode.unfocus();
-                            if (isSelected) {
-                              _selectedEmails.remove(user.email);
-                            } else {
-                              _selectedEmails.add(user.email);
-                            }
-                            setState(() {});
-                          },
-                          borderRadius: 0,
-                        ),
-                      );
-                    },
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
           const SizedBox(height: 20),
-          Text(context.l10n.chooseARecoveryTime, style: textTheme.bodyMuted),
+          Text(
+            context.l10n.chooseARecoveryTime,
+            style: TextStyles.body.copyWith(color: colors.textLight),
+          ),
           const SizedBox(height: 12),
           RecoveryDateSelector(
             selectedDays: _selectedRecoveryDays,
@@ -167,19 +160,18 @@ class _AddContactSheetState extends State<AddContactSheet> {
             },
           ),
           const SizedBox(height: 20),
-          ButtonWidgetV2(
-            buttonType: ButtonTypeV2.primary,
-            labelText: context.l10n.addTrustedContact,
+          ButtonComponent(
+            label: context.l10n.addTrustedContact,
             isDisabled: !canAdd,
             onTap: canAdd ? _onAddContactTap : null,
             shouldSurfaceExecutionStates: false,
           ),
           const SizedBox(height: 12),
           Center(
-            child: ButtonWidgetV2(
-              buttonType: ButtonTypeV2.link,
-              buttonSize: ButtonSizeV2.small,
-              labelText: AppLocalizations.of(context).verifyIDLabel,
+            child: ButtonComponent(
+              label: AppLocalizations.of(context).verifyIDLabel,
+              variant: ButtonComponentVariant.link,
+              size: ButtonComponentSize.small,
               isDisabled: emailForVerification == null,
               shouldSurfaceExecutionStates: false,
               onTap: emailForVerification == null
@@ -366,29 +358,5 @@ class _AddContactSheetState extends State<AddContactSheet> {
       return emailsToAdd.first;
     }
     return null;
-  }
-
-  Widget _buildGroupedSuggestionItem({
-    required int listIndex,
-    required bool isLastItem,
-    required Widget child,
-  }) {
-    final colorScheme = getEnteColorScheme(context);
-    return Column(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.vertical(
-            top: listIndex == 0 ? const Radius.circular(14) : Radius.zero,
-            bottom: isLastItem ? const Radius.circular(14) : Radius.zero,
-          ),
-          child: child,
-        ),
-        if (!isLastItem)
-          DividerWidget(
-            dividerType: DividerType.menu,
-            bgColor: colorScheme.fillFaint,
-          ),
-      ],
-    );
   }
 }

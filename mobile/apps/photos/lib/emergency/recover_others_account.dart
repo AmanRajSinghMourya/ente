@@ -167,7 +167,6 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
                 isRequired: true,
                 autocorrect: false,
                 autofillHints: const [AutofillHints.newPassword],
-                shouldUnfocusOnTapOutside: false,
                 message: passwordMessage,
                 messageType: passwordMessageType,
                 onChanged: (password) {
@@ -205,7 +204,6 @@ class _RecoverOthersAccountState extends State<RecoverOthersAccount> {
                 isRequired: true,
                 autocorrect: false,
                 autofillHints: const [AutofillHints.newPassword],
-                shouldUnfocusOnTapOutside: false,
                 finishAutofillContextOnEditingComplete: true,
                 message: confirmPasswordMessage,
                 messageType: confirmPasswordMessageType,
