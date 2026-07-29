@@ -56,7 +56,6 @@ class _ItemsWidgetState extends State<ItemsWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.componentColors;
     final items = <Widget>[];
     if (isCustomLimit) {
       items.add(_menuItemForPicker(initialDeviceLimit));
@@ -64,11 +63,7 @@ class _ItemsWidgetState extends State<ItemsWidget> {
     for (final deviceLimit in publicLinkDeviceLimits) {
       items.add(_menuItemForPicker(deviceLimit));
     }
-    return MenuGroupComponent(
-      showDividers: true,
-      items: items,
-      dividerColor: colors.strokeFaint,
-    );
+    return MenuGroupComponent(items: items);
   }
 
   Widget _menuItemForPicker(int deviceLimit) {

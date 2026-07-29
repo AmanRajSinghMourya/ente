@@ -57,8 +57,6 @@ class _ItemsWidgetState extends State<ItemsWidget> {
   @override
   Widget build(BuildContext context) {
     return MenuGroupComponent(
-      showDividers: true,
-      dividerColor: context.componentColors.strokeFaint,
       items: [
         for (final expiryOption in _expiryOptions)
           _menuItemForPicker(context, expiryOption),
