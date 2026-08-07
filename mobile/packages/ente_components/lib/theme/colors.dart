@@ -64,6 +64,7 @@ class ColorTokens {
     required this.accentPink,
     required this.accentTeal,
     required this.specialContentReverse,
+    required this.dynamicFabBackground,
     required this.specialScrim,
     required this.specialWhite,
     required this.specialWhiteOverlay,
@@ -126,6 +127,7 @@ class ColorTokens {
   final Color accentPink;
   final Color accentTeal;
   final Color specialContentReverse;
+  final Color dynamicFabBackground;
   final Color specialScrim;
   final Color specialWhite;
   final Color specialWhiteOverlay;
@@ -202,6 +204,7 @@ class ColorTokens {
       accentPink: accentPink,
       accentTeal: accentTeal,
       specialContentReverse: specialContentReverse,
+      dynamicFabBackground: dynamicFabBackground,
       specialScrim: specialScrim,
       specialWhite: specialWhite,
       specialWhiteOverlay: specialWhiteOverlay,
@@ -302,6 +305,7 @@ const ColorTokens colorTokensLight = ColorTokens(
   accentPink: accentPinkDefaultLight,
   accentTeal: accentTealDefaultLight,
   specialContentReverse: specialContentReverseLight,
+  dynamicFabBackground: dynamicFabBackgroundLight,
   specialScrim: specialScrimLight,
   specialWhite: specialWhiteLight,
   specialWhiteOverlay: specialWhiteOverlayLight,
@@ -365,6 +369,7 @@ const ColorTokens colorTokensDark = ColorTokens(
   accentPink: accentPinkDefaultDark,
   accentTeal: accentTealDefaultDark,
   specialContentReverse: specialContentReverseDark,
+  dynamicFabBackground: dynamicFabBackgroundDark,
   specialScrim: specialScrimDark,
   specialWhite: specialWhiteDark,
   specialWhiteOverlay: specialWhiteOverlayDark,
@@ -591,6 +596,9 @@ const Color accentTealDefaultDark = Color.fromRGBO(95, 183, 187, 1);
 // Special Colors
 const Color specialContentReverseLight = Color.fromRGBO(255, 255, 255, 1);
 const Color specialContentReverseDark = Color.fromRGBO(0, 0, 0, 1);
+
+const Color dynamicFabBackgroundLight = Color.fromRGBO(0, 0, 0, 1);
+const Color dynamicFabBackgroundDark = Color.fromRGBO(48, 48, 48, 1);
 
 const Color specialScrimLight = Color.fromRGBO(0, 0, 0, 0.4);
 const Color specialScrimDark = Color.fromRGBO(0, 0, 0, 0.4);
