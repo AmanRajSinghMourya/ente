@@ -7,7 +7,6 @@ import "package:ente_legacy/models/legacy_kit_models.dart";
 import "package:ente_legacy/pages/share_legacy_kit_page.dart";
 import "package:ente_legacy/services/legacy_kit_service.dart";
 import "package:ente_strings/ente_strings.dart";
-import "package:ente_ui/components/buttons/dynamic_fab.dart";
 import "package:ente_ui/utils/toast_util.dart";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";

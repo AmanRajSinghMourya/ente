@@ -1,7 +1,5 @@
 import 'package:dots_indicator/dots_indicator.dart';
 import 'package:ente_accounts/ente_accounts.dart';
-import 'package:ente_components/components/buttons/dynamic_fab.dart'
-    show NoScalingAnimation;
 import 'package:ente_components/ente_components.dart';
 import 'package:ente_strings/ente_strings.dart';
 import 'package:ente_ui/theme/ente_theme.dart';

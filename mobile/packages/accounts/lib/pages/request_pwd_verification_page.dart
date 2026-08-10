@@ -1,8 +1,6 @@
 import "dart:convert";
 import "dart:typed_data";
 
-import "package:ente_components/components/buttons/dynamic_fab.dart"
-    show NoScalingAnimation;
 import "package:ente_components/ente_components.dart";
 import "package:ente_configuration/base_configuration.dart";
 import 'package:ente_crypto_api/ente_crypto_api.dart';

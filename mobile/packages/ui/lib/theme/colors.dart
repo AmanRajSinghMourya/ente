@@ -137,8 +137,6 @@ class EnteColorScheme extends ThemeExtension<EnteColorScheme> {
   final Color boxSelectColor;
   final Color boxUnSelectColor;
   final Color alternativeColor;
-  final Color dynamicFABBackgroundColor;
-  final Color dynamicFABTextColor;
   final Color recoveryKeyBoxColor;
   final Color frostyBlurBackdropFilterColor;
   final Color iconColor;
@@ -215,8 +213,6 @@ class EnteColorScheme extends ThemeExtension<EnteColorScheme> {
     this.boxSelectColor = _defaultBoxSelectColor,
     this.boxUnSelectColor = _defaultBoxUnSelectColor,
     this.alternativeColor = _defaultAlternativeColor,
-    this.dynamicFABBackgroundColor = _defaultDynamicFABBackgroundColor,
-    this.dynamicFABTextColor = _defaultDynamicFABTextColor,
     this.recoveryKeyBoxColor = _defaultRecoveryKeyBoxColor,
     this.frostyBlurBackdropFilterColor = _defaultFrostyBlurBackdropFilterColor,
     this.iconColor = _defaultIconColor,
@@ -397,8 +393,6 @@ class EnteColorScheme extends ThemeExtension<EnteColorScheme> {
     Color? boxSelectColor,
     Color? boxUnSelectColor,
     Color? alternativeColor,
-    Color? dynamicFABBackgroundColor,
-    Color? dynamicFABTextColor,
     Color? recoveryKeyBoxColor,
     Color? frostyBlurBackdropFilterColor,
     Color? iconColor,
@@ -466,9 +460,6 @@ class EnteColorScheme extends ThemeExtension<EnteColorScheme> {
       boxSelectColor: boxSelectColor ?? this.boxSelectColor,
       boxUnSelectColor: boxUnSelectColor ?? this.boxUnSelectColor,
       alternativeColor: alternativeColor ?? this.alternativeColor,
-      dynamicFABBackgroundColor:
-          dynamicFABBackgroundColor ?? this.dynamicFABBackgroundColor,
-      dynamicFABTextColor: dynamicFABTextColor ?? this.dynamicFABTextColor,
       recoveryKeyBoxColor: recoveryKeyBoxColor ?? this.recoveryKeyBoxColor,
       frostyBlurBackdropFilterColor:
           frostyBlurBackdropFilterColor ?? this.frostyBlurBackdropFilterColor,
@@ -724,10 +715,6 @@ const Color _defaultBoxUnSelectColor = Color.fromRGBO(240, 240, 240, 1);
 
 // Alternative color
 const Color _defaultAlternativeColor = Color.fromARGB(255, 152, 77, 244);
-
-// Dynamic FAB colors
-const Color _defaultDynamicFABBackgroundColor = Color.fromRGBO(0, 0, 0, 1);
-const Color _defaultDynamicFABTextColor = Color.fromRGBO(255, 255, 255, 1);
 
 // Recovery key box color
 const Color _defaultRecoveryKeyBoxColor = Color.fromARGB(51, 150, 0, 220);
