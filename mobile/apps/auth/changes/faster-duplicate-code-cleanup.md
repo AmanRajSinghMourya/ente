@@ -1,0 +1,1 @@
+- Made removing large groups of duplicate authenticator codes significantly faster.

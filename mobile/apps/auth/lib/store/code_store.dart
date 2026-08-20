@@ -126,6 +126,7 @@ class CodeStore {
   Future<AddResult> addCode(
     Code code, {
     bool shouldSync = true,
+    bool shouldNotify = true,
     AccountMode? accountMode,
     List<Code>? existingAllCodes,
   }) async {
@@ -166,7 +167,9 @@ class CodeStore {
         mode,
       );
     }
-    Bus.instance.fire(CodesUpdatedEvent());
+    if (shouldNotify) {
+      Bus.instance.fire(CodesUpdatedEvent());
+    }
     return result;
   }
 

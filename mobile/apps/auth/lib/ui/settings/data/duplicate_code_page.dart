@@ -1,8 +1,11 @@
+import 'package:ente_auth/events/codes_updated_event.dart';
+import 'package:ente_auth/services/authenticator_service.dart';
 import 'package:ente_auth/services/deduplication_service.dart';
 import 'package:ente_auth/store/code_store.dart';
 import 'package:ente_auth/ui/code_widget.dart';
 import 'package:ente_auth/utils/dialog_util.dart';
 import 'package:ente_components/ente_components.dart';
+import 'package:ente_events/event_bus.dart';
 import 'package:ente_lock_screen/local_authentication_service.dart';
 import 'package:ente_strings/ente_strings.dart';
 import 'package:flutter/material.dart';
@@ -199,14 +202,26 @@ class _DuplicateCodePageState extends State<DuplicateCodePage> {
   }
 
   Future<bool> _trashSelectedDuplicates() async {
+    AccountMode? accountMode;
+    var didTrashCode = false;
     try {
+      accountMode = AuthenticatorService.instance.getAccountMode();
+      final existingAllCodes = await CodeStore.instance.getAllCodes(
+        accountMode: accountMode,
+        sortCodes: false,
+      );
       for (final index in selectedGroups) {
         final codes = _duplicateCodes[index].codes;
         for (var codeIndex = 1; codeIndex < codes.length; codeIndex++) {
           final code = codes[codeIndex];
           await CodeStore.instance.addCode(
             code.copyWith(display: code.display.copyWith(trashed: true)),
+            accountMode: accountMode,
+            existingAllCodes: existingAllCodes,
+            shouldSync: false,
+            shouldNotify: false,
           );
+          didTrashCode = true;
         }
       }
       return true;
@@ -216,6 +231,13 @@ class _DuplicateCodePageState extends State<DuplicateCodePage> {
         showGenericErrorDialog(context: context, error: error).ignore();
       }
       return false;
+    } finally {
+      if (didTrashCode) {
+        Bus.instance.fire(CodesUpdatedEvent());
+        if (accountMode == AccountMode.online) {
+          AuthenticatorService.instance.onlineSync().ignore();
+        }
+      }
     }
   }
 }
