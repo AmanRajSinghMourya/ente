@@ -15,7 +15,7 @@ permissions:
     contents: write
 
 concurrency:
-    group: auth-build
+    group: auth-build-unsigned-test
     cancel-in-progress: false
 
 jobs:
