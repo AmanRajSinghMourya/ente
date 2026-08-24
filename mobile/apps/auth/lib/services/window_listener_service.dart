@@ -71,6 +71,27 @@ class WindowListenerService with WindowListener, TrayListener {
     return _preferences.getBool('is_maximized') ?? initialIsMaximized;
   }
 
+  Future<void> restoreWindowPosition() async {
+    if (!Platform.isWindows) return;
+    final x = _preferences.getDouble('windowX');
+    final y = _preferences.getDouble('windowY');
+    if (x != null && y != null) {
+      final position = Offset(x, y);
+      final displays = await screenRetriever.getAllDisplays();
+      for (final display in displays) {
+        final visiblePosition = display.visiblePosition;
+        final visibleSize = display.visibleSize;
+        if (visiblePosition != null &&
+            visibleSize != null &&
+            (visiblePosition & visibleSize).contains(position)) {
+          await windowManager.setPosition(position);
+          return;
+        }
+      }
+    }
+    await windowManager.center();
+  }
+
   @override
   void onWindowResize() {
     if (isMenubarMode() && !_isOneOffWindowed) return;
@@ -82,6 +103,18 @@ class WindowListenerService with WindowListener, TrayListener {
     final height = (await windowManager.getSize()).height;
     await _preferences.setDouble('windowWidth', width);
     await _preferences.setDouble('windowHeight', height);
+  }
+
+  @override
+  void onWindowMoved() {
+    if (!Platform.isWindows) return;
+    unawaited(_saveWindowPosition());
+  }
+
+  Future<void> _saveWindowPosition() async {
+    final position = await windowManager.getPosition();
+    await _preferences.setDouble('windowX', position.dx);
+    await _preferences.setDouble('windowY', position.dy);
   }
 
   @override
