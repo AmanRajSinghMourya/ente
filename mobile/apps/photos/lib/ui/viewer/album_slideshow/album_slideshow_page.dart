@@ -617,6 +617,7 @@ class _AlbumSlideshowSettingsSheetState
     return BottomSheetComponent(
       title: pendingTranslation("Slideshow settings"),
       closeTooltip: context.strings.close,
+      isScrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
