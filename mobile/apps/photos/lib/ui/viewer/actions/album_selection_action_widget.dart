@@ -171,6 +171,7 @@ class _AlbumSelectionActionWidgetState
           hugeIcon: HugeIcons.strokeRoundedDelete01,
           onTap: _trashCollection,
           isCritical: true,
+          shouldShow: ownsAllSelectedAlbums,
         ),
       );
     } else if (widget.sectionType == UISectionType.hiddenCollections) {
@@ -195,6 +196,7 @@ class _AlbumSelectionActionWidgetState
           labelText: context.strings.archive,
           hugeIcon: HugeIcons.strokeRoundedArchive03,
           onTap: _archiveClick,
+          shouldShow: ownsAllSelectedAlbums,
         ),
       );
     }
@@ -591,9 +593,7 @@ class _AlbumSelectionActionWidgetState
   }
 
   bool _usesShareeMetadata(Collection collection) {
-    return widget.sectionType == UISectionType.incomingCollections ||
-        widget.sectionType == UISectionType.homeCollections &&
-            !collection.isOwner(Configuration.instance.getUserID()!);
+    return !collection.isOwner(Configuration.instance.getUserID()!);
   }
 
   Future<void> _leaveAlbum() async {

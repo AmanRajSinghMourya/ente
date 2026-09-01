@@ -1,0 +1,1 @@
+- Archived shared and received albums now appear only in Archive.
