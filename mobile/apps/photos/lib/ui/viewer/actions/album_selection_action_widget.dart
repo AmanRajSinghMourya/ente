@@ -196,7 +196,6 @@ class _AlbumSelectionActionWidgetState
           labelText: context.strings.archive,
           hugeIcon: HugeIcons.strokeRoundedArchive03,
           onTap: _archiveClick,
-          shouldShow: ownsAllSelectedAlbums,
         ),
       );
     }

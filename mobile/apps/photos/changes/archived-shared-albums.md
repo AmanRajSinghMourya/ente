@@ -1,1 +1,1 @@
-- Archived shared and received albums now appear only in Archive.
+- Shared and received albums now move to Archive and back.

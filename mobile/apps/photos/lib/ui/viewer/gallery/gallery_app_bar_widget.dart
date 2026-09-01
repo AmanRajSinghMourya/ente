@@ -865,8 +865,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             iconColor,
           ),
         ),
-      if (galleryType == GalleryType.sharedCollection &&
-          widget.collection!.hasShareeArchived())
+      if (galleryType == GalleryType.sharedCollection)
         _menuOption(
           AlbumPopupAction.sharedArchive,
           widget.collection!.hasShareeArchived()
