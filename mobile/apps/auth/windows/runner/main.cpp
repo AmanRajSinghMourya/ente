@@ -55,10 +55,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   flutter::DartProject project(L"data");
   project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);
-  // TODO: Remove after upgrading past Flutter 3.38.10.
-  // Added for Flutter Windows frame-pacing issues tracked in
-  // flutter/flutter#175135 and flutter/flutter#178916.
-  project.set_ui_thread_policy(flutter::UIThreadPolicy::RunOnSeparateThread);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
