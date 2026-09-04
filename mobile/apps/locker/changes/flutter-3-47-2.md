@@ -1,1 +1,1 @@
-- Improved app stability and compatibility with an updated Flutter framework.
+- Upgrade to flutter 3.47.2
