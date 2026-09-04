@@ -1,0 +1,1 @@
+- Improved app stability and compatibility with an updated Flutter framework.
