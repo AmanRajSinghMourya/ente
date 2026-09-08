@@ -201,6 +201,9 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
           padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
           child: MenuComponent(
             title: strings.shareAllPersonPhotos,
+            subtitle: strings.shareAllPersonPhotosDescription(
+              name: widget.person.data.name,
+            ),
             trailing: ToggleSwitchComponent(
               selected: _autoAdd,
               onChanged: _setAutoAdd,
@@ -277,7 +280,7 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
       await collections.addOrCopyToCollection(
         album.id,
         _filesToShare.map((file) => file.copyWith()).toList(),
-        toCopy: true,
+        toCopy: false,
       );
       await collections.createShareUrl(album);
       if (_autoAdd) {

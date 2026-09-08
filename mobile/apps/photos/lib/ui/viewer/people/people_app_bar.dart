@@ -282,7 +282,10 @@ class _AppBarWidgetState extends State<PeopleAppBar> {
       return actions;
     }
 
-    final files = GalleryFilesState.maybeOf(context)?.galleryFilesOrNull;
+    final currentUserID = Configuration.instance.getUserID();
+    final files = GalleryFilesState.maybeOf(context)?.galleryFilesOrNull
+        ?.where((file) => file.ownerID == currentUserID)
+        .toList();
     if (!isIgnored &&
         person.data.name.trim().isNotEmpty &&
         files != null &&
