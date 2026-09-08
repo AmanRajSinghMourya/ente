@@ -92,6 +92,7 @@ class Gallery extends StatefulWidget {
 
   // Enables tap-to-select; it does not indicate whether files are selected.
   final bool inSelectionMode;
+  final bool disableSelection;
   final bool showSelectAll;
 
   final SortAscFn? sortAsyncFn;
@@ -122,6 +123,7 @@ class Gallery extends StatefulWidget {
     this.disableScroll = false,
     this.limitSelectionToOne = false,
     this.inSelectionMode = false,
+    this.disableSelection = false,
     this.sortAsyncFn,
     this.showSelectAll = true,
     this.reloadDebounceTime = const Duration(milliseconds: 500),
@@ -917,7 +919,7 @@ class GalleryState extends State<Gallery> {
     }
 
     return SwipeSelectionWrapper(
-      isEnabled: shouldEnableSwipeSelection,
+      isEnabled: shouldEnableSwipeSelection && !widget.disableSelection,
       swipeHelper: _swipeHelper,
       selectedFiles: widget.selectedFiles,
       swipeActiveNotifier: _swipeActiveNotifier,
@@ -995,8 +997,11 @@ class GalleryState extends State<Gallery> {
                                     ),
                                   ),
                                 ),
-                                SectionedListSliver(
-                                  sectionLayouts: groups.groupLayouts,
+                                SliverIgnorePointer(
+                                  ignoring: widget.disableSelection,
+                                  sliver: SectionedListSliver(
+                                    sectionLayouts: groups.groupLayouts,
+                                  ),
                                 ),
                                 SliverToBoxAdapter(child: widget.footer),
                               ],
@@ -1015,6 +1020,7 @@ class GalleryState extends State<Gallery> {
                               selectedFiles: widget.selectedFiles,
                               showSelectAll:
                                   widget.showSelectAll &&
+                                  !widget.disableSelection &&
                                   !widget.limitSelectionToOne,
                               scrollbarInUseNotifier: scrollBarInUseNotifier,
                               showGallerySettingsCTA:
