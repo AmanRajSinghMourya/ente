@@ -284,7 +284,7 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
   Future<void> _shareLink() async {
     final person = widget.person;
     final albumName = person == null
-        ? context.strings.sharePersonAlbumName(
+        ? context.strings.unnamedPersonAlbumName(
             date: getDateAndMonthAndYear(DateTime.now()),
           )
         : person.data.name.trim();
