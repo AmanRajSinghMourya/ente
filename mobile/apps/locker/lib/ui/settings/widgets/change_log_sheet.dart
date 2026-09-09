@@ -1,24 +1,32 @@
 import "package:ente_components/ente_components.dart";
+import "package:ente_strings/ente_strings.dart";
 import "package:flutter/material.dart";
+import "package:hugeicons/hugeicons.dart";
 import "package:locker/ui/settings/widgets/change_log_strings.dart";
-
-class _ChangeLogEntry {
-  final String title;
-  final String description;
-
-  const _ChangeLogEntry(this.title, this.description);
-}
 
 Future<void> showChangeLogSheet(BuildContext context) {
   final strings = ChangeLogStrings.forLocale(Localizations.localeOf(context));
   return showBottomSheetComponent<void>(
     context: context,
     builder: (sheetContext) => BottomSheetComponent(
-      title: strings.sheetTitle,
-      content: _ChangeLogSheetBody(strings: strings),
+      header: _ChangeLogHeader(title: context.strings.whatsNew),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      actionsTopSpacing: Spacing.lg,
+      content: Flexible(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: _ChangeLogEntryTile(
+            title: strings.title,
+            description: strings.description,
+          ),
+        ),
+      ),
       actions: [
         ButtonComponent(
-          label: strings.continueLabel,
+          variant: ButtonComponentVariant.primary,
+          size: ButtonComponentSize.large,
+          label: context.strings.continueLabel,
+          shouldSurfaceExecutionStates: false,
           onTap: () => Navigator.of(sheetContext).pop(),
         ),
       ],
@@ -26,82 +34,72 @@ Future<void> showChangeLogSheet(BuildContext context) {
   );
 }
 
-class _ChangeLogSheetBody extends StatelessWidget {
-  final ChangeLogStrings strings;
+class _ChangeLogEntryTile extends StatelessWidget {
+  final String title;
+  final String description;
 
-  const _ChangeLogSheetBody({required this.strings});
+  const _ChangeLogEntryTile({required this.title, required this.description});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.componentColors;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.5;
-    final entries =
-        <_ChangeLogEntry>[
-              _ChangeLogEntry(strings.title1, strings.desc1),
-              _ChangeLogEntry(strings.title2, strings.desc2),
-              _ChangeLogEntry(strings.title3, strings.desc3),
-            ]
-            .where(
-              (entry) =>
-                  entry.title.trim().isNotEmpty ||
-                  entry.description.trim().isNotEmpty,
-            )
-            .toList(growable: false);
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          strings.sheetSubtitle,
-          style: TextStyles.body.copyWith(color: colors.textLight),
+          title,
+          textAlign: TextAlign.left,
+          style: TextStyles.large.copyWith(color: colors.textBase),
         ),
-        const SizedBox(height: 16),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const BouncingScrollPhysics(),
-            itemBuilder: (context, index) {
-              final entry = entries[index];
-              return _ChangeLogEntryTile(entry: entry);
-            },
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemCount: entries.length,
-          ),
+        const SizedBox(height: Spacing.md),
+        Text(
+          description,
+          textAlign: TextAlign.left,
+          style: TextStyles.body.copyWith(color: colors.textLight),
         ),
       ],
     );
   }
 }
 
-class _ChangeLogEntryTile extends StatelessWidget {
-  final _ChangeLogEntry entry;
+class _ChangeLogHeader extends StatelessWidget {
+  const _ChangeLogHeader({required this.title});
 
-  const _ChangeLogEntryTile({required this.entry});
+  final String title;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.componentColors;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.fillLight,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(entry.title, style: TextStyles.bodyBold),
-          const SizedBox(height: 6),
-          Text(
-            entry.description,
-            style: TextStyles.body.copyWith(color: colors.textLight),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButtonComponent(
+            tooltip: "Close",
+            variant: IconButtonComponentVariant.circular,
+            shouldSurfaceExecutionStates: false,
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedCancel01,
+              size: IconSizes.small,
+            ),
+            onTap: () => Navigator.of(context).pop(),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: Spacing.xs),
+        Image.asset(
+          "assets/whats_new_illustration.png",
+          width: 115,
+          height: 108,
+        ),
+        const SizedBox(height: Spacing.sm),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: TextStyles.display2.copyWith(color: colors.textBase),
+        ),
+      ],
     );
   }
 }
