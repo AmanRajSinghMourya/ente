@@ -27,9 +27,9 @@ const maxPersonRawShareFiles = 50;
 
 Future<void> showSharePersonSheet(
   BuildContext context, {
-  required PersonEntity person,
   required List<EnteFile> files,
   required GlobalKey shareButtonKey,
+  PersonEntity? person,
 }) async {
   final album = await showBottomSheetComponent<Collection>(
     context: context,
@@ -46,7 +46,7 @@ Future<void> showSharePersonSheet(
 class _SharePersonSheet extends StatefulWidget {
   const _SharePersonSheet({required this.person, required this.files});
 
-  final PersonEntity person;
+  final PersonEntity? person;
   final List<EnteFile> files;
 
   @override
@@ -70,9 +70,7 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
   @override
   void initState() {
     super.initState();
-    _selectedFiles
-      ..selectAll(widget.files.toSet())
-      ..addListener(() => setState(() {}));
+    _selectedFiles.addListener(() => setState(() {}));
   }
 
   @override
@@ -95,6 +93,7 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = context.componentColors;
+    final person = widget.person;
     return FractionallySizedBox(
       heightFactor: 0.86,
       alignment: Alignment.bottomCenter,
@@ -109,7 +108,9 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      strings.sharePersonPhotos(name: widget.person.data.name),
+                      person == null
+                          ? strings.sharePhotos
+                          : strings.sharePersonPhotos(name: person.data.name),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyles.h2.copyWith(color: colors.textBase),
@@ -149,6 +150,9 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
                     ),
                     AnimatedCrossFade(
                       duration: Motion.standard,
+                      firstCurve: Curves.easeInOut,
+                      secondCurve: Curves.easeInOut,
+                      sizeCurve: Curves.easeInOut,
                       crossFadeState: _canShareFiles
                           ? CrossFadeState.showFirst
                           : CrossFadeState.showSecond,
@@ -179,38 +183,47 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
 
   Widget _buildContent(BuildContext context) {
     final strings = context.strings;
+    final person = widget.person;
+    final selection = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+      child: Column(
+        children: [
+          _selectionRow(context),
+          const SizedBox(height: Spacing.lg),
+        ],
+      ),
+    );
     return Column(
       children: [
-        AnimatedCrossFade(
-          duration: Motion.standard,
-          crossFadeState: _autoAdd
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: Padding(
+        if (person == null)
+          selection
+        else ...[
+          AnimatedCrossFade(
+            duration: Motion.standard,
+            firstCurve: Curves.easeInOut,
+            secondCurve: Curves.easeInOut,
+            sizeCurve: Curves.easeInOut,
+            crossFadeState: _autoAdd
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: selection,
+            secondChild: const SizedBox.shrink(),
+          ),
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
-            child: Column(
-              children: [
-                _selectionRow(context),
-                const SizedBox(height: Spacing.lg),
-              ],
+            child: MenuComponent(
+              title: strings.shareAllPersonPhotos,
+              subtitle: strings.shareAllPersonPhotosDescription(
+                name: person.data.name,
+              ),
+              trailing: ToggleSwitchComponent(
+                selected: _autoAdd,
+                onChanged: _setAutoAdd,
+              ),
             ),
           ),
-          secondChild: const SizedBox.shrink(),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
-          child: MenuComponent(
-            title: strings.shareAllPersonPhotos,
-            subtitle: strings.shareAllPersonPhotosDescription(
-              name: widget.person.data.name,
-            ),
-            trailing: ToggleSwitchComponent(
-              selected: _autoAdd,
-              onChanged: _setAutoAdd,
-            ),
-          ),
-        ),
-        const SizedBox(height: Spacing.lg),
+          const SizedBox(height: Spacing.lg),
+        ],
         Expanded(child: _buildGallery()),
       ],
     );
@@ -221,31 +234,29 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Flexible(
-          child: SelectionSummaryChipComponent(
-            label: strings.selectAll,
-            semanticLabel: strings.selectAll,
-            isSelected: _selectedFiles.files.length == widget.files.length,
-            icon: const HugeIcon(icon: HugeIcons.strokeRoundedTick02, size: 14),
-            onTap: _selectedFiles.files.length == widget.files.length
-                ? null
-                : () => _selectedFiles.replaceSelection(widget.files.toSet()),
+        SelectionSummaryChipComponent(
+          label: strings.selectAll,
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedTick02,
+            size: IconSizes.small,
           ),
+          semanticLabel: strings.selectAll,
+          isSelected: _selectedFiles.files.length == widget.files.length,
+          onTap: _selectedFiles.files.length == widget.files.length
+              ? null
+              : () => _selectedFiles.replaceSelection(widget.files.toSet()),
         ),
-        const SizedBox(width: Spacing.sm),
-        Flexible(
-          child: SelectionSummaryChipComponent(
-            label: strings.selectedCount(count: _selectedFiles.files.length),
-            semanticLabel: strings.unselectAll,
-            isSelected: _selectedFiles.files.isNotEmpty,
-            icon: const HugeIcon(
-              icon: HugeIcons.strokeRoundedCancel01,
-              size: 14,
-            ),
-            onTap: _selectedFiles.files.isEmpty
-                ? null
-                : () => _selectedFiles.clearAll(fireEvent: false),
+        SelectionSummaryChipComponent(
+          label: strings.selectedPhotos(count: _selectedFiles.files.length),
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedCancel01,
+            size: IconSizes.small,
           ),
+          semanticLabel: strings.clearSelection,
+          isSelected: _selectedFiles.files.isNotEmpty,
+          onTap: _selectedFiles.files.isEmpty
+              ? null
+              : () => _selectedFiles.clearAll(fireEvent: false),
         ),
       ],
     );
@@ -271,12 +282,18 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
   }
 
   Future<void> _shareLink() async {
+    final person = widget.person;
+    final albumName = person == null
+        ? context.strings.sharePersonAlbumName(
+            date: getDateAndMonthAndYear(DateTime.now()),
+          )
+        : person.data.name.trim();
     final dialog = createProgressDialog(context, context.strings.creatingLink);
     await dialog.show();
     final collections = CollectionsService.instance;
     Collection? album;
     try {
-      album = await collections.createAlbum(widget.person.data.name.trim());
+      album = await collections.createAlbum(albumName);
       await collections.addOrCopyToCollection(
         album.id,
         _filesToShare.map((file) => file.copyWith()).toList(),
@@ -285,7 +302,7 @@ class _SharePersonSheetState extends State<_SharePersonSheet> {
       await collections.createShareUrl(album);
       if (_autoAdd) {
         await services.smartAlbumsService.addPeopleToSmartAlbum(album.id, [
-          widget.person.remoteID,
+          person!.remoteID,
         ]);
         unawaited(services.smartAlbumsService.syncSmartAlbums());
       }

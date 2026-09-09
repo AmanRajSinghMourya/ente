@@ -4916,8 +4916,11 @@
     }
   },
   "grantAccess": "Grant access",
+  "sharePhotos": "Share photos",
   "sharePersonPhotos": "Share {name}’s photos",
   "@sharePersonPhotos": {"placeholders": {"name": {"type": "String"}}},
+  "sharePersonAlbumName": "Portrait - {date}",
+  "@sharePersonAlbumName": {"placeholders": {"date": {"type": "String"}}},
   "shareAllPersonPhotos": "Share all photos",
   "shareAllPersonPhotosDescription": "All photos of {name} including future ones",
   "@shareAllPersonPhotosDescription": {"placeholders": {"name": {"type": "String"}}},

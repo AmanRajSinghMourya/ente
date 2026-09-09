@@ -927,6 +927,7 @@ class GalleryState extends State<Gallery> {
       child: GalleryContextState(
         sortOrderAsc: _sortOrderAsc,
         inSelectionMode: widget.inSelectionMode,
+        disableSelection: widget.disableSelection,
         type: _groupType,
         galleryType: widget.galleryType,
         child: _allGalleryFiles.isEmpty
@@ -997,11 +998,8 @@ class GalleryState extends State<Gallery> {
                                     ),
                                   ),
                                 ),
-                                SliverIgnorePointer(
-                                  ignoring: widget.disableSelection,
-                                  sliver: SectionedListSliver(
-                                    sectionLayouts: groups.groupLayouts,
-                                  ),
+                                SectionedListSliver(
+                                  sectionLayouts: groups.groupLayouts,
                                 ),
                                 SliverToBoxAdapter(child: widget.footer),
                               ],
@@ -1020,7 +1018,6 @@ class GalleryState extends State<Gallery> {
                               selectedFiles: widget.selectedFiles,
                               showSelectAll:
                                   widget.showSelectAll &&
-                                  !widget.disableSelection &&
                                   !widget.limitSelectionToOne,
                               scrollbarInUseNotifier: scrollBarInUseNotifier,
                               showGallerySettingsCTA:
