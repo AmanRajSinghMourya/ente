@@ -8,16 +8,60 @@ Future<void> showChangeLogSheet(BuildContext context) {
   final strings = ChangeLogStrings.forLocale(Localizations.localeOf(context));
   return showBottomSheetComponent<void>(
     context: context,
-    builder: (sheetContext) => BottomSheetComponent(
+    builder: (_) => _ChangeLogSheet(strings: strings),
+  );
+}
+
+class _ChangeLogSheet extends StatefulWidget {
+  final ChangeLogStrings strings;
+
+  const _ChangeLogSheet({required this.strings});
+
+  @override
+  State<_ChangeLogSheet> createState() => _ChangeLogSheetState();
+}
+
+class _ChangeLogSheetState extends State<_ChangeLogSheet> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.componentColors;
+    return BottomSheetComponent(
       header: _ChangeLogHeader(title: context.strings.whatsNew),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       actionsTopSpacing: Spacing.lg,
       content: Flexible(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: _ChangeLogEntryTile(
-            title: strings.title,
-            description: strings.description,
+        child: ScrollbarTheme(
+          data: ScrollbarTheme.of(context).copyWith(
+            thumbColor: WidgetStatePropertyAll(colors.fillDarkest),
+            trackColor: WidgetStatePropertyAll(colors.fillDark),
+            trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
+          ),
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            trackVisibility: true,
+            thickness: 5,
+            radius: const Radius.circular(39),
+            child: ListView.separated(
+              controller: _scrollController,
+              shrinkWrap: true,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(right: Spacing.lg),
+              itemBuilder: (context, index) => _ChangeLogEntryTile(
+                title: widget.strings.entries[index].title,
+                description: widget.strings.entries[index].description,
+              ),
+              separatorBuilder: (_, _) => const SizedBox(height: Spacing.lg),
+              itemCount: widget.strings.entries.length,
+            ),
           ),
         ),
       ),
@@ -27,11 +71,11 @@ Future<void> showChangeLogSheet(BuildContext context) {
           size: ButtonComponentSize.large,
           label: context.strings.continueLabel,
           shouldSurfaceExecutionStates: false,
-          onTap: () => Navigator.of(sheetContext).pop(),
+          onTap: () => Navigator.of(context).pop(),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 class _ChangeLogEntryTile extends StatelessWidget {

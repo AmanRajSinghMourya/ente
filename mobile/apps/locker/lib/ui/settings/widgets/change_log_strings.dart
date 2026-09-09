@@ -1,10 +1,9 @@
 import "dart:ui";
 
 class ChangeLogStrings {
-  final String title;
-  final String description;
+  final List<ChangeLogEntryStrings> entries;
 
-  const ChangeLogStrings({required this.title, required this.description});
+  const ChangeLogStrings({required this.entries});
 
   static ChangeLogStrings forLocale(Locale locale) {
     final key = locale.countryCode != null && locale.countryCode!.isNotEmpty
@@ -18,9 +17,20 @@ class ChangeLogStrings {
 
   static const Map<String, ChangeLogStrings> _translations = {
     "en": ChangeLogStrings(
-      title: "Document scanner",
-      description:
-          "Locker can now scan paper documents. Point the camera at a page and save it as a PDF, straight into the collection you pick.",
+      entries: [
+        ChangeLogEntryStrings(
+          title: "Document scanner",
+          description:
+              "Locker can now scan paper documents. Point the camera at a page and save it as a PDF, straight into the collection you pick.",
+        ),
+      ],
     ),
   };
+}
+
+class ChangeLogEntryStrings {
+  final String title;
+  final String description;
+
+  const ChangeLogEntryStrings({required this.title, required this.description});
 }
