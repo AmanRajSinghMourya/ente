@@ -272,7 +272,6 @@ class _MergeClustersToPersonPageState extends State<MergeClustersToPersonPage> {
                 child: Center(child: EnteLoadingWidget()),
               ),
             );
-            return _buildScrollBody(slivers);
           } else if (snapshot.hasError) {
             _logger.severe(
               "Failed to load persons for merge",
@@ -284,207 +283,259 @@ class _MergeClustersToPersonPageState extends State<MergeClustersToPersonPage> {
                 child: Center(child: Icon(Icons.error_outline_rounded)),
               ),
             );
-            return _buildScrollBody(slivers);
+          } else {
+            final persons = snapshot.data ?? [];
+            final sortedPersons = [...persons];
+            _sortFaces(sortedPersons);
+            final results = _filterPersons(sortedPersons);
+            if (results.isEmpty && !_showNewPersonTile) {
+              slivers.add(
+                SliverFillRemaining(
+                  child: Center(child: Text(context.strings.noResultsFound)),
+                ),
+              );
+            } else {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final estimatedCount = (screenWidth / 100).floor();
+              final crossAxisCount = estimatedCount > 0 ? estimatedCount : 1;
+              final itemSize =
+                  (screenWidth -
+                      ((horizontalEdgePadding * 2) +
+                          ((crossAxisCount - 1) * gridPadding))) /
+                  crossAxisCount;
+
+              final bottomPadding = MediaQuery.paddingOf(context).bottom;
+              slivers.add(
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalEdgePadding,
+                    16,
+                    horizontalEdgePadding,
+                    16 + bottomPadding,
+                  ),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      mainAxisSpacing: gridPadding,
+                      crossAxisSpacing: gridPadding,
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: itemSize / (itemSize + labelHeight),
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      childCount: results.length + (_showNewPersonTile ? 1 : 0),
+                      (context, index) {
+                        if (_showNewPersonTile && index == 0) {
+                          return _AddNewPersonGridTile(
+                            size: itemSize,
+                            labelHeight: labelHeight,
+                            onTap: _onAddNewPersonSelected,
+                          );
+                        }
+                        final person =
+                            results[_showNewPersonTile ? index - 1 : index];
+                        final personId =
+                            person.params[kPersonParamID] as String?;
+                        final personKey =
+                            personId != null && personId.isNotEmpty
+                            ? personId
+                            : person.name();
+                        return _ManualPersonGridTile(
+                          key: ValueKey(personKey),
+                          result: person,
+                          size: itemSize,
+                          labelHeight: labelHeight,
+                          onTap: () => _onPersonSelected(person),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            }
           }
 
-          final persons = snapshot.data ?? [];
-          final sortedPersons = [...persons];
-          _sortFaces(sortedPersons);
-          final results = _filterPersons(sortedPersons);
-          if (results.isEmpty && !_showNewPersonTile) {
-            slivers.add(
-              SliverFillRemaining(
-                child: Center(child: Text(context.strings.noResultsFound)),
+          return AppBarComponent(
+            title: context.strings.addToPerson,
+            physics: const BouncingScrollPhysics(),
+            titleBuilder: (context, state) => AnimatedSwitcher(
+              duration: _searchTransitionDuration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              layoutBuilder: (currentChild, previousChildren) => Stack(
+                alignment: Alignment.centerLeft,
+                clipBehavior: Clip.none,
+                children: [...previousChildren, ?currentChild],
               ),
-            );
-            return _buildScrollBody(slivers);
-          }
-          final screenWidth = MediaQuery.of(context).size.width;
-          final estimatedCount = (screenWidth / 100).floor();
-          final crossAxisCount = estimatedCount > 0 ? estimatedCount : 1;
-          final itemSize =
-              (screenWidth -
-                  ((horizontalEdgePadding * 2) +
-                      ((crossAxisCount - 1) * gridPadding))) /
-              crossAxisCount;
+              transitionBuilder: (child, animation) {
+                final curvedAnimation = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
+                );
+                final beginOffset =
+                    child.key == const ValueKey("person_search_field")
+                    ? const Offset(0.035, 0)
+                    : const Offset(-0.035, 0);
+                return FadeTransition(
+                  opacity: curvedAnimation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: beginOffset,
+                      end: Offset.zero,
+                    ).animate(curvedAnimation),
+                    child: child,
+                  ),
+                );
+              },
+              child: _isSearchBarVisible
+                  ? KeyedSubtree(
+                      key: const ValueKey("person_search_field"),
+                      child: TextInputComponent(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        hintText: context.strings.search,
+                        autofocus: true,
+                        shouldUnfocusOnClearOrSubmit: true,
+                        prefix: HugeIcon(
+                          icon: HugeIcons.strokeRoundedSearch01,
+                          size: 18,
+                          color: context.componentColors.textLight,
+                        ),
+                        suffix: HugeIcon(
+                          icon: HugeIcons.strokeRoundedCancel01,
+                          size: 18,
+                          color: context.componentColors.textLight,
+                        ),
+                        onSuffixTap: _closeSearch,
+                        onChanged: _updateSearchQuery,
+                      ),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey("person_title_row"),
+                      child: SizedBox(
+                        height: state.height,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                state.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: state.textStyle,
+                              ),
+                            ),
+                            const SizedBox(width: Spacing.md),
+                            SizedBox.square(
+                              dimension: _titleActionSize,
+                              child: IconButtonComponent(
+                                variant: IconButtonComponentVariant.primary,
+                                shouldSurfaceExecutionStates: false,
+                                icon: const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedSearch01,
+                                ),
+                                onTap: _activateSearch,
+                              ),
+                            ),
+                            const SizedBox(width: Spacing.sm),
+                            SizedBox.square(
+                              dimension: _titleActionSize,
+                              child: galleryAppBarPopupMenuAction<_MergeSortKey>(
+                                icon: const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedFilterHorizontal,
+                                ),
+                                tooltip: context.strings.sort,
+                                optionsBuilder: () {
+                                  final l10n = context.strings;
+                                  final sortKeys = _canUseSimilaritySort
+                                      ? _MergeSortKey.values
+                                      : _MergeSortKey.values
+                                            .where(
+                                              (key) =>
+                                                  key != _MergeSortKey.similar,
+                                            )
+                                            .toList();
+                                  return sortKeys.map((key) {
+                                    String label;
+                                    late final String detail;
+                                    Widget? activeTrailingWidget;
 
-          final bottomPadding = MediaQuery.paddingOf(context).bottom;
-          slivers.add(
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                horizontalEdgePadding,
-                16,
-                horizontalEdgePadding,
-                16 + bottomPadding,
-              ),
-              sliver: SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  mainAxisSpacing: gridPadding,
-                  crossAxisSpacing: gridPadding,
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: itemSize / (itemSize + labelHeight),
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  childCount: results.length + (_showNewPersonTile ? 1 : 0),
-                  (context, index) {
-                    if (_showNewPersonTile && index == 0) {
-                      return _AddNewPersonGridTile(
-                        size: itemSize,
-                        labelHeight: labelHeight,
-                        onTap: _onAddNewPersonSelected,
-                      );
-                    }
-                    final person =
-                        results[_showNewPersonTile ? index - 1 : index];
-                    final personId = person.params[kPersonParamID] as String?;
-                    final personKey = personId != null && personId.isNotEmpty
-                        ? personId
-                        : person.name();
-                    return _ManualPersonGridTile(
-                      key: ValueKey(personKey),
-                      result: person,
-                      size: itemSize,
-                      labelHeight: labelHeight,
-                      onTap: () => _onPersonSelected(person),
-                    );
-                  },
-                ),
-              ),
+                                    if (key == _MergeSortKey.similar) {
+                                      label = l10n.similar;
+                                      detail = l10n.closest;
+                                    } else {
+                                      final peopleKey =
+                                          _peopleSortKeyFromMergeSortKey(key)!;
+                                      switch (peopleKey) {
+                                        case PeopleSortKey.mostPhotos:
+                                          label = l10n.photos;
+                                          detail = l10n.count;
+                                          break;
+                                        case PeopleSortKey.name:
+                                          label = l10n.name;
+                                          detail = _isSortAscending(peopleKey)
+                                              ? l10n.sortAToZ
+                                              : l10n.sortZToA;
+                                          break;
+                                        case PeopleSortKey.lastUpdated:
+                                          label = l10n.updated;
+                                          detail = _isSortAscending(peopleKey)
+                                              ? l10n.sortOldestFirst
+                                              : l10n.sortNewestFirst;
+                                          break;
+                                      }
+
+                                      final isAscending = _isSortAscending(
+                                        peopleKey,
+                                      );
+                                      final directionIcon =
+                                          peopleKey == PeopleSortKey.name
+                                          ? (isAscending
+                                                ? HugeIcons
+                                                      .strokeRoundedArrowDown02
+                                                : HugeIcons
+                                                      .strokeRoundedArrowUp02)
+                                          : (isAscending
+                                                ? HugeIcons
+                                                      .strokeRoundedArrowUp02
+                                                : HugeIcons
+                                                      .strokeRoundedArrowDown02);
+                                      activeTrailingWidget = HugeIcon(
+                                        icon: directionIcon,
+                                        size: 12,
+                                        strokeWidth: 3,
+                                        color:
+                                            context.componentColors.textLight,
+                                      );
+                                    }
+
+                                    final isSelected =
+                                        _selectedMergeSortKey == key;
+                                    return EntePopupMenuOption(
+                                      value: key,
+                                      label: label,
+                                      secondaryLabel: isSelected
+                                          ? detail
+                                          : null,
+                                      isActive: isSelected,
+                                      activeTrailingWidget:
+                                          activeTrailingWidget,
+                                    );
+                                  }).toList();
+                                },
+                                onSelected: _selectSortKey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
+            titleBuilderHeight: _searchTitleHeight,
+            slivers: slivers,
           );
-          return _buildScrollBody(slivers);
         },
       ),
     );
-  }
-
-  Widget _buildScrollBody(List<Widget> slivers) {
-    return AppBarComponent(
-      title: context.strings.addToPerson,
-      physics: const BouncingScrollPhysics(),
-      titleBuilder: _buildTitle,
-      titleBuilderHeight: _searchTitleHeight,
-      slivers: slivers,
-    );
-  }
-
-  Widget _buildTitle(BuildContext context, HeaderAppBarTitleState state) {
-    return AnimatedSwitcher(
-      duration: _searchTransitionDuration,
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (currentChild, previousChildren) => Stack(
-        alignment: Alignment.centerLeft,
-        clipBehavior: Clip.none,
-        children: [...previousChildren, ?currentChild],
-      ),
-      transitionBuilder: (child, animation) {
-        final curvedAnimation = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        final beginOffset = child.key == const ValueKey("person_search_field")
-            ? const Offset(0.035, 0)
-            : const Offset(-0.035, 0);
-        return FadeTransition(
-          opacity: curvedAnimation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: beginOffset,
-              end: Offset.zero,
-            ).animate(curvedAnimation),
-            child: child,
-          ),
-        );
-      },
-      child: _isSearchBarVisible
-          ? KeyedSubtree(
-              key: const ValueKey("person_search_field"),
-              child: _buildSearchField(context),
-            )
-          : KeyedSubtree(
-              key: const ValueKey("person_title_row"),
-              child: _buildTitleRow(state),
-            ),
-    );
-  }
-
-  Widget _buildTitleRow(HeaderAppBarTitleState state) {
-    return SizedBox(
-      height: state.height,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(
-              state.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: state.textStyle,
-            ),
-          ),
-          const SizedBox(width: Spacing.md),
-          SizedBox.square(
-            dimension: _titleActionSize,
-            child: _buildSearchAction(),
-          ),
-          const SizedBox(width: Spacing.sm),
-          SizedBox.square(dimension: _titleActionSize, child: _buildSortMenu()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchAction() {
-    return IconButtonComponent(
-      variant: IconButtonComponentVariant.primary,
-      shouldSurfaceExecutionStates: false,
-      icon: const HugeIcon(icon: HugeIcons.strokeRoundedSearch01),
-      onTap: _activateSearch,
-    );
-  }
-
-  Widget _buildSearchField(BuildContext context) {
-    final colors = context.componentColors;
-    return TextInputComponent(
-      controller: _searchController,
-      focusNode: _searchFocusNode,
-      hintText: context.strings.search,
-      autofocus: true,
-      shouldUnfocusOnClearOrSubmit: true,
-      prefix: HugeIcon(
-        icon: HugeIcons.strokeRoundedSearch01,
-        size: 18,
-        color: colors.textLight,
-      ),
-      suffix: HugeIcon(
-        icon: HugeIcons.strokeRoundedCancel01,
-        size: 18,
-        color: colors.textLight,
-      ),
-      onSuffixTap: _closeSearch,
-      onChanged: _updateSearchQuery,
-    );
-  }
-
-  Widget _buildSortMenu() {
-    return galleryAppBarPopupMenuAction<_MergeSortKey>(
-      icon: const HugeIcon(icon: HugeIcons.strokeRoundedFilterHorizontal),
-      tooltip: context.strings.sort,
-      optionsBuilder: _buildSortMenuOptions,
-      onSelected: _selectSortKey,
-    );
-  }
-
-  List<EntePopupMenuOption<_MergeSortKey>> _buildSortMenuOptions() {
-    final l10n = context.strings;
-    final sortKeys = _canUseSimilaritySort
-        ? _MergeSortKey.values
-        : _MergeSortKey.values
-              .where((key) => key != _MergeSortKey.similar)
-              .toList();
-    return [for (final key in sortKeys) _buildSortMenuItem(key, l10n)];
   }
 
   void _selectSortKey(_MergeSortKey selectedKey) {
@@ -510,72 +561,6 @@ class _MergeClustersToPersonPageState extends State<MergeClustersToPersonPage> {
       }
     });
     unawaited(_persistSortPreferences());
-  }
-
-  EntePopupMenuOption<_MergeSortKey> _buildSortMenuItem(
-    _MergeSortKey key,
-    StringsLocalizations l10n,
-  ) {
-    String label;
-    late final String detail;
-    Widget? activeTrailingWidget;
-
-    if (key == _MergeSortKey.similar) {
-      label = l10n.similar;
-      detail = l10n.closest;
-    } else {
-      final peopleKey = _peopleSortKeyFromMergeSortKey(key)!;
-      switch (peopleKey) {
-        case PeopleSortKey.mostPhotos:
-          label = l10n.photos;
-          break;
-        case PeopleSortKey.name:
-          label = l10n.name;
-          break;
-        case PeopleSortKey.lastUpdated:
-          label = l10n.updated;
-          break;
-      }
-
-      switch (peopleKey) {
-        case PeopleSortKey.mostPhotos:
-          detail = l10n.count;
-          break;
-        case PeopleSortKey.name:
-          detail = _isSortAscending(peopleKey) ? l10n.sortAToZ : l10n.sortZToA;
-          break;
-        case PeopleSortKey.lastUpdated:
-          detail = _isSortAscending(peopleKey)
-              ? l10n.sortOldestFirst
-              : l10n.sortNewestFirst;
-          break;
-      }
-
-      final bool isAscending = _isSortAscending(peopleKey);
-      final directionIcon = peopleKey == PeopleSortKey.name
-          ? (isAscending
-                ? HugeIcons.strokeRoundedArrowDown02
-                : HugeIcons.strokeRoundedArrowUp02)
-          : (isAscending
-                ? HugeIcons.strokeRoundedArrowUp02
-                : HugeIcons.strokeRoundedArrowDown02);
-      activeTrailingWidget = HugeIcon(
-        icon: directionIcon,
-        size: 12,
-        strokeWidth: 3,
-        color: context.componentColors.textLight,
-      );
-    }
-
-    final bool isSelected = _selectedMergeSortKey == key;
-
-    return EntePopupMenuOption(
-      value: key,
-      label: label,
-      secondaryLabel: isSelected ? detail : null,
-      isActive: isSelected,
-      activeTrailingWidget: activeTrailingWidget,
-    );
   }
 
   void _onPersonSelected(GenericSearchResult result) {
