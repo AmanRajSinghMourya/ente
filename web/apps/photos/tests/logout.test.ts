@@ -2,8 +2,16 @@ import { afterEach, expect, test, vi } from "vitest";
 import { openAuthenticatedSession } from "../src/services/authenticated-session";
 import { photosLogout } from "../src/services/logout";
 
-const { apiOrigin, openSession, terminateMLWorker } = vi.hoisted(() => ({
+const {
+    apiOrigin,
+    encryptBoxWithRecoveryKey,
+    generateKey,
+    openSession,
+    terminateMLWorker,
+} = vi.hoisted(() => ({
     apiOrigin: vi.fn<() => Promise<string>>(),
+    encryptBoxWithRecoveryKey: vi.fn(),
+    generateKey: vi.fn(),
     openSession: vi.fn(() =>
         Promise.resolve({ free: vi.fn(), updateAuthToken: vi.fn() }),
     ),
@@ -16,10 +24,26 @@ vi.mock("ente-base/app", () => ({
     isDesktop: false,
 }));
 vi.mock("ente-base/origins", () => ({ apiOrigin }));
+vi.mock("ente-base/session", () => ({ masterKeyFromSession: vi.fn() }));
+vi.mock("ente-base/token", () => ({ savedAuthToken: vi.fn() }));
 vi.mock("ente-base/log", () => ({
     default: { info: vi.fn(), error: vi.fn() },
 }));
-vi.mock("ente-photos-wasm", () => ({ openSession }));
+vi.mock("ente-photos-wasm", () => ({
+    encryptBoxWithRecoveryKey,
+    generateKey,
+    openSession,
+}));
+vi.mock("ente-accounts/services/user", () => ({
+    ensureLocalUser: () => ({ id: 1 }),
+    ensureSavedKeyAttributes: () => ({
+        publicKey: "public-key",
+        encryptedSecretKey: "encrypted-secret-key",
+        secretKeyDecryptionNonce: "secret-key-nonce",
+        recoveryKeyEncryptedWithMasterKey: "encrypted-recovery-key",
+        recoveryKeyDecryptionNonce: "recovery-key-nonce",
+    }),
+}));
 vi.mock("ente-accounts/services/logout", () => ({
     accountLogout: vi.fn(),
     logoutClearStateAgain: vi.fn(),
@@ -45,6 +69,10 @@ vi.mock("ente-new/photos/services/app-lock", () => ({
 vi.mock("ente-new/photos/services/ml", () => ({
     terminateMLWorker,
     logoutML: vi.fn(),
+}));
+vi.mock("ente-new/photos/services/collection", () => ({
+    bindCollectionKeyOpener: vi.fn(),
+    unbindCollectionKeyOpener: vi.fn(),
 }));
 vi.mock("ente-new/photos/services/search", () => ({ logoutSearch: vi.fn() }));
 vi.mock("ente-new/photos/services/settings", () => ({

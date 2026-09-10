@@ -1,7 +1,7 @@
 [package]
 name = "ente-space"
 version = "0.0.1"
-edition = "2024"
+edition.workspace = true
 
 [features]
 museum = []
@@ -21,6 +21,8 @@ zeroize.workspace = true
 ente-accounts.workspace = true
 ente-test-support.workspace = true
 mockito.workspace = true
-reqwest = { workspace = true, features = ["json"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 uuid = { workspace = true, features = ["v4"] }
+
+[lints]
+workspace = true

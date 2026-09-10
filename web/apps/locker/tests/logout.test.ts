@@ -2,8 +2,16 @@ import { expect, test, vi } from "vitest";
 import { openAuthenticatedSession } from "../src/services/authenticated-session";
 import { lockerLogout } from "../src/services/logout";
 
-const { apiOrigin, openSession, accountLogout } = vi.hoisted(() => ({
+const {
+    apiOrigin,
+    encryptBoxWithRecoveryKey,
+    generateKey,
+    openSession,
+    accountLogout,
+} = vi.hoisted(() => ({
     apiOrigin: vi.fn<() => Promise<string>>(),
+    encryptBoxWithRecoveryKey: vi.fn(),
+    generateKey: vi.fn(),
     openSession: vi.fn(() =>
         Promise.resolve({ free: vi.fn(), updateAuthToken: vi.fn() }),
     ),
@@ -20,17 +28,28 @@ vi.mock("ente-base/log", () => ({
     default: { info: vi.fn(), error: vi.fn() },
 }));
 vi.mock("ente-base/token", () => ({ savedAuthToken: vi.fn() }));
-vi.mock("ente-accounts/services/session-storage", () => ({
+vi.mock("../src/services/account-keys", () => ({
     masterKeyFromSession: vi.fn(),
 }));
 vi.mock("ente-accounts/services/user", () => ({
     ensureLocalUser: () => ({ id: 1 }),
+    ensureSavedKeyAttributes: () => ({
+        publicKey: "public-key",
+        encryptedSecretKey: "encrypted-secret-key",
+        secretKeyDecryptionNonce: "secret-key-nonce",
+        recoveryKeyEncryptedWithMasterKey: "encrypted-recovery-key",
+        recoveryKeyDecryptionNonce: "recovery-key-nonce",
+    }),
 }));
 vi.mock("ente-accounts/services/accounts-db", () => ({
     savedLocalUser: () => ({ id: 1 }),
 }));
 vi.mock("ente-accounts/services/logout", () => ({ accountLogout }));
-vi.mock("ente-locker-wasm", () => ({ openSession }));
+vi.mock("ente-locker-wasm", () => ({
+    encryptBoxWithRecoveryKey,
+    generateKey,
+    openSession,
+}));
 vi.mock("ente-legacy-wasm/authenticated", () => ({ openSession }));
 vi.mock("../src/services/locker-db", () => ({ clearLockerDB: vi.fn() }));
 

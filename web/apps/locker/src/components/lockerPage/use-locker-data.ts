@@ -1,3 +1,4 @@
+import { masterKeyFromSession } from "@/services/account-keys";
 import { openAuthenticatedSession } from "@/services/authenticated-session";
 import {
     LOCKER_FILE_LIMIT_FREE,
@@ -13,9 +14,9 @@ import {
     savedPartialLocalUser,
 } from "ente-accounts/services/accounts-db";
 import { stashRedirect } from "ente-accounts/services/redirect";
-import { masterKeyFromSession } from "ente-accounts/services/session-storage";
 import { ensureLocalUser } from "ente-accounts/services/user";
 import type { MiniDialogAttributes } from "ente-base/components/MiniDialog";
+import { isNamedError } from "ente-base/error";
 import {
     authenticatedRequestHeaders,
     ensureOk,
@@ -47,7 +48,7 @@ interface LockerUsageResponse {
     userStorage?: number;
 }
 
-export interface UserDetails extends LockerUploadLimitState {
+interface UserDetails extends LockerUploadLimitState {
     email: string;
 }
 
@@ -64,11 +65,6 @@ interface UserDetailsRefreshTrigger {
 
 interface UploadLimitStateSnapshot {
     userDetails: UserDetails;
-}
-
-interface LoadUserDetailsResult {
-    applied: boolean;
-    snapshot?: UploadLimitStateSnapshot;
 }
 
 export const useLockerData = ({
@@ -183,34 +179,29 @@ export const useLockerData = ({
         [],
     );
 
-    const loadUserDetails =
-        useCallback(async (): Promise<LoadUserDetailsResult> => {
-            const requestID = ++latestUserDetailsRequestRef.current;
-            try {
-                const headers = await authenticatedRequestHeaders();
-                const [lockerUsage, email] = await Promise.all([
-                    loadLockerUsage(headers),
-                    loadUserEmail(headers),
-                ]);
-                const nextUserDetails = { ...lockerUsage.userDetails, email };
-                const snapshot = {
-                    userDetails: nextUserDetails,
-                } satisfies UploadLimitStateSnapshot;
-
-                if (
-                    !mountedRef.current ||
-                    requestID !== latestUserDetailsRequestRef.current
-                ) {
-                    return { applied: false, snapshot };
-                }
-
-                setUserDetails(nextUserDetails);
-                return { applied: true, snapshot };
-            } catch (error) {
-                log.error("Failed to fetch user details", error);
-                return { applied: false };
+    const loadUserDetails = useCallback(async (): Promise<boolean> => {
+        const requestID = ++latestUserDetailsRequestRef.current;
+        try {
+            const headers = await authenticatedRequestHeaders();
+            const [lockerUsage, email] = await Promise.all([
+                loadLockerUsage(headers),
+                loadUserEmail(headers),
+            ]);
+            const nextUserDetails = { ...lockerUsage.userDetails, email };
+            if (
+                !mountedRef.current ||
+                requestID !== latestUserDetailsRequestRef.current
+            ) {
+                return false;
             }
-        }, [loadLockerUsage, loadUserEmail]);
+
+            setUserDetails(nextUserDetails);
+            return true;
+        } catch (error) {
+            log.error("Failed to fetch user details", error);
+            return false;
+        }
+    }, [loadLockerUsage, loadUserEmail]);
 
     const refreshUserDetailsForSyncState = useCallback(
         async (trigger: UserDetailsRefreshTrigger) => {
@@ -226,8 +217,8 @@ export const useLockerData = ({
             isRefreshingUserDetailsRef.current = true;
             let pendingTrigger: UserDetailsRefreshTrigger | undefined;
             try {
-                const result = await loadUserDetails();
-                if (result.applied) {
+                const applied = await loadUserDetails();
+                if (applied) {
                     lastUserDetailsRefreshKeyRef.current = key;
                 }
             } finally {
@@ -269,46 +260,36 @@ export const useLockerData = ({
         }
     }, [loadLockerUsage]);
 
-    const fetchAndStoreLockerData = useCallback(
-        async (key: string) => {
-            const requestID = ++latestDataRequestRef.current;
+    const fetchAndStoreLockerData = useCallback(async () => {
+        const requestID = ++latestDataRequestRef.current;
 
-            const data = await syncLockerState(key);
+        const data = await syncLockerState();
 
-            if (
-                !mountedRef.current ||
-                requestID !== latestDataRequestRef.current
-            ) {
-                return;
+        if (!mountedRef.current || requestID !== latestDataRequestRef.current) {
+            return;
+        }
+
+        setCollections(data.collections);
+        setTrashItems(data.trashItems);
+        setTrashLastUpdatedAt(data.trashLastUpdatedAt);
+        setInitialLoadError(null);
+        void refreshUserDetailsForSyncState(data);
+    }, [refreshUserDetailsForSyncState]);
+
+    const refreshData = useCallback(async () => {
+        if (!masterKey) {
+            return;
+        }
+
+        try {
+            await fetchAndStoreLockerData();
+        } catch (error) {
+            log.error("Failed to refresh locker data", error);
+            if (isHTTP401Error(error)) {
+                showMiniDialog(sessionExpiredDialogAttributes(logout));
             }
-
-            setCollections(data.collections);
-            setTrashItems(data.trashItems);
-            setTrashLastUpdatedAt(data.trashLastUpdatedAt);
-            setInitialLoadError(null);
-            void refreshUserDetailsForSyncState(data);
-        },
-        [refreshUserDetailsForSyncState],
-    );
-
-    const refreshData = useCallback(
-        async (mk?: string) => {
-            const key = mk ?? masterKey;
-            if (!key) {
-                return;
-            }
-
-            try {
-                await fetchAndStoreLockerData(key);
-            } catch (error) {
-                log.error("Failed to refresh locker data", error);
-                if (isHTTP401Error(error)) {
-                    showMiniDialog(sessionExpiredDialogAttributes(logout));
-                }
-            }
-        },
-        [fetchAndStoreLockerData, logout, masterKey, showMiniDialog],
-    );
+        }
+    }, [fetchAndStoreLockerData, logout, masterKey, showMiniDialog]);
 
     useEffect(() => {
         let cancelled = false;
@@ -332,6 +313,8 @@ export const useLockerData = ({
                     );
                     return;
                 }
+
+                await openAuthenticatedSession(ensureLocalUser().id, token, mk);
                 if (!canApplyState()) {
                     return;
                 }
@@ -344,7 +327,7 @@ export const useLockerData = ({
                     );
                 });
 
-                const persisted = await loadPersistedLockerState(mk);
+                const persisted = await loadPersistedLockerState();
                 if (canApplyState() && persisted.hasPersistedState) {
                     setCollections(persisted.collections);
                     setTrashItems(persisted.trashItems);
@@ -354,12 +337,16 @@ export const useLockerData = ({
                     void refreshUserDetailsForSyncState(persisted);
                 }
 
-                await fetchAndStoreLockerData(mk);
+                await fetchAndStoreLockerData();
                 if (canApplyState()) {
                     setHasFetched(true);
                 }
             } catch (error) {
                 log.error("Failed to fetch locker data", error);
+                if (isNamedError(error, "missing_recovery_key")) {
+                    showMiniDialog(sessionExpiredDialogAttributes(logout));
+                    return;
+                }
                 if (isHTTP401Error(error)) {
                     showMiniDialog(sessionExpiredDialogAttributes(logout));
                 }
