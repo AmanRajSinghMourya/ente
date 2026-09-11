@@ -729,6 +729,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
         (galleryType.canArchive() && !isHidden) ||
         (!isArchived && galleryType.canHide()) ||
         widget.collection != null ||
+        widget.deviceCollection != null ||
         galleryType.canDelete() ||
         galleryType == GalleryType.sharedCollection ||
         (galleryType == GalleryType.localFolder && !_isICloudSharedAlbum) ||
@@ -1348,6 +1349,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
           galleryFiles,
           0,
           "guest_view",
+          isLocalOnlyContext: galleryType == GalleryType.localFolder,
           galleryType: galleryType,
         ),
       );
