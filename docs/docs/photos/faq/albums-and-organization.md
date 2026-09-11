@@ -87,7 +87,7 @@ Album slideshows are available in Ente Photos on iOS and Android.
 **On mobile:**
 
 1. Open the **Albums** tab.
-2. Open an Ente album.
+2. Open an Ente album or an **On device** album.
 3. Tap the three dots in the top-right corner.
 4. Tap **Slideshow**.
 
@@ -121,7 +121,7 @@ Yes, for photos that are already on your device. Ente needs an internet connecti
 
 ### Can I start a slideshow from On device albums or Gallery mode? {#album-slideshow-gallery-mode}
 
-No. Album slideshows are available only for Ente albums after you sign in. You cannot start one from an **On device** album or while using [Gallery mode](/photos/faq/gallery-mode).
+Yes. Open an **On device** album, tap the three-dot menu, and choose **Slideshow**. In [Gallery mode](/photos/faq/gallery-mode), you can also start a slideshow from the three-dot menu at the top of the home screen. You do not need an account.
 
 ## Uncategorized
 
