@@ -930,6 +930,7 @@ class GalleryState extends State<Gallery> {
         disableSelection: widget.disableSelection,
         type: _groupType,
         galleryType: widget.galleryType,
+        loadAllFiles: () async => (await _loadFiles()).files,
         child: _allGalleryFiles.isEmpty
             ? _GalleryAppBarScrollBody(
                 appBar: widget.appBar,

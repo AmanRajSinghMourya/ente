@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:photos/models/file/file.dart";
 import "package:photos/models/gallery_type.dart";
 import "package:photos/ui/viewer/gallery/component/group/type.dart";
 
@@ -8,12 +9,14 @@ class GalleryContextState extends InheritedWidget {
   final bool disableSelection;
   final GroupType type;
   final GalleryType? galleryType;
+  final Future<List<EnteFile>> Function()? loadAllFiles;
 
   const GalleryContextState({
     this.inSelectionMode = false,
     this.disableSelection = false,
     this.type = GroupType.day,
     this.galleryType,
+    this.loadAllFiles,
     required this.sortOrderAsc,
     required super.child,
     super.key,

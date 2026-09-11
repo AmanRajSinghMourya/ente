@@ -11,6 +11,7 @@ import 'package:logging/logging.dart';
 import 'package:photos/core/configuration.dart';
 import "package:photos/core/constants.dart";
 import 'package:photos/core/event_bus.dart';
+import "package:photos/db/device_files_db.dart";
 import "package:photos/db/files_db.dart";
 import "package:photos/events/collection_meta_event.dart";
 import "package:photos/events/guest_view_event.dart";
@@ -498,9 +499,20 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
 
   List<Widget> _getDefaultActions(BuildContext context) {
     final List<Widget> actions = <Widget>[];
-    if (widget.selectedFiles.files.isNotEmpty ||
-        !Configuration.instance.hasConfiguredAccount()) {
+    if (widget.selectedFiles.files.isNotEmpty) {
       return actions;
+    }
+
+    if (!Configuration.instance.hasConfiguredAccount()) {
+      return [
+        if (widget.showOverflowMenu && widget.deviceCollection != null)
+          galleryAppBarPopupMenuAction<AlbumPopupAction>(
+            tooltip: context.strings.more,
+            icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
+            optionsBuilder: () => [_slideshowMenuOption()],
+            onSelected: (_) => _startAlbumSlideshow(),
+          ),
+      ];
     }
 
     final strings = context.strings;
@@ -705,7 +717,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
         isArchived ||
         (galleryType.canArchive() && !isHidden) ||
         (!isArchived && galleryType.canHide()) ||
-        widget.collection != null ||
+        _isAlbumSlideshowAvailable ||
         galleryType.canDelete() ||
         galleryType == GalleryType.sharedCollection ||
         (galleryType == GalleryType.localFolder && !_isICloudSharedAlbum) ||
@@ -828,15 +840,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             iconColor,
           ),
         ),
-      if (_isAlbumSlideshowAvailable)
-        _menuOption(
-          AlbumPopupAction.albumSlideshow,
-          strings.slideshow,
-          galleryAppBarMenuIcon(
-            HugeIcons.strokeRoundedPresentation03,
-            iconColor,
-          ),
-        ),
+      if (_isAlbumSlideshowAvailable) _slideshowMenuOption(),
       if (canAutoAdd)
         _menuOption(
           AlbumPopupAction.autoAddPhotos,
@@ -927,7 +931,19 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
       _isDeviceFolderBackedUp &&
       widget.onDisableDeviceFolderBackup != null;
 
-  bool get _isAlbumSlideshowAvailable => widget.collection != null;
+  bool get _isAlbumSlideshowAvailable =>
+      widget.collection != null || widget.deviceCollection != null;
+
+  EntePopupMenuOption<AlbumPopupAction> _slideshowMenuOption() {
+    return _menuOption(
+      AlbumPopupAction.albumSlideshow,
+      context.strings.slideshow,
+      galleryAppBarMenuIcon(
+        HugeIcons.strokeRoundedPresentation03,
+        context.componentColors.iconColor,
+      ),
+    );
+  }
 
   EntePopupMenuOption<AlbumPopupAction> _menuOption(
     AlbumPopupAction value,
@@ -986,7 +1002,15 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
   }
 
   Future<void> _startAlbumSlideshow() async {
-    final galleryFiles = await _loadAllCollectionFiles();
+    final deviceCollection = widget.deviceCollection;
+    final galleryFiles = deviceCollection == null
+        ? await _loadAllCollectionFiles()
+        : (await FilesDB.instance.getFilesInDeviceCollection(
+            deviceCollection,
+            Configuration.instance.getUserID(),
+            galleryLoadStartTime,
+            galleryLoadEndTime,
+          )).files;
     if (!mounted) return;
     if (galleryFiles == null) {
       showToast(context, context.strings.somethingWentWrong);
@@ -996,7 +1020,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
     await showAlbumSlideshow(
       context,
       files: galleryFiles,
-      title: widget.collection!.displayName,
+      title: deviceCollection?.name ?? widget.collection!.displayName,
     );
   }
 
