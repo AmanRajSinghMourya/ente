@@ -1,0 +1,1 @@
+- Added Slideshow and Guest view to on-device albums.

@@ -11,6 +11,7 @@ import 'package:logging/logging.dart';
 import 'package:photos/core/configuration.dart';
 import "package:photos/core/constants.dart";
 import 'package:photos/core/event_bus.dart';
+import "package:photos/db/device_files_db.dart";
 import "package:photos/db/files_db.dart";
 import "package:photos/events/collection_meta_event.dart";
 import "package:photos/events/guest_view_event.dart";
@@ -498,12 +499,34 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
 
   List<Widget> _getDefaultActions(BuildContext context) {
     final List<Widget> actions = <Widget>[];
-    if (widget.selectedFiles.files.isNotEmpty ||
-        !Configuration.instance.hasConfiguredAccount()) {
+    if (widget.selectedFiles.files.isNotEmpty) {
       return actions;
     }
 
     final strings = context.strings;
+    if (!Configuration.instance.hasConfiguredAccount()) {
+      if (widget.deviceCollection != null) {
+        actions.add(
+          galleryAppBarPopupMenuAction<AlbumPopupAction>(
+            tooltip: strings.more,
+            icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
+            optionsBuilder: () => _deviceAlbumViewingOptions(
+              strings,
+              context.componentColors.iconColor,
+            ),
+            onSelected: (AlbumPopupAction value) async {
+              if (value == AlbumPopupAction.albumSlideshow) {
+                await _startAlbumSlideshow();
+              } else {
+                await _onGalleryGuestViewClick();
+              }
+            },
+          ),
+        );
+      }
+      return actions;
+    }
+
     final colorScheme = getEnteColorScheme(context);
 
     if (galleryType == GalleryType.magic) {
@@ -907,6 +930,8 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
           strings.disableBackup,
           galleryAppBarMenuIcon(HugeIcons.strokeRoundedUpload01, iconColor),
         ),
+      if (widget.deviceCollection != null)
+        ..._deviceAlbumViewingOptions(strings, iconColor),
       if (galleryType == GalleryType.sharedPublicCollection &&
           (widget.collection?.isDownloadEnabledForPublicLink() ?? false))
         _menuOption(
@@ -914,6 +939,24 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
           strings.download,
           galleryAppBarMenuIcon(HugeIcons.strokeRoundedDownload01, iconColor),
         ),
+    ];
+  }
+
+  List<EntePopupMenuOption<AlbumPopupAction>> _deviceAlbumViewingOptions(
+    StringsLocalizations strings,
+    Color iconColor,
+  ) {
+    return [
+      _menuOption(
+        AlbumPopupAction.albumSlideshow,
+        strings.slideshow,
+        galleryAppBarMenuIcon(HugeIcons.strokeRoundedPresentation03, iconColor),
+      ),
+      _menuOption(
+        AlbumPopupAction.galleryGuestView,
+        strings.guestView,
+        galleryAppBarMenuIcon(HugeIcons.strokeRoundedIncognito, iconColor),
+      ),
     ];
   }
 
@@ -986,7 +1029,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
   }
 
   Future<void> _startAlbumSlideshow() async {
-    final galleryFiles = await _loadAllCollectionFiles();
+    final galleryFiles = await _loadAllGalleryFiles();
     if (!mounted) return;
     if (galleryFiles == null) {
       showToast(context, context.strings.somethingWentWrong);
@@ -996,13 +1039,25 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
     await showAlbumSlideshow(
       context,
       files: galleryFiles,
-      title: widget.collection!.displayName,
+      title: widget.deviceCollection?.name ?? widget.collection!.displayName,
+      includeBackupExcludedFiles: widget.deviceCollection != null,
     );
   }
 
-  Future<List<EnteFile>?> _loadAllCollectionFiles() async {
+  Future<List<EnteFile>?> _loadAllGalleryFiles() async {
     if (widget.files != null) {
       return widget.files!;
+    }
+
+    final deviceCollection = widget.deviceCollection;
+    if (deviceCollection != null) {
+      final filesResult = await FilesDB.instance.getFilesInDeviceCollection(
+        deviceCollection,
+        Configuration.instance.getUserID(),
+        galleryLoadStartTime,
+        galleryLoadEndTime,
+      );
+      return filesResult.files;
     }
 
     final collection = widget.collection;
@@ -1276,21 +1331,21 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
 
   Future<void> _onGalleryGuestViewClick() async {
     if (await LocalAuthentication().isDeviceSupported()) {
-      final collectionFiles = await _loadAllCollectionFiles();
+      final galleryFiles = await _loadAllGalleryFiles();
       if (!mounted) return;
-      if (collectionFiles == null) {
+      if (galleryFiles == null) {
         showToast(context, context.strings.somethingWentWrong);
         return;
       }
 
-      if (collectionFiles.isEmpty) {
+      if (galleryFiles.isEmpty) {
         showToast(context, context.strings.nothingToSeeHere);
         return;
       }
 
       final page = DetailPage(
         DetailPageConfiguration(
-          collectionFiles,
+          galleryFiles,
           0,
           "guest_view",
           galleryType: galleryType,
