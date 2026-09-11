@@ -44,47 +44,49 @@ class _HomeHeaderWidgetState extends State<HomeHeaderWidget> {
           child: widget.centerWidget,
         ),
         isLocalGalleryMode
-            ? Padding(
-                padding: const EdgeInsets.all(6),
-                child: galleryAppBarPopupMenuAction<_HomeHeaderAction>(
-                  tooltip: context.strings.more,
-                  icon: const HugeIcon(
-                    icon: HugeIcons.strokeRoundedMoreVertical,
+            ? EntePopupMenuButton<_HomeHeaderAction>(
+                optionsBuilder: () => [
+                  EntePopupMenuOption(
+                    value: _HomeHeaderAction.slideshow,
+                    label: context.strings.slideshow,
+                    leadingWidget: galleryAppBarMenuIcon(
+                      HugeIcons.strokeRoundedPresentation03,
+                      context.componentColors.iconColor,
+                    ),
                   ),
-                  optionsBuilder: () => [
+                  if (showAddAlbumAction)
                     EntePopupMenuOption(
-                      value: _HomeHeaderAction.slideshow,
-                      label: context.strings.slideshow,
+                      value: _HomeHeaderAction.addPhotos,
+                      label: context.strings.addPhotos,
                       leadingWidget: galleryAppBarMenuIcon(
-                        HugeIcons.strokeRoundedPresentation03,
+                        HugeIcons.strokeRoundedImageAdd01,
                         context.componentColors.iconColor,
                       ),
                     ),
-                    if (showAddAlbumAction)
-                      EntePopupMenuOption(
-                        value: _HomeHeaderAction.addPhotos,
-                        label: context.strings.addPhotos,
-                        leadingWidget: galleryAppBarMenuIcon(
-                          HugeIcons.strokeRoundedImageAdd01,
-                          context.componentColors.iconColor,
-                        ),
-                      ),
-                  ],
-                  onSelected: (action) async {
-                    if (action == _HomeHeaderAction.addPhotos) {
-                      await handleFullPermissionBackupFlow(context);
-                      return;
-                    }
-                    final files = await GalleryContextState.of(
-                      context,
-                    )!.loadAllFiles!();
-                    if (!context.mounted) return;
-                    await showAlbumSlideshow(
-                      context,
-                      files: files,
-                      title: context.strings.slideshow,
-                    );
-                  },
+                ],
+                onSelected: (action) async {
+                  if (action == _HomeHeaderAction.addPhotos) {
+                    await handleFullPermissionBackupFlow(context);
+                    return;
+                  }
+                  final files = await GalleryContextState.of(
+                    context,
+                  )!.loadAllFiles!();
+                  if (!context.mounted) return;
+                  await showAlbumSlideshow(
+                    context,
+                    files: files,
+                    title: context.strings.slideshow,
+                  );
+                },
+                child: Tooltip(
+                  message: context.strings.more,
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: GalleryAppBarIconButtonSurface(
+                      icon: HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
+                    ),
+                  ),
                 ),
               )
             : showAddAlbumAction
