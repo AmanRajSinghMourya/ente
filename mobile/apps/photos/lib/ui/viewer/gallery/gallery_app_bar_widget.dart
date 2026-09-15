@@ -512,7 +512,7 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
             optionsBuilder: () => _deviceAlbumViewingOptions(
               strings,
-              context.componentColors.iconColor,
+              getEnteColorScheme(context).contentLight,
             ),
             onSelected: (AlbumPopupAction value) async {
               if (value == AlbumPopupAction.albumSlideshow) {
