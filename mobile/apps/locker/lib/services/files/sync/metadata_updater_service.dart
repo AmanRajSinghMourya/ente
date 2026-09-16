@@ -22,7 +22,7 @@ class MetadataUpdaterService {
   Future<bool> editFileCaption(EnteFile file, String caption) async {
     try {
       await _updatePublicMetadata([file], captionKey, caption);
-      await CollectionService.instance.sync();
+      CollectionService.instance.sync().ignore();
       return true;
     } catch (e) {
       return false;
@@ -33,7 +33,7 @@ class MetadataUpdaterService {
     try {
       final Map<String, dynamic> updates = {editNameKey: name};
       await _updatePublicMetadataBulk([file], updates);
-      await CollectionService.instance.sync();
+      CollectionService.instance.sync().ignore();
       return true;
     } catch (e) {
       return false;
@@ -46,7 +46,7 @@ class MetadataUpdaterService {
   ) async {
     try {
       await _updatePublicMetadataBulk([file], metadata);
-      await CollectionService.instance.sync();
+      CollectionService.instance.sync().ignore();
       return true;
     } catch (e) {
       return false;

@@ -145,10 +145,7 @@ class FavoritesService {
 
       await _collectionService.addToCollection(collection!, files[0]);
     }
-
     _updateFavoriteFilesCache(files, favFlag: true);
-
-    _collectionService.sync().ignore();
   }
 
   Future<void> updateFavorites(List<EnteFile> files, bool favFlag) async {
@@ -165,7 +162,11 @@ class FavoritesService {
         collectionID,
       );
       for (final file in files) {
-        await _collectionService.addToCollection(collection!, file);
+        await _collectionService.addToCollection(
+          collection!,
+          file,
+          runSync: false,
+        );
       }
     } else {
       final Collection? favCollection = await getFavoritesCollection();
@@ -184,10 +185,17 @@ class FavoritesService {
         targetCollection ??= await _collectionService
             .getOrCreateUncategorizedCollection();
 
-        await _collectionService.move([file], favCollection!, targetCollection);
+        await _collectionService.move(
+          [file],
+          favCollection!,
+          targetCollection,
+          runSync: false,
+        );
       }
     }
     _updateFavoriteFilesCache(files, favFlag: favFlag);
+    Bus.instance.fire(CollectionsUpdatedEvent('favorites_updated'));
+    _collectionService.sync().ignore();
   }
 
   Future<void> removeFromFavorites(EnteFile file) async {

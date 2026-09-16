@@ -8,6 +8,7 @@ import "package:flutter/material.dart";
 import "package:flutter_svg/flutter_svg.dart";
 import "package:hugeicons/hugeicons.dart";
 import "package:locker/events/collections_updated_event.dart";
+import "package:locker/events/user_details_refresh_event.dart";
 import "package:locker/models/selected_files.dart";
 import "package:locker/services/collections/collections_service.dart";
 import "package:locker/services/collections/models/collection.dart";
@@ -705,7 +706,7 @@ class _FileSelectionOverlayBarState extends State<FileSelectionOverlayBar> {
       }
 
       await Future.wait(addFutures);
-      await CollectionService.instance.sync();
+      CollectionService.instance.sync().ignore();
       _logger.info(
         'Completed add-to operation for ${ownedFiles.length} file(s).',
       );
@@ -787,10 +788,17 @@ class _FileSelectionOverlayBarState extends State<FileSelectionOverlayBar> {
             .getCollectionsForFile(file);
 
         if (collections.isNotEmpty) {
-          await CollectionService.instance.trashFile(file, collections.first);
+          await CollectionService.instance.trashFile(
+            file,
+            collections.first,
+            runSync: false,
+          );
         }
       }
 
+      Bus.instance.fire(CollectionsUpdatedEvent('files_trashed'));
+      Bus.instance.fire(UserDetailsRefreshEvent());
+      CollectionService.instance.sync().ignore();
       await dialog?.hide();
 
       if (mounted) {

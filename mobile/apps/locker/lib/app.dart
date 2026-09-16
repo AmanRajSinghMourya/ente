@@ -123,7 +123,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (Configuration.instance.hasConfiguredAccount()) {
-        CollectionService.instance.sync();
+        CollectionService.instance.sync().ignore();
       }
     }
   }

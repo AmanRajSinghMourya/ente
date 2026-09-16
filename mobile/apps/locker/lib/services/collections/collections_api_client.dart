@@ -1,4 +1,3 @@
-import "dart:async";
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -220,7 +219,8 @@ class CollectionApiClient {
   Future<void> leaveCollection(Collection collection) async {
     await CollectionSharingService.instance.leaveCollection(collection.id);
     await _handleCollectionDeletion(collection);
-    await CollectionService.instance.sync();
+    Bus.instance.fire(CollectionsUpdatedEvent("collection_left"));
+    CollectionService.instance.sync().ignore();
   }
 
   Future<void> _handleCollectionDeletion(Collection collection) async {
@@ -524,7 +524,7 @@ class CollectionApiClient {
     await _updateCollectionInDB(collection);
     _logger.info("Firing CollectionsUpdatedEvent: share_url_created");
     Bus.instance.fire(CollectionsUpdatedEvent("share_url_created"));
-    unawaited(CollectionService.instance.sync());
+    CollectionService.instance.sync().ignore();
   }
 
   Future<void> disableShareUrl(Collection collection) async {
@@ -533,7 +533,7 @@ class CollectionApiClient {
     await _updateCollectionInDB(collection);
     _logger.info("Firing CollectionsUpdatedEvent: share_url_disabled");
     Bus.instance.fire(CollectionsUpdatedEvent("share_url_disabled"));
-    unawaited(CollectionService.instance.sync());
+    CollectionService.instance.sync().ignore();
   }
 
   Future<void> updateShareUrl(
@@ -551,7 +551,7 @@ class CollectionApiClient {
     await _updateCollectionInDB(collection);
     _logger.info("Firing CollectionsUpdatedEvent: share_url_updated");
     Bus.instance.fire(CollectionsUpdatedEvent("share_url_updated"));
-    unawaited(CollectionService.instance.sync());
+    CollectionService.instance.sync().ignore();
   }
 
   Future<List<User>> share(
@@ -581,7 +581,7 @@ class CollectionApiClient {
     final updatedCollection = collection!.copyWith(sharees: sharees);
     await _updateCollectionInDB(updatedCollection);
     Bus.instance.fire(CollectionsUpdatedEvent("email_share_added"));
-    unawaited(CollectionService.instance.sync());
+    CollectionService.instance.sync().ignore();
     return sharees;
   }
 
@@ -594,7 +594,7 @@ class CollectionApiClient {
     final updatedCollection = collection!.copyWith(sharees: sharees);
     await _updateCollectionInDB(updatedCollection);
     Bus.instance.fire(CollectionsUpdatedEvent("email_share_removed"));
-    unawaited(CollectionService.instance.sync());
+    CollectionService.instance.sync().ignore();
     return sharees;
   }
 

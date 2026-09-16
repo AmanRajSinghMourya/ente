@@ -76,6 +76,11 @@ class CollectionService {
   }
 
   Future<void> sync() async {
+    await _syncCollections();
+    await TrashService.instance.syncTrash();
+  }
+
+  Future<void> _syncCollections() async {
     final previousSyncTime = _db.getSyncTime();
     final shouldCheckFirstSyncCompletion = previousSyncTime == 0;
 
@@ -183,9 +188,7 @@ class CollectionService {
       await _db.updateCollections([collection]);
 
       Bus.instance.fire(CollectionsUpdatedEvent('collection_created'));
-
-      await sync();
-
+      sync().ignore();
       return collection;
     } catch (e) {
       _logger.severe("Failed to create collection: $e");
@@ -305,9 +308,8 @@ class CollectionService {
       await _db.addFilesToCollection(collection, [file]);
 
       Bus.instance.fire(CollectionsUpdatedEvent('add_to_collection'));
-
       if (runSync) {
-        await sync();
+        sync().ignore();
       }
     } catch (e, stackTrace) {
       _logger.severe("Failed to add file to collection: $e", e, stackTrace);
@@ -324,25 +326,22 @@ class CollectionService {
       final List<TrashRequest> requests = [];
       requests.add(TrashRequest(file.uploadedFileID!, collection.id));
       await _apiClient.trash(requests);
-
       await _db.deleteFilesFromCollection(collection, [file]);
-
-      if (runSync) {
-        await TrashService.instance.syncTrash();
-        await sync();
-        Bus.instance.fire(UserDetailsRefreshEvent());
-      }
-    } catch (e) {
-      _logger.severe("Failed to remove file from collections: $e");
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to remove file from collections', e, stackTrace);
       rethrow;
     }
+    if (!runSync) return;
+    Bus.instance.fire(CollectionsUpdatedEvent('file_trashed'));
+    Bus.instance.fire(UserDetailsRefreshEvent());
+    sync().ignore();
   }
 
   Future<void> rename(Collection collection, String newName) async {
     try {
       await _apiClient.rename(collection, newName);
       _logger.info("Renamed collection ${collection.id}");
-      await sync();
+      sync().ignore();
     } catch (e, s) {
       _logger.severe("failed to rename collection", e, s);
       rethrow;
@@ -415,10 +414,8 @@ class CollectionService {
 
     try {
       await _apiClient.removeFromCollection(collectionId, files);
-
       Bus.instance.fire(CollectionsUpdatedEvent('files_removed'));
-
-      await sync();
+      sync().ignore();
     } catch (e, stackTrace) {
       _logger.severe(
         "Failed to remove files from collection: $e",
@@ -451,9 +448,9 @@ class CollectionService {
       // stay attached to the moved file before the source mapping is removed.
       await _db.addFilesToCollection(to, files);
       await _db.deleteFilesFromCollection(from, files);
-
       if (runSync) {
-        await sync();
+        Bus.instance.fire(CollectionsUpdatedEvent('files_moved'));
+        sync().ignore();
       }
     } catch (e, stackTrace) {
       _logger.severe("Failed to move files: $e", e, stackTrace);
@@ -489,8 +486,8 @@ class CollectionService {
       }
 
       await _apiClient.trashCollection(collection, keepFiles: true);
-      await sync();
-      await TrashService.instance.syncTrash();
+      Bus.instance.fire(CollectionsUpdatedEvent('collection_trashed'));
+      sync().ignore();
     } catch (e) {
       _logger.severe("Failed to trash collection keeping files: $e");
       rethrow;
@@ -511,10 +508,9 @@ class CollectionService {
       }
 
       await _apiClient.trashCollection(collection);
-
-      await sync();
-      await TrashService.instance.syncTrash();
+      Bus.instance.fire(CollectionsUpdatedEvent('collection_trashed'));
       Bus.instance.fire(UserDetailsRefreshEvent());
+      sync().ignore();
     } catch (e) {
       _logger.severe("Failed to trash collection with files: $e");
       rethrow;
@@ -534,8 +530,8 @@ class CollectionService {
       );
       // Bulk deletion syncs once after the loop.
       if (!isBulkDelete) {
-        await sync();
-        await TrashService.instance.syncTrash();
+        Bus.instance.fire(CollectionsUpdatedEvent('collection_trashed'));
+        sync().ignore();
       }
     } catch (e) {
       _logger.severe("Failed to trash empty collection: $e");

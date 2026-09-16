@@ -1,18 +1,15 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:ente_crypto_api/ente_crypto_api.dart';
 import "package:ente_events/event_bus.dart";
-import "package:ente_events/models/signed_in_event.dart";
 import 'package:ente_network/network.dart';
 import "package:locker/events/collections_updated_event.dart";
 import "package:locker/events/user_details_refresh_event.dart";
 import 'package:locker/services/collections/collections_service.dart';
 import 'package:locker/services/collections/models/collection.dart';
 import 'package:locker/services/collections/models/collection_file_item.dart';
-import "package:locker/services/configuration.dart";
 import 'package:locker/services/db/locker_db.dart';
 import 'package:locker/services/db/trash_table.dart';
 import 'package:locker/services/files/sync/models/file.dart';
@@ -36,15 +33,6 @@ class TrashService {
     _prefs = preferences;
     _enteDio = Network.instance.enteDio;
     _db = LockerDB.instance;
-
-    Bus.instance.on<SignedInEvent>().listen((event) async {
-      _logger.info("User signed in, starting initial trash sync.");
-      unawaited(syncTrash());
-    });
-
-    if (Configuration.instance.hasConfiguredAccount()) {
-      unawaited(syncTrash());
-    }
   }
 
   Future<void> syncTrash() async {
@@ -68,6 +56,13 @@ class TrashService {
 
     if (diff.lastSyncedTimeStamp != 0) {
       await _setSyncTime(diff.lastSyncedTimeStamp);
+    }
+    final didChange =
+        diff.trashedFiles.isNotEmpty ||
+        diff.deletedUploadIDs.isNotEmpty ||
+        diff.restoredFiles.isNotEmpty;
+    if (didChange) {
+      Bus.instance.fire(CollectionsUpdatedEvent("trash_sync"));
     }
     if (diff.hasMore) {
       return syncTrash();
@@ -203,7 +198,7 @@ class TrashService {
     await _enteDio.post("/trash/delete", data: params);
     await _db.deleteTrashFiles(uniqueFileIds);
     await _db.deleteFilesByUploadedFileIDs(uniqueFileIds);
-    unawaited(syncTrash());
+    syncTrash().ignore();
   }
 
   Future<void> emptyTrash() async {
@@ -222,7 +217,7 @@ class TrashService {
 
     await _db.clearTrashFilesTable();
     await _db.deleteFilesByUploadedFileIDs(fileIDs);
-    unawaited(syncTrash());
+    syncTrash().ignore();
     _logger.info("Successfully emptied trash");
   }
 
@@ -251,9 +246,9 @@ class TrashService {
     }
     await _enteDio.post("/collections/restore-files", data: params);
     await _db.deleteTrashFiles(files.map((e) => e.uploadedFileID!).toList());
-    await CollectionService.instance.sync();
     Bus.instance.fire(CollectionsUpdatedEvent("file_restore"));
     Bus.instance.fire(UserDetailsRefreshEvent());
+    CollectionService.instance.sync().ignore();
   }
 }
 

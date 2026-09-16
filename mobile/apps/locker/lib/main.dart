@@ -205,6 +205,7 @@ Future<void> _init(bool bool, {String? via}) async {
       enteDio: Network.instance.enteDio,
     );
     await CollectionApiClient.instance.init();
+    await TrashService.instance.init(preferences);
     await CollectionService.instance.init(preferences);
     await FavoritesService.instance.init();
     await OfflineFilesService.instance.init();
@@ -217,7 +218,6 @@ Future<void> _init(bool bool, {String? via}) async {
       packageInfo,
     );
     await UpdateService.instance.init(preferences, packageInfo);
-    await TrashService.instance.init(preferences);
     await LockerContactsDisplayService.init(preferences: preferences);
     unawaited(cleanStaleLegacyKitShareFiles());
     unawaited(

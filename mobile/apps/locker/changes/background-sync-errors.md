@@ -1,0 +1,1 @@
+- Fixed successful changes sometimes showing an error while refreshing in the background.

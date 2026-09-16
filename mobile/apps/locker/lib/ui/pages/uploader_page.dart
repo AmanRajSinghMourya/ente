@@ -194,9 +194,7 @@ abstract class UploaderPageState<T extends UploaderPage> extends State<T> {
           }
           Bus.instance.fire(UserDetailsRefreshEvent());
 
-          await CollectionService.instance.sync().catchError((e) {
-            _logger.warning('Background sync failed after upload', e);
-          });
+          CollectionService.instance.sync().ignore();
         }
         if (!hasUploadError) {
           outcome = _UploadFilesOutcome.succeeded;
