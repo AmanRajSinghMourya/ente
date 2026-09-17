@@ -452,16 +452,17 @@ class _CatalogHugeIcon extends StatelessWidget {
 }
 
 class _CatalogTrailingIcon extends StatelessWidget {
-  const _CatalogTrailingIcon(this.icon);
+  const _CatalogTrailingIcon(this.icon, {this.size = IconSizes.small});
 
   final HugeIconData icon;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return _CatalogHugeIcon(
       icon,
       color: context.componentColors.textLight,
-      size: IconSizes.small,
+      size: size,
     );
   }
 }
@@ -3323,16 +3324,13 @@ class _PopupMenuPreviewState extends State<_PopupMenuPreview> {
 
   List<EntePopupMenuOption<String>> _sortOptions(BuildContext context) {
     return [
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'sort-name',
         label: 'Name',
         secondaryLabel: 'A-Z',
-        secondaryTrailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedArrowUp02,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        secondaryTrailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedArrowUp02,
+          size: IconSizes.tiny,
         ),
       ),
       const EntePopupMenuOption(value: 'sort-created', label: 'Created'),
@@ -3388,37 +3386,28 @@ class _PopupMenuPreviewState extends State<_PopupMenuPreview> {
 
   List<EntePopupMenuOption<String>> _viewOptions(BuildContext context) {
     return [
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'grid',
         label: 'Grid',
-        trailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedGridView,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        trailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedGridView,
+          size: IconSizes.tiny,
         ),
       ),
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'list',
         label: 'List',
-        trailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedMenu01,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        trailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedMenu01,
+          size: IconSizes.tiny,
         ),
       ),
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'upload',
         label: 'Upload',
-        trailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedImageUpload,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        trailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedImageUpload,
+          size: IconSizes.tiny,
         ),
         showDivider: false,
       ),
@@ -3428,27 +3417,21 @@ class _PopupMenuPreviewState extends State<_PopupMenuPreview> {
   List<EntePopupMenuOption<String>> _fullOptions(BuildContext context) {
     final colors = context.componentColors;
     return [
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'created-ascending',
         label: 'Created',
         secondaryLabel: 'A-Z',
-        leadingWidget: const _CatalogHugeIcon(
+        leadingWidget: _CatalogHugeIcon(
           HugeIcons.strokeRoundedAdd01,
           size: IconSizes.small,
         ),
-        secondaryTrailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedArrowUp02,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        secondaryTrailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedArrowUp02,
+          size: IconSizes.tiny,
         ),
-        trailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedAdd01,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        trailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedAdd01,
+          size: IconSizes.tiny,
         ),
       ),
       EntePopupMenuOption(
@@ -3459,12 +3442,9 @@ class _PopupMenuPreviewState extends State<_PopupMenuPreview> {
           HugeIcons.strokeRoundedRefresh,
           size: IconSizes.small,
         ),
-        secondaryTrailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedArrowUp02,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        secondaryTrailingWidget: const _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedArrowUp02,
+          size: IconSizes.tiny,
         ),
         activeTrailingWidget: _CatalogHugeIcon(
           HugeIcons.strokeRoundedCheckmarkCircle02,
@@ -3537,16 +3517,13 @@ class _PopupMenuPreviewState extends State<_PopupMenuPreview> {
         label: 'Name',
         secondaryLabel: 'A-Z',
       ),
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'label-icon',
         label: 'Name',
         secondaryLabel: 'A-Z',
-        secondaryTrailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedArrowUp02,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        secondaryTrailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedArrowUp02,
+          size: IconSizes.tiny,
         ),
       ),
       const EntePopupMenuOption(
@@ -3557,15 +3534,12 @@ class _PopupMenuPreviewState extends State<_PopupMenuPreview> {
           size: IconSizes.small,
         ),
       ),
-      EntePopupMenuOption(
+      const EntePopupMenuOption(
         value: 'trailing',
         label: 'Grid',
-        trailingWidget: Builder(
-          builder: (context) => _CatalogHugeIcon(
-            HugeIcons.strokeRoundedGridView,
-            color: context.componentColors.textLight,
-            size: IconSizes.tiny,
-          ),
+        trailingWidget: _CatalogTrailingIcon(
+          HugeIcons.strokeRoundedGridView,
+          size: IconSizes.tiny,
         ),
       ),
       EntePopupMenuOption(

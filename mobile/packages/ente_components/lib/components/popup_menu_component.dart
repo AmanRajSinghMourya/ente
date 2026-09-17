@@ -118,7 +118,7 @@ Future<T?> showEntePopupMenu<T>({
   final colors = context.componentColors;
   final menuStrokeColor = colors.strokeFaint;
   final hasMenuTheme =
-      context.dependOnInheritedWidgetOfExactType<_EntePopupMenuTheme>() != null;
+      context.getInheritedWidgetOfExactType<_EntePopupMenuTheme>() != null;
   final button = context.findRenderObject()! as RenderBox;
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   // Anchor the menu to the button's bottom edge so it drops below the button
