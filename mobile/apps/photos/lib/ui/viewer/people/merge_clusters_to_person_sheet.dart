@@ -499,12 +499,14 @@ class _MergeClustersToPersonPageState extends State<MergeClustersToPersonPage> {
                                                       .strokeRoundedArrowUp02
                                                 : HugeIcons
                                                       .strokeRoundedArrowDown02);
-                                      activeTrailingWidget = HugeIcon(
-                                        icon: directionIcon,
-                                        size: 12,
-                                        strokeWidth: 3,
-                                        color:
-                                            context.componentColors.textLight,
+                                      activeTrailingWidget = Builder(
+                                        builder: (context) => HugeIcon(
+                                          icon: directionIcon,
+                                          size: 12,
+                                          strokeWidth: 3,
+                                          color:
+                                              context.componentColors.textLight,
+                                        ),
                                       );
                                     }
 

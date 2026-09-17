@@ -504,16 +504,13 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
     }
 
     final strings = context.strings;
-    final colorScheme = getEnteColorScheme(context);
     if (!Configuration.instance.hasConfiguredAccount()) {
       if (widget.showOverflowMenu && widget.deviceCollection != null) {
         actions.add(
           galleryAppBarPopupMenuAction<AlbumPopupAction>(
             tooltip: strings.more,
             icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
-            optionsBuilder: () => [
-              _slideshowMenuOption(strings, colorScheme.contentLight),
-            ],
+            optionsBuilder: () => [_slideshowMenuOption(strings)],
             onSelected: (AlbumPopupAction value) async {
               if (value == AlbumPopupAction.albumSlideshow) {
                 await _startAlbumSlideshow();
@@ -603,7 +600,6 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
         icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
         optionsBuilder: () => _buildOverflowMenuOptions(
           strings: strings,
-          iconColor: colorScheme.contentLight,
           userId: userId,
           isArchived: isArchived,
           isHidden: isHidden,
@@ -737,7 +733,6 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
   Future<List<EntePopupMenuOption<AlbumPopupAction>>>
   _buildOverflowMenuOptions({
     required StringsLocalizations strings,
-    required Color iconColor,
     required int userId,
     required bool isArchived,
     required bool isHidden,
@@ -757,31 +752,31 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
         _menuOption(
           AlbumPopupAction.editDetails,
           strings.editDetails,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedEdit03, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedEdit03),
         ),
       if (galleryType == GalleryType.quickLink)
         _menuOption(
           AlbumPopupAction.convertToAlbum,
           strings.convertToAlbum,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedAlbum02, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedAlbum02),
         ),
       if (galleryType.showMap())
         _menuOption(
           AlbumPopupAction.map,
           strings.map,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedLocation01, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedLocation01),
         ),
       if (galleryType.canSort())
         _menuOption(
           AlbumPopupAction.sort,
           strings.sortAlbumsBy,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedSorting01, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedSorting01),
         ),
       if (galleryType == GalleryType.uncategorized)
         _menuOption(
           AlbumPopupAction.cleanUncategorized,
           strings.cleanUncategorized,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedClean, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedClean),
         ),
       if (galleryType.canPin())
         _menuOption(
@@ -791,20 +786,22 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             widget.collection!.isPinned
                 ? HugeIcons.strokeRoundedPinOff
                 : HugeIcons.strokeRoundedPin,
-            iconColor,
           ),
         ),
       if (galleryType == GalleryType.locationTag)
         _menuOption(
           AlbumPopupAction.editLocation,
           strings.editLocation,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedLocation01, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedLocation01),
         ),
       if (galleryType == GalleryType.locationTag)
         _menuOption(
           AlbumPopupAction.deleteLocation,
           strings.deleteLocation,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedDelete01, warningColor),
+          galleryAppBarMenuIcon(
+            HugeIcons.strokeRoundedDelete01,
+            color: warningColor,
+          ),
           labelColor: warningColor,
         ),
       if (galleryType != GalleryType.sharedCollection &&
@@ -816,7 +813,6 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             isArchived
                 ? HugeIcons.strokeRoundedUnarchive03
                 : HugeIcons.strokeRoundedArchive03,
-            iconColor,
           ),
         ),
       if (!isArchived && galleryType.canHide())
@@ -827,14 +823,13 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             isHidden
                 ? HugeIcons.strokeRoundedView
                 : HugeIcons.strokeRoundedViewOffSlash,
-            iconColor,
           ),
         ),
       if (widget.collection != null)
         _menuOption(
           AlbumPopupAction.galleryGuestView,
           strings.guestView,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedIncognito, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedIncognito),
         ),
       if (widget.collection != null && castService.isSupported)
         _menuOption(
@@ -845,15 +840,14 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
                     castService.getActiveSessions().isNotEmpty
                 ? HugeIcons.strokeRoundedTvSmart
                 : HugeIcons.strokeRoundedTv02,
-            iconColor,
           ),
         ),
-      if (_isAlbumSlideshowAvailable) _slideshowMenuOption(strings, iconColor),
+      if (_isAlbumSlideshowAvailable) _slideshowMenuOption(strings),
       if (canAutoAdd)
         _menuOption(
           AlbumPopupAction.autoAddPhotos,
           hasAutoAddPeople ? strings.editAutoAddPeople : strings.autoAddPeople,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedUserAdd01, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedUserAdd01),
         ),
       if (galleryType.canDelete())
         _menuOption(
@@ -863,7 +857,6 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             isQuickLink
                 ? HugeIcons.strokeRoundedLinkBackward
                 : HugeIcons.strokeRoundedDelete01,
-            iconColor,
           ),
         ),
       if (galleryType == GalleryType.sharedCollection)
@@ -874,7 +867,6 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             widget.collection!.hasShareePinned()
                 ? HugeIcons.strokeRoundedPinOff
                 : HugeIcons.strokeRoundedPin,
-            iconColor,
           ),
         ),
       if (galleryType == GalleryType.sharedCollection)
@@ -887,7 +879,6 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             widget.collection!.hasShareeArchived()
                 ? HugeIcons.strokeRoundedUnarchive03
                 : HugeIcons.strokeRoundedArchive03,
-            iconColor,
           ),
         ),
       if (galleryType == GalleryType.sharedCollection)
@@ -898,33 +889,32 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
             widget.collection!.hasShareeHidden()
                 ? HugeIcons.strokeRoundedView
                 : HugeIcons.strokeRoundedViewOffSlash,
-            iconColor,
           ),
         ),
       if (galleryType == GalleryType.sharedCollection)
         _menuOption(
           AlbumPopupAction.leave,
           strings.leaveAlbum,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedLogout05, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedLogout05),
         ),
       if (galleryType == GalleryType.localFolder && !_isICloudSharedAlbum)
         _menuOption(
           AlbumPopupAction.freeUpSpace,
           strings.freeUpSpace,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedClean, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedClean),
         ),
       if (_canDisableDeviceFolderBackup)
         _menuOption(
           AlbumPopupAction.disableBackup,
           strings.disableBackup,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedUpload01, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedUpload01),
         ),
       if (galleryType == GalleryType.sharedPublicCollection &&
           (widget.collection?.isDownloadEnabledForPublicLink() ?? false))
         _menuOption(
           AlbumPopupAction.downloadAlbum,
           strings.download,
-          galleryAppBarMenuIcon(HugeIcons.strokeRoundedDownload01, iconColor),
+          galleryAppBarMenuIcon(HugeIcons.strokeRoundedDownload01),
         ),
     ];
   }
@@ -944,12 +934,11 @@ class _GalleryAppBarWidgetState extends State<GalleryAppBarWidget> {
 
   EntePopupMenuOption<AlbumPopupAction> _slideshowMenuOption(
     StringsLocalizations strings,
-    Color iconColor,
   ) {
     return _menuOption(
       AlbumPopupAction.albumSlideshow,
       strings.slideshow,
-      galleryAppBarMenuIcon(HugeIcons.strokeRoundedPresentation03, iconColor),
+      galleryAppBarMenuIcon(HugeIcons.strokeRoundedPresentation03),
     );
   }
 

@@ -157,7 +157,6 @@ class _CollectionListPageState extends State<CollectionListPage> {
   }
 
   List<EntePopupMenuOption<_CollectionListMenuAction>> _buildMenuOptions() {
-    final colorScheme = getEnteColorScheme(context);
     final strings = context.strings;
     final currentViewType = albumViewType ?? localSettings.albumViewType();
     final isListView = currentViewType == AlbumViewType.list;
@@ -166,26 +165,30 @@ class _CollectionListPageState extends State<CollectionListPage> {
     final nameSortDirection = currentSortKey == AlbumSortKey.albumName
         ? currentSortDirection
         : null;
-    final activeTrailingWidget = HugeIcon(
-      icon: currentSortDirection == AlbumSortDirection.ascending
-          ? HugeIcons.strokeRoundedArrowUp02
-          : HugeIcons.strokeRoundedArrowDown02,
-      size: 12,
-      strokeWidth: 3,
-      color: colorScheme.textMuted,
+    final activeTrailingWidget = Builder(
+      builder: (context) => HugeIcon(
+        icon: currentSortDirection == AlbumSortDirection.ascending
+            ? HugeIcons.strokeRoundedArrowUp02
+            : HugeIcons.strokeRoundedArrowDown02,
+        size: 12,
+        strokeWidth: 3,
+        color: getEnteColorScheme(context).textMuted,
+      ),
     );
 
     return [
       EntePopupMenuOption(
         value: _CollectionListMenuAction.toggleView,
         label: isListView ? strings.grid : strings.list,
-        trailingWidget: HugeIcon(
-          icon: isListView
-              ? HugeIcons.strokeRoundedGridView
-              : HugeIcons.strokeRoundedMenu01,
-          size: 12,
-          strokeWidth: 3,
-          color: colorScheme.contentLight,
+        trailingWidget: Builder(
+          builder: (context) => HugeIcon(
+            icon: isListView
+                ? HugeIcons.strokeRoundedGridView
+                : HugeIcons.strokeRoundedMenu01,
+            size: 12,
+            strokeWidth: 3,
+            color: context.componentColors.textLight,
+          ),
         ),
       ),
       EntePopupMenuOption(

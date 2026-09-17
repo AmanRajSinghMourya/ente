@@ -142,7 +142,6 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
   }
 
   List<Widget> _getDefaultActions(BuildContext context) {
-    final iconColor = getEnteColorScheme(context).contentLight;
     final hasAccount = Configuration.instance.hasConfiguredAccount();
     final List<Widget> actions = <Widget>[];
     if (widget.selectedFiles.files.isNotEmpty) {
@@ -180,10 +179,7 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
         EntePopupMenuOption(
           value: ClusterPopupAction.memoryLane,
           label: context.strings.facesTimelineAppBarTitle,
-          leadingWidget: galleryAppBarMenuIcon(
-            HugeIcons.strokeRoundedSparkles,
-            iconColor,
-          ),
+          leadingWidget: galleryAppBarMenuIcon(HugeIcons.strokeRoundedSparkles),
         ),
       if (!isLocalGalleryMode && hasAccount) ...[
         EntePopupMenuOption(
@@ -191,7 +187,6 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
           label: context.strings.ignorePerson,
           leadingWidget: galleryAppBarMenuIcon(
             HugeIcons.strokeRoundedUserBlock01,
-            iconColor,
           ),
         ),
         EntePopupMenuOption(
@@ -199,7 +194,6 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
           label: context.strings.mixedGrouping,
           leadingWidget: galleryAppBarMenuIcon(
             HugeIcons.strokeRoundedUserMultiple,
-            iconColor,
           ),
         ),
         if (kDebugMode)
@@ -208,7 +202,6 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
             label: "Debug mixed grouping",
             leadingWidget: galleryAppBarMenuIcon(
               HugeIcons.strokeRoundedAiBrain01,
-              iconColor,
             ),
           ),
       ],

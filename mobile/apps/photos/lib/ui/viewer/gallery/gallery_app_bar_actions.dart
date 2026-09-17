@@ -49,6 +49,6 @@ Widget galleryAppBarPopupMenuAction<T>({
   );
 }
 
-Widget galleryAppBarMenuIcon(List<List<dynamic>> icon, Color color) {
+Widget galleryAppBarMenuIcon(List<List<dynamic>> icon, {Color? color}) {
   return HugeIcon(icon: icon, size: IconSizes.small, color: color);
 }
