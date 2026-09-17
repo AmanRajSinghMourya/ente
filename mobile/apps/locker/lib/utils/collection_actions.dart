@@ -2,6 +2,7 @@ import "dart:async";
 
 import "package:ente_accounts/services/user_service.dart";
 import "package:ente_components/ente_components.dart";
+import "package:ente_events/event_bus.dart";
 import "package:ente_pure_utils/ente_pure_utils.dart";
 import "package:ente_sharing/components/invite_dialog.dart";
 import "package:ente_sharing/models/user.dart";
@@ -11,11 +12,11 @@ import 'package:ente_ui/utils/dialog_util.dart';
 import "package:ente_ui/utils/toast_util.dart";
 import 'package:flutter/material.dart';
 import "package:locker/core/errors.dart";
+import "package:locker/events/collections_updated_event.dart";
 import "package:locker/services/collections/collections_api_client.dart";
 import 'package:locker/services/collections/collections_service.dart';
 import 'package:locker/services/collections/models/collection.dart';
 import "package:locker/services/configuration.dart";
-import "package:locker/services/trash/trash_service.dart";
 import "package:locker/ui/components/delete_confirmation_sheet.dart";
 import "package:locker/ui/components/subscription_required_sheet.dart";
 import "package:locker/ui/components/text_input_sheet.dart";
@@ -177,8 +178,8 @@ class CollectionActions {
       }
 
       if (emptyCollections.isNotEmpty) {
-        await CollectionService.instance.sync();
-        await TrashService.instance.syncTrash();
+        Bus.instance.fire(CollectionsUpdatedEvent('collections_trashed'));
+        await CollectionService.instance.syncAfterMutation(includeTrash: true);
       }
 
       for (final collection in nonEmptyCollections) {

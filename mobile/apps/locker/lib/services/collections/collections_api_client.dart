@@ -220,7 +220,8 @@ class CollectionApiClient {
   Future<void> leaveCollection(Collection collection) async {
     await CollectionSharingService.instance.leaveCollection(collection.id);
     await _handleCollectionDeletion(collection);
-    await CollectionService.instance.sync();
+    Bus.instance.fire(CollectionsUpdatedEvent("collection_left"));
+    await CollectionService.instance.syncAfterMutation();
   }
 
   Future<void> _handleCollectionDeletion(Collection collection) async {
