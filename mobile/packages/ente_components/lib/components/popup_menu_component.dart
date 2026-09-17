@@ -62,20 +62,27 @@ class EntePopupMenuButton<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = this.child;
-    if (child == null) {
-      return IconButtonComponent(
-        variant: IconButtonComponentVariant.primary,
-        shouldSurfaceExecutionStates: false,
-        icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
-        onTap: () => _showMenu(context),
-      );
-    }
+    return _EntePopupMenuTheme(
+      borderRadius: borderRadius,
+      child: Builder(
+        builder: (context) {
+          final child = this.child;
+          if (child == null) {
+            return IconButtonComponent(
+              variant: IconButtonComponentVariant.primary,
+              shouldSurfaceExecutionStates: false,
+              icon: const HugeIcon(icon: HugeIcons.strokeRoundedMoreVertical),
+              onTap: () => _showMenu(context),
+            );
+          }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _showMenu(context),
-      child: child,
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _showMenu(context),
+            child: child,
+          );
+        },
+      ),
     );
   }
 
@@ -110,6 +117,8 @@ Future<T?> showEntePopupMenu<T>({
 }) {
   final colors = context.componentColors;
   final menuStrokeColor = colors.strokeFaint;
+  final hasMenuTheme =
+      context.dependOnInheritedWidgetOfExactType<_EntePopupMenuTheme>() != null;
   final button = context.findRenderObject()! as RenderBox;
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   // Anchor the menu to the button's bottom edge so it drops below the button
@@ -130,15 +139,17 @@ Future<T?> showEntePopupMenu<T>({
 
   return showMenu<T>(
     context: context,
-    color: colors.fillLight,
+    color: hasMenuTheme ? null : colors.fillLight,
     elevation: elevation,
     surfaceTintColor: Colors.transparent,
     menuPadding: EdgeInsets.zero,
     constraints: BoxConstraints.tightFor(width: menuWidth),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(borderRadius),
-      side: BorderSide(color: menuStrokeColor),
-    ),
+    shape: hasMenuTheme
+        ? null
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(borderRadius),
+            side: BorderSide(color: menuStrokeColor),
+          ),
     clipBehavior: Clip.antiAlias,
     position: position,
     items: List.generate(options.length, (index) {
@@ -148,20 +159,53 @@ Future<T?> showEntePopupMenu<T>({
         enabled: option.enabled,
         padding: EdgeInsets.zero,
         height: itemHeight,
-        child: Container(
-          key: ValueKey('ente-popup-menu-item-$index'),
-          height: itemHeight,
-          padding: EdgeInsets.symmetric(horizontal: itemHorizontalPadding),
-          decoration: BoxDecoration(
-            border: option.showDivider && index != options.length - 1
-                ? Border(bottom: BorderSide(color: menuStrokeColor))
-                : null,
+        child: Builder(
+          builder: (context) => Container(
+            key: ValueKey('ente-popup-menu-item-$index'),
+            height: itemHeight,
+            padding: EdgeInsets.symmetric(horizontal: itemHorizontalPadding),
+            decoration: BoxDecoration(
+              border: option.showDivider && index != options.length - 1
+                  ? Border(
+                      bottom: BorderSide(
+                        color: context.componentColors.strokeFaint,
+                      ),
+                    )
+                  : null,
+            ),
+            child: _EntePopupMenuRow(option: option),
           ),
-          child: _EntePopupMenuRow(option: option),
         ),
       );
     }),
   );
+}
+
+class _EntePopupMenuTheme extends InheritedTheme {
+  const _EntePopupMenuTheme({required this.borderRadius, required super.child});
+
+  final double borderRadius;
+
+  @override
+  Widget wrap(BuildContext context, Widget child) => Builder(
+    builder: (context) {
+      final colors = context.componentColors;
+      return PopupMenuTheme(
+        data: PopupMenuTheme.of(context).copyWith(
+          color: colors.fillLight,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(borderRadius),
+            side: BorderSide(color: colors.strokeFaint),
+          ),
+        ),
+        child: child,
+      );
+    },
+  );
+
+  @override
+  bool updateShouldNotify(_EntePopupMenuTheme oldWidget) =>
+      borderRadius != oldWidget.borderRadius;
 }
 
 class _EntePopupMenuRow<T> extends StatelessWidget {

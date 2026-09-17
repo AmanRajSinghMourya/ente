@@ -24,6 +24,79 @@ Future<void> pumpPopupMenu(
 }
 
 void main() {
+  testWidgets('an open popup menu follows light and dark theme changes', (
+    tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    String? selected;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ComponentTheme.lightTheme(),
+        darkTheme: ComponentTheme.darkTheme(),
+        home: Scaffold(
+          body: EntePopupMenuButton<String>(
+            optionsBuilder: () => const [
+              EntePopupMenuOption(value: 'edit', label: 'Edit'),
+              EntePopupMenuOption(value: 'review', label: 'Review'),
+            ],
+            onSelected: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(EntePopupMenuButton<String>));
+    await tester.pumpAndSettle();
+
+    for (final brightness in [
+      Brightness.dark,
+      Brightness.light,
+      Brightness.dark,
+    ]) {
+      tester.platformDispatcher.platformBrightnessTestValue = brightness;
+      await tester.pumpAndSettle();
+      final colors = ComponentTheme.colorsForApp(
+        ComponentApp.photos,
+        brightness: brightness,
+      );
+      final material = tester.widget<Material>(
+        find
+            .ancestor(of: find.text('Edit'), matching: find.byType(Material))
+            .first,
+      );
+      expect(material.color, colors.fillLight);
+      expect(
+        (material.shape! as RoundedRectangleBorder).side,
+        BorderSide(color: colors.strokeFaint),
+      );
+      for (var index = 0; index < 2; index++) {
+        final surface = tester.widget<Container>(
+          find.byKey(ValueKey('ente-popup-menu-item-$index')),
+        );
+        final decoration = surface.decoration! as BoxDecoration;
+        if (index == 0) {
+          expect(
+            (decoration.border! as Border).bottom.color,
+            colors.strokeFaint,
+          );
+        } else {
+          expect(decoration.border, isNull);
+        }
+      }
+      expect(
+        tester.widget<Text>(find.text('Edit')).style!.color,
+        colors.textBase,
+      );
+      expect(tester.takeException(), isNull);
+    }
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(selected, 'edit');
+    expect(find.text('Review'), findsNothing);
+  });
+
   testWidgets(
     'EntePopupMenuButton ignores async options after anchor unmounts',
     (tester) async {
