@@ -175,16 +175,20 @@ fn generate_frb(target: FrbTarget) -> Result<(), DynError> {
     let mut shared_types = HashMap::new();
     for app in apps {
         let package_dir = repo_root.join("mobile/apps").join(app);
-        generate_frb_package(&package_dir)?;
-        let mut modules = vec![("contacts", "contacts/types")];
-        if *app == "locker" {
-            modules.push(("legacy", "legacy"));
+        let generated_dir = package_dir.join("lib/src/rust");
+        if generated_dir.exists() {
+            fs::remove_dir_all(&generated_dir)?;
         }
-        for (name, module) in modules {
+        generate_frb_package(&package_dir)?;
+        for name in ["contacts", "legacy"] {
             let types_path = package_dir
                 .join("lib/src/rust/third_party/ente_frb_lib")
-                .join(format!("{module}.dart"));
+                .join(format!("{name}/types.dart"));
             let types = fs::read_to_string(&types_path)?
+                .replace(
+                    "part 'types.freezed.dart';",
+                    &format!("part '{name}.freezed.dart';"),
+                )
                 .lines()
                 .filter(|line| !line.ends_with("/frb_generated.dart';"))
                 .collect::<Vec<_>>()
@@ -198,10 +202,11 @@ fn generate_frb(target: FrbTarget) -> Result<(), DynError> {
             }
             let freezed_file = format!("{name}.freezed.dart");
             if types.contains(&format!("part '{freezed_file}';")) {
-                fs::rename(
-                    types_path.with_extension("freezed.dart"),
-                    shared_dir.join(freezed_file),
-                )?;
+                let freezed_path = types_path.with_extension("freezed.dart");
+                let freezed = fs::read_to_string(&freezed_path)?
+                    .replace("part of 'types.dart';", &format!("part of '{name}.dart';"));
+                fs::write(shared_dir.join(freezed_file), freezed)?;
+                fs::remove_file(freezed_path)?;
             }
             fs::write(shared_dir.join(format!("{name}.dart")), &types)?;
             fs::write(
@@ -473,8 +478,7 @@ fn sanitize_generated_swift_bindings(swift_file: &Path, crate_name: &str) -> Res
         .map_err(|error| format!("failed to read {}: {error}", swift_file.display()))?;
     let free_call_prefix = format!("try! rustCall {{ uniffi_{crate_name}_fn_free_");
 
-    let mut rewritten = String::with_capacity(original.len());
-    let mut replaced = false;
+    let mut rewritten = String::from("// swift-format-ignore-file\n");
 
     for segment in original.split_inclusive('\n') {
         let line = segment.strip_suffix('\n').unwrap_or(segment);
@@ -489,16 +493,13 @@ fn sanitize_generated_swift_bindings(swift_file: &Path, crate_name: &str) -> Res
             if segment.ends_with('\n') {
                 rewritten.push('\n');
             }
-            replaced = true;
         } else {
             rewritten.push_str(segment);
         }
     }
 
-    if replaced {
-        fs::write(swift_file, rewritten)
-            .map_err(|error| format!("failed to write {}: {error}", swift_file.display()))?;
-    }
+    fs::write(swift_file, rewritten)
+        .map_err(|error| format!("failed to write {}: {error}", swift_file.display()))?;
 
     Ok(())
 }

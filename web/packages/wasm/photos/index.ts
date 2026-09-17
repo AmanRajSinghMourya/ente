@@ -1,5 +1,5 @@
-import { readAndFree } from "ente-utils/wasm";
 import type {
+    EncryptedBox,
     OpenSessionInput,
     Session,
     WrappedRootContactKey,
@@ -13,12 +13,15 @@ export const openSession = async (input: OpenSessionInput): Promise<Session> =>
     (await wasm()).openSession(input);
 
 export const encryptBoxWithRecoveryKey = (session: Session, dataB64: string) =>
-    readAndFree(session.encryptWithRecoveryKey(dataB64), (box) => ({
-        encryptedData: box.encryptedData,
-        nonce: box.nonce,
-    }));
+    session.encryptWithRecoveryKey(dataB64);
 
 export const generateKey = async () => (await wasm()).cryptoGenerateKey();
+
+export const encryptBox = async (dataB64: string, keyB64: string) =>
+    (await wasm()).cryptoEncryptBox(dataB64, keyB64);
+
+export const decryptBox = async (box: EncryptedBox, keyB64: string) =>
+    (await wasm()).cryptoDecryptBox(box.encryptedData, box.nonce, keyB64);
 
 export const contactsGetDiff = async (
     session: Session,

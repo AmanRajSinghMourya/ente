@@ -223,7 +223,9 @@ func main() {
 	embeddingRepo := &embedding.Repository{DB: db}
 
 	authCache := cache.New(1*time.Minute, 15*time.Minute)
-	accessTokenCache := cache.New(1*time.Minute, 15*time.Minute)
+	accessTokenCache := public.NewLinkCache(1*time.Minute, 15*time.Minute)
+	fileLinkRepo.Cache = accessTokenCache
+	collectionLinkRepo.Cache = accessTokenCache
 	discordController := discord.NewDiscordController(userRepo, hostName, environment)
 	userLookupController := controller.NewUserLookupController(userRepo, discordController)
 	rateLimiter := middleware.NewRateLimitMiddleware(discordController, 1000, 1*time.Second)
@@ -238,6 +240,9 @@ func main() {
 		LockController:          lockController,
 		NotificationHistoryRepo: notificationHistoryRepo,
 	}
+	fileCountInitializer := controller.NewFileCountInitializer(usageRepo, trashRepo, lockController)
+	usageRepo.QueueFileCountInitialization = fileCountInitializer.Enqueue
+	go fileCountInitializer.Run()
 
 	userCache := cache2.NewUserCache()
 	userCacheCtrl := &usercache.Controller{UserCache: userCache, FileRepo: fileRepo,
@@ -298,8 +303,6 @@ func main() {
 		FileRepo:          fileRepo,
 		UploadResultCache: make(map[int64]bool),
 	}
-	fileCountInitializer := &controller.FileCountInitializer{UsageRepo: usageRepo, LockController: lockController}
-
 	accessCtrl := access.NewAccessController(accessCollectionRepo, accessFileRepo)
 	commentsRepo := &socialrepo.CommentsRepository{DB: db}
 	reactionsRepo := &socialrepo.ReactionsRepository{DB: db}
@@ -603,8 +606,8 @@ func main() {
 	}
 	pasteHandler := &api.PasteHandler{Controller: pasteCtrl}
 	storageAPI.GET("/files/upload-eligibility", fileHandler.ValidateUploadEligibility)
-	storageAPI.GET("/files/upload-urls", fileHandler.GetUploadURLs)
-	storageAPI.GET("/files/multipart-upload-urls", fileHandler.GetMultipartUploadURLs)
+	storageAPI.GET("/files/upload-urls", fileHandler.RestrictLegacyUploads, fileHandler.GetUploadURLs)
+	storageAPI.GET("/files/multipart-upload-urls", fileHandler.RestrictLegacyUploads, fileHandler.GetMultipartUploadURLs)
 	storageAPI.POST("/files/upload-url", fileHandler.GetUploadURLV2)
 	storageAPI.POST("/files/multipart-upload-url", fileHandler.GetMultipartUploadURLV2)
 	storageAPI.GET("/files/download/:fileID", fileHandler.Get)
@@ -707,6 +710,7 @@ func main() {
 	publicAPI.POST("/users/srp/create-session", userHandler.CreateSRPSession)
 	privateAPI.PUT("/users/recovery-key", userHandler.SetRecoveryKey)
 	privateAPI.GET("/users/public-key", userHandler.GetPublicKey)
+	privateAPI.POST("/users/public-keys", userHandler.GetPublicKeys)
 	privateAPI.GET("/users/session-validity/v2", userHandler.GetSessionValidityV2)
 	privateAPI.POST("/users/event", userHandler.ReportEvent)
 	privateAPI.POST("/users/logout", userHandler.Logout)
@@ -750,6 +754,7 @@ func main() {
 	storageAPI.GET("/collections/v2", collectionHandler.GetV2)
 	storageAPI.GET("/collections/v3", collectionHandler.GetWithLimit)
 	storageAPI.POST("/collections/share", collectionHandler.Share)
+	storageAPI.POST("/collections/share/batch", collectionHandler.BatchShare)
 	storageAPI.POST("/collections/share/bulk", collectionHandler.BulkShare)
 	storageAPI.POST("/collections/join-link", collectionHandler.JoinLink)
 	storageAPI.POST("/collections/share-url", collectionHandler.ShareURL)
@@ -837,7 +842,7 @@ func main() {
 	castAPI := server.Group("/cast")
 
 	castCtrl := cast.NewController(&castDb, accessCtrl)
-	castMiddleware := middleware.CastMiddleware{CastCtrl: castCtrl, Cache: authCache}
+	castMiddleware := middleware.CastMiddleware{CastCtrl: castCtrl}
 	castAPI.Use(rateLimiter.GlobalRateLimiter(), castMiddleware.CastAuthMiddleware())
 
 	castHandler := &api.CastHandler{
@@ -1108,7 +1113,7 @@ func main() {
 	setupAndStartCrons(
 		userAuthRepo, collectionLinkRepo, fileLinkRepo, pasteRepo, twoFactorRepo, passkeysRepo, fileController, taskLockingRepo, emailNotificationCtrl,
 		trashController, pushController, objectController, dataCleanupController, storageBonusCtrl, emergencyCtrl,
-		embeddingController, healthCheckHandler, castDb, inactiveUserOrchestrator, spaceDripController, fileCountInitializer)
+		embeddingController, healthCheckHandler, castDb, inactiveUserOrchestrator, spaceDripController)
 
 	primaryDBCollector := sqlstats.NewStatsCollector("prod_db", db)
 	latencySensitiveDBCollector := sqlstats.NewStatsCollector("latency_sensitive_db", latencySensitiveDB)
@@ -1298,8 +1303,7 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 	healthCheckHandler *api.HealthCheckHandler,
 	castDb castRepo.Repository,
 	inactiveUserOrchestrator *user.InactiveUserOrchestrator,
-	spaceDripController *spacecontroller.SpaceDripController,
-	fileCountInitializer *controller.FileCountInitializer) {
+	spaceDripController *spacecontroller.SpaceDripController) {
 	if viper.GetBool("jobs.cron.skip") {
 		log.Info("Skipping cron jobs")
 		return
@@ -1424,8 +1428,6 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 	schedule(c, "@every 24h", func() {
 		pushController.ClearExpiredTokens()
 	})
-
-	schedule(c, "@every 1m", fileCountInitializer.ProcessBatch)
 
 	c.Start()
 }

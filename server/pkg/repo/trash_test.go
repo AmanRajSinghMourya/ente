@@ -3,6 +3,7 @@ package repo
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
@@ -11,6 +12,9 @@ import (
 
 func TestTrashFilesUsesRequestItemsAsItsScope(t *testing.T) {
 	repository, db := setupTrashTest(t)
+	repository.FileLinkRepo.Cache = public.NewLinkCache(time.Minute, time.Minute)
+	repository.FileLinkRepo.Cache.Set("requested-token", true, time.Now())
+	repository.FileLinkRepo.Cache.Set("untouched-token", true, time.Now())
 	ownerID := testutil.InsertUser(t, db, testutil.UserFixture{
 		UserID:       1,
 		Email:        "trash-owner@ente.com",
@@ -78,10 +82,18 @@ func TestTrashFilesUsesRequestItemsAsItsScope(t *testing.T) {
 	if !requestedLinkDisabled || untouchedLinkDisabled {
 		t.Fatalf("unexpected public file link states: requested disabled=%t, untouched disabled=%t", requestedLinkDisabled, untouchedLinkDisabled)
 	}
+	if _, cached := repository.FileLinkRepo.Cache.Get("requested-token", "requested-token"); cached {
+		t.Fatal("trashed file link cache entry was not invalidated")
+	}
+	if _, cached := repository.FileLinkRepo.Cache.Get("untouched-token", "untouched-token"); !cached {
+		t.Fatal("untouched file link cache entry was invalidated")
+	}
 }
 
 func TestTrashFilesRollsBackWhenFileLinkCleanupFails(t *testing.T) {
 	repository, db := setupTrashTest(t)
+	repository.FileLinkRepo.Cache = public.NewLinkCache(time.Minute, time.Minute)
+	repository.FileLinkRepo.Cache.Set("failure-token", true, time.Now())
 	ownerID := testutil.InsertUser(t, db, testutil.UserFixture{
 		UserID:       1,
 		Email:        "trash-owner@ente.com",
@@ -142,6 +154,9 @@ func TestTrashFilesRollsBackWhenFileLinkCleanupFails(t *testing.T) {
 	if linkDisabled {
 		t.Fatal("public file link changed despite transaction rollback")
 	}
+	if _, cached := repository.FileLinkRepo.Cache.Get("failure-token", "failure-token"); !cached {
+		t.Fatal("rolled-back file link invalidated its cache entry")
+	}
 }
 
 func TestStaleCleanupInvalidatesOnlyRemovedOwnedMemberships(t *testing.T) {
@@ -201,6 +216,36 @@ func TestStaleCleanupInvalidatesOnlyRemovedOwnedMemberships(t *testing.T) {
 				t.Fatalf("deleted = %t, storage = %d, want true, 123", deleted, storage)
 			}
 		})
+	}
+}
+
+func TestStaleDeletedFileCleanupRejectsLiveObject(t *testing.T) {
+	repository, db, userID := setupCollectionMembershipTest(t)
+	collectionID := insertObjectTestCollection(t, db, userID)
+	fileID := insertObjectTestFile(t, db, userID)
+	linkObjectTestFileToCollection(t, db, collectionID, fileID, userID)
+	insertObjectTestKey(t, db, fileID, ente.FILE, "live-zero-byte-object", 0, []string{"b2-eu-cen"})
+	if _, err := db.Exec(`INSERT INTO trash(file_id, collection_id, user_id, delete_by, updated_at, is_deleted)
+		VALUES ($1, $2, $3, 1, 1, TRUE)`, fileID, collectionID, userID); err != nil {
+		t.Fatal(err)
+	}
+
+	fileIDs, err := repository.TrashRepo.GetStaleDeletedFileIDs(t.Context(), userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fileIDs) != 1 || fileIDs[0] != fileID {
+		t.Fatalf("GetStaleDeletedFileIDs() = %v, want [%d]", fileIDs, fileID)
+	}
+	if err := repository.TrashRepo.CleanUpDeletedFilesFromCollection(t.Context(), fileIDs, userID); err == nil {
+		t.Fatal("CleanUpDeletedFilesFromCollection() succeeded with a live object")
+	}
+	var deleted bool
+	if err := db.QueryRow(`SELECT is_deleted FROM collection_files WHERE file_id = $1`, fileID).Scan(&deleted); err != nil {
+		t.Fatal(err)
+	}
+	if deleted {
+		t.Fatal("collection membership was deleted")
 	}
 }
 

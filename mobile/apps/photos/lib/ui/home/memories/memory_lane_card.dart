@@ -2,21 +2,23 @@ import "dart:typed_data";
 
 import "package:ente_components/ente_components.dart";
 import "package:ente_strings/ente_strings.dart";
+import "package:ente_ui/theme/colors.dart";
 import "package:flutter/material.dart";
-import "package:photos/core/constants.dart";
-import "package:photos/models/file/file.dart";
 import "package:photos/ui/home/memories/memory_card_constants.dart";
-import "package:photos/ui/viewer/file/thumbnail_widget.dart";
 
 class MemoryLaneCardWidget extends StatelessWidget {
-  final EnteFile oldestFile;
+  final String personId;
+  final bool isSeen;
+  final Uint8List oldestFace;
   final Uint8List face;
   final String personName;
   final Size size;
   final VoidCallback onTap;
 
   const MemoryLaneCardWidget({
-    required this.oldestFile,
+    required this.personId,
+    required this.isSeen,
+    required this.oldestFace,
     required this.face,
     required this.personName,
     required this.size,
@@ -29,15 +31,24 @@ class MemoryLaneCardWidget extends StatelessWidget {
     final name = personName.trim();
     final title = name.isEmpty
         ? context.strings.facesTimelineAppBarTitle
-        : context.strings.memoryLaneCardTitle(name: name);
+        : context.strings.memoryLaneCardTitle(
+            name: name,
+            nameEndsWithS: name.toLowerCase().endsWith("s").toString(),
+          );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: kMemoryCardStripGap / 2),
       child: GestureDetector(
         onTap: onTap,
-        child: SizedBox(
+        child: Container(
           width: size.width,
           height: size.height,
+          foregroundDecoration: isSeen
+              ? const BoxDecoration(
+                  color: Color(0xFFBFBFBF),
+                  backgroundBlendMode: BlendMode.saturation,
+                )
+              : null,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -70,11 +81,10 @@ class MemoryLaneCardWidget extends StatelessWidget {
                         stops: [0.53663, 0.89955],
                       ),
                     ),
-                    child: ThumbnailWidget(
-                      oldestFile,
-                      rawThumbnail: true,
-                      shouldShowSyncStatus: false,
-                      thumbnailSize: thumbnailLargeSize,
+                    child: Image.memory(
+                      oldestFace,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
                     ),
                   ),
                 ),
@@ -83,17 +93,21 @@ class MemoryLaneCardWidget extends StatelessWidget {
                 left: size.width * 0.081081081081,
                 bottom: 16,
                 width: size.width * 0.837837837838,
-                child: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyles.body.copyWith(
-                    height: 16 / 14,
-                    fontFamily: TextStyles.outfitFontFamily,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                child: Hero(
+                  tag: 'memory-lane-title-$personId',
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyles.body.copyWith(
+                      inherit: false,
+                      height: 16 / 14,
+                      fontFamily: TextStyles.outfitFontFamily,
+                      color: isSeen ? textFaintDark : Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.left,
                   ),
-                  textAlign: TextAlign.left,
                 ),
               ),
             ],

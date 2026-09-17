@@ -964,16 +964,6 @@
       }
     }
   },
-  "deleteMultipleFilesDialogBody": "{count, plural, one{{count} item} other{{count} items}} will be deleted permanently.",
-  "@deleteMultipleFilesDialogBody": {
-    "description": "Confirmation message body for deleting multiple items",
-    "placeholders": {
-      "count": {
-        "type": "int",
-        "example": "3"
-      }
-    }
-  },
   "deleteNotSupportedForSharedFiles": "Delete is not supported for shared files",
   "deleteOnDeviceFiles": "Delete on device files",
   "deletePhotos": "Delete photos",
@@ -1427,7 +1417,7 @@
   "@facesTimelineBannerTitle": {
     "description": "Title for the Memory Lane suggestion banner shown on a person's page"
   },
-  "facesTimelineCaptionYearsAgo": "{count, plural, one{# year ago} other{# years ago}}",
+  "facesTimelineCaptionYearsAgo": "{count, plural, zero{now} one{# year ago} other{# years ago}}",
   "@facesTimelineCaptionYearsAgo": {
     "description": "Caption for frames when birthdate is unknown, expressing time difference",
     "placeholders": {
@@ -1448,6 +1438,95 @@
       "name": {
         "type": "String",
         "description": "Person's name"
+      }
+    }
+  },
+  "memoryLaneAgeCaption": "{name} was {count, plural, one{{age} year old} other{{age} years old}}",
+  "@memoryLaneAgeCaption": {
+    "description": "Memory Lane age caption. The age placeholder is rendered as a separate, larger text widget; count selects the plural form.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "age": {
+        "type": "String",
+        "description": "Placeholder for the separately styled age number; retain this placeholder in every plural form."
+      }
+    }
+  },
+  "memoryLaneCaptionYearsAgo": "{name} {count, plural, one{{number} year ago} other{{number} years ago}}",
+  "@memoryLaneCaptionYearsAgo": {
+    "description": "Memory Lane caption in elapsed years. Always keep the number, including for one.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "number": {
+        "type": "String",
+        "description": "Placeholder rendered as a separate, larger number; retain in every plural form."
+      }
+    }
+  },
+  "memoryLaneCaptionMonthsAgo": "{name} {count, plural, one{{number} month ago} other{{number} months ago}}",
+  "@memoryLaneCaptionMonthsAgo": {
+    "description": "Memory Lane caption in elapsed months. Always keep the number, including for one.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "number": {
+        "type": "String",
+        "description": "Placeholder rendered as a separate, larger number; retain in every plural form."
+      }
+    }
+  },
+  "memoryLaneCaptionWeeksAgo": "{name} {count, plural, one{{number} week ago} other{{number} weeks ago}}",
+  "@memoryLaneCaptionWeeksAgo": {
+    "description": "Memory Lane caption in elapsed weeks. Always keep the number, including for one.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "number": {
+        "type": "String",
+        "description": "Placeholder rendered as a separate, larger number; retain in every plural form."
+      }
+    }
+  },
+  "memoryLaneCaptionDaysAgo": "{name} {count, plural, one{{number} day ago} other{{number} days ago}}",
+  "@memoryLaneCaptionDaysAgo": {
+    "description": "Memory Lane caption in elapsed days. Always keep the number, including for one.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "number": {
+        "type": "String",
+        "description": "Placeholder rendered as a separate, larger number; retain in every plural form."
+      }
+    }
+  },
+  "memoryLaneCaptionToday": "{name} today",
+  "@memoryLaneCaptionToday": {
+    "description": "Memory Lane caption for a photo taken today, without a number.",
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
     }
   },
@@ -2013,6 +2092,15 @@
   },
   "itemsShowTheNumberOfDaysRemainingBeforePermanentDeletion": "Items show the number of days remaining before permanent deletion",
   "itemsStored": "Items stored",
+  "itemsWillBeDeletedFromAllCollections": "{count, plural, one{This item will be deleted from all collections. You can recover it from Trash.} other{These items will be deleted from all collections. You can recover them from Trash.}}",
+  "@itemsWillBeDeletedFromAllCollections": {
+    "description": "Confirmation message explaining that deleted items leave every collection and remain recoverable from Trash.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "itemsWillBeRemovedFromAlbum": "Selected items will be removed from this album",
   "itLooksLikeSomethingWentWrongPleaseRetryAfterSome": "It looks like something went wrong. Please retry after some time. If the error persists, please contact our support team.",
   "@itLooksLikeSomethingWentWrongPleaseRetryAfterSome": {
@@ -2447,13 +2535,17 @@
       }
     }
   },
-  "memoryLaneCardTitle": "{name}’s memory lane",
+  "memoryLaneCardTitle": "{nameEndsWithS, select, true{{name}’ memory lane} other{{name}’s memory lane}}",
   "@memoryLaneCardTitle": {
-    "description": "Title for the Memory Lane card on the home screen",
+    "description": "Title for a person's Memory Lane, used on the home screen card, viewer page, and shared link",
     "placeholders": {
       "name": {
         "type": "String",
         "description": "Person's name"
+      },
+      "nameEndsWithS": {
+        "type": "String",
+        "description": "true if the trimmed name ends in s or S; false otherwise"
       }
     }
   },
@@ -2487,6 +2579,15 @@
   "message": "Message",
   "minimizeAppOnCopy": "Minimize app on copy",
   "minimizeToTrayOnClose": "Minimize to tray on close",
+  "minutesCountShort": "{count}m",
+  "@minutesCountShort": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
   "mixedGrouping": "Mixed grouping?",
   "mlConsent": "Enable machine learning",
   "mlConsentConfirmation": "I understand, and wish to enable machine learning",
@@ -2579,6 +2680,7 @@
   "moveSelectedPhotosToOneDate": "Move selected photos to one date",
   "moveToAlbum": "Move to album",
   "moveToHiddenAlbum": "Move to hidden album",
+  "moveToTrashQuestion": "Move to Trash?",
   "movingFilesToAlbum": "Moving files to album...",
   "muteAudio": "Mute audio",
   "name": "Name",
@@ -3712,6 +3814,15 @@
       }
     }
   },
+  "secondsCountShort": "{count}s",
+  "@secondsCountShort": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
   "secret": "Secret",
   "secretCanNotBeEmpty": "Secret can not be empty",
   "security": "Security",
@@ -4704,16 +4815,6 @@
   "yesDeleteCollections": "Yes, delete {count, plural, one{collection} other{collections}}",
   "@yesDeleteCollections": {
     "description": "Button label for confirming deletion of one or more collections",
-    "placeholders": {
-      "count": {
-        "type": "int",
-        "example": "3"
-      }
-    }
-  },
-  "yesDeleteFiles": "Yes, delete {count, plural, one{item} other{items}}",
-  "@yesDeleteFiles": {
-    "description": "Button label for confirming deletion of one or more items",
     "placeholders": {
       "count": {
         "type": "int",

@@ -10,11 +10,6 @@ import {
 } from "screens/ProfileImageViewerScreen";
 import { ProfileScreen } from "screens/ProfileScreen";
 import {
-    markSpaceHomePostRead,
-    patchCachedSpaceHomePost,
-    removeCachedSpaceHomePostsBySpace,
-} from "services/home-posts";
-import {
     loadCurrentSpacePostAssetURL,
     loadCurrentSpaceProfile,
     loadCurrentSpaceProfilePostsPage,
@@ -39,6 +34,8 @@ export const AuthenticatedFriendProfile: React.FC<
     AuthenticatedFriendProfileProps
 > = ({ friendSpaceId, username }) => {
     const router = useSpaceRouter();
+    const initialSection =
+        router.query.section == "latest" ? "latest" : undefined;
     const { friends, profile, profileLoadError, profileLoadStatus } =
         useSpaceAppState();
     const [friendProfile, setFriendProfile] =
@@ -140,7 +137,6 @@ export const AuthenticatedFriendProfile: React.FC<
         if (!actorSpaceId) return;
 
         await removeCurrentSpaceFriend(actorSpaceId, friendSpaceId);
-        await removeCachedSpaceHomePostsBySpace(actorSpaceId, friendSpaceId);
     }, [friendSpaceId, profile?.spaceId]);
 
     if (profileLoadStatus != "ready" || !profile?.spaceId) {
@@ -152,7 +148,8 @@ export const AuthenticatedFriendProfile: React.FC<
         );
     }
     if (
-        !hadCachedFriendProfileOnMount.current &&
+        (!hadCachedFriendProfileOnMount.current ||
+            initialSection == "latest") &&
         (isProfileLoading || isPostsLoading)
     ) {
         return <SpaceRouteFallback background={spaceAppBackgroundColor} />;
@@ -163,12 +160,11 @@ export const AuthenticatedFriendProfile: React.FC<
         <>
             <SpacePageMeta themeColor={spaceAppBackgroundColor} />
             <ProfileScreen
-                friendsCount={displayedProfile.friendsCount}
                 headerVariant="friend"
+                initialSection={initialSection}
                 isCoverLoading={isProfileLoading}
                 isNameLoading={isProfileLoading && !immediateFriendProfile}
                 isPostsLoading={isPostsLoading}
-                isStatsLoading={isProfileLoading || isPostsLoading}
                 onBack={goBack}
                 onLoadPostImage={loadCurrentSpacePostAssetURL}
                 onMessageFriend={() =>
@@ -176,23 +172,28 @@ export const AuthenticatedFriendProfile: React.FC<
                 }
                 onOpenProfileCover={() => setOpenProfileImage("cover")}
                 onOpenProfilePhoto={() => setOpenProfileImage("avatar")}
-                onOpenPost={(post) => {
-                    if (!post.postId) return;
-                    void markSpaceHomePostRead(actorSpaceId, {
-                        postId: post.postId,
-                        timestampMs: post.timestampMs,
-                    }).catch((error: unknown) =>
-                        log.warn("Failed to mark Space post as read", error),
-                    );
-                }}
                 onReplyToPost={(postSpaceId, postId, text) =>
                     replyToCurrentPost(actorSpaceId, postSpaceId, postId, text)
                 }
                 onSetPostLiked={async (postId, liked) => {
-                    await setCurrentPostLiked(actorSpaceId, postId, liked);
-                    void patchCachedSpaceHomePost(actorSpaceId, postId, {
-                        viewerLiked: liked,
-                    });
+                    const previousLiked =
+                        posts.find((post) => post.postId == postId)
+                            ?.viewerLiked ?? false;
+                    const updateLiked = (viewerLiked: boolean) =>
+                        setPosts((current) =>
+                            current.map((post) =>
+                                post.postId == postId
+                                    ? { ...post, viewerLiked }
+                                    : post,
+                            ),
+                        );
+                    updateLiked(liked);
+                    try {
+                        await setCurrentPostLiked(actorSpaceId, postId, liked);
+                    } catch (error) {
+                        updateLiked(previousLiked);
+                        throw error;
+                    }
                 }}
                 onUnfriend={unfriend}
                 onUnfriendComplete={() =>

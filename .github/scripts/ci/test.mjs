@@ -16,6 +16,26 @@ test("docs changes do not wait for unrelated workflows", (t) => {
     checkResult(results(selected));
 });
 
+test("Android lint configuration selects the lint workflow", (t) => {
+    for (const file of ["android/detekt.yml", "android/scripts/lint.sh"]) {
+        assert.deepEqual(select(t, [file]), ["android-lint", "repo-lint"]);
+    }
+});
+
+test("shared Android build inputs select Ensu", (t) => {
+    for (const file of [
+        "android/build.gradle.kts",
+        "android/settings.gradle.kts",
+        "android/gradle.properties",
+        "android/gradle/wrapper/gradle-wrapper.properties",
+        "android/gradle/verification-metadata.xml",
+        "android/gradlew",
+        "android/gradlew.bat",
+    ]) {
+        assert.ok(select(t, [file]).includes("ensu-android-build"), file);
+    }
+});
+
 test("shared build inputs select their consumers", (t) => {
     assert.deepEqual(select(t, [".github/actions/setup-flutter/action.yml"]), [
         "mobile-lint",
@@ -23,15 +43,23 @@ test("shared build inputs select their consumers", (t) => {
         "repo-lint",
     ]);
     assert.deepEqual(select(t, ["rust/crates/core/src/lib.rs"]), [
+        "android-lint",
         "ensu-android-build",
         "ensu-ios-build",
         "mobile-lint",
         "repo-lint",
+        "rust-cli-test",
         "rust-lint",
         "rust-test",
         "web-lint",
     ]);
     assert.ok(select(t, ["server/pkg/api.go"]).includes("rust-test"));
+    assert.deepEqual(select(t, ["rust/apps/cli-next/src/main.rs"]), [
+        "repo-lint",
+        "rust-cli-test",
+        "rust-lint",
+        "rust-test",
+    ]);
     assert.ok(
         select(t, ["rust/bindings/napi/src/lib.rs"]).includes("desktop-lint"),
     );
@@ -42,6 +70,10 @@ test("path filters cover root files, nested files, and dotfiles", (t) => {
         "Cargo.lock",
         "rust/Cargo.lock",
         "rust/.config/Cargo.lock",
+        "Package.resolved",
+        "Package.swift",
+        "apple/Package.resolved",
+        "apple/Package.swift",
     ]) {
         assert.ok(select(t, [file]).includes("dependency-review"), file);
     }
@@ -142,13 +174,13 @@ function select(t, files, before = []) {
     const cwd = mkdtempSync(join(tmpdir(), "ente-ci-"));
     t.after(() => rmSync(cwd, { recursive: true }));
     const git = (...args) =>
-        execFileSync("git", args, {
-            cwd,
-            encoding: "utf8",
-            input: "fixture\n",
-        }).trim();
+        execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
     git("init", "-q");
-    const blob = git("hash-object", "-w", "--stdin");
+    const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], {
+        cwd,
+        encoding: "utf8",
+        input: "fixture\n",
+    }).trim();
     const tree = (files) => {
         git("read-tree", "--empty");
         for (const file of files)

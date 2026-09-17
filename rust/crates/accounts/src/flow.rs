@@ -282,7 +282,7 @@ where
         } else {
             let (response, kek) = self
                 .client
-                .login_with_srp(&params.email, &params.password)
+                .login_with_srp(&params.password, &srp_attrs)
                 .await?;
             let response = self.resolve_second_factor(response).await?;
             (response, kek)
@@ -717,6 +717,10 @@ where
             .filter(|session_id| !session_id.is_empty())
             .ok_or_else(|| Error::Protocol("No passkey session ID".into()))?;
 
+        #[expect(
+            clippy::expect_used,
+            reason = "AuthResponse validation requires accountsUrl for passkey sessions"
+        )]
         let accounts_url = auth_response
             .accounts_url
             .as_deref()

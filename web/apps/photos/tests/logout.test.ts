@@ -1,3 +1,4 @@
+import { logoutContacts } from "ente-contacts";
 import { afterEach, expect, test, vi } from "vitest";
 import { openAuthenticatedSession } from "../src/services/authenticated-session";
 import { photosLogout } from "../src/services/logout";
@@ -18,13 +19,17 @@ const {
     terminateMLWorker: vi.fn<() => Promise<void>>(),
 }));
 
+vi.mock("ente-contacts", () => ({ logoutContacts: vi.fn() }));
+
 vi.mock("ente-base/app", () => ({
     clientPackageName: "io.ente.photos.web",
     desktopAppVersion: undefined,
     isDesktop: false,
 }));
 vi.mock("ente-base/origins", () => ({ apiOrigin }));
-vi.mock("ente-base/session", () => ({ masterKeyFromSession: vi.fn() }));
+vi.mock("ente-new/photos/services/account-keys", () => ({
+    masterKeyFromSession: vi.fn(),
+}));
 vi.mock("ente-base/token", () => ({ savedAuthToken: vi.fn() }));
 vi.mock("ente-base/log", () => ({
     default: { info: vi.fn(), error: vi.fn() },
@@ -107,4 +112,5 @@ test("logout rejects pending sessions while worker shutdown is pending", async (
         workerShutdown.resolve(undefined);
         await loggingOut;
     }
+    expect(logoutContacts).toHaveBeenCalledOnce();
 });

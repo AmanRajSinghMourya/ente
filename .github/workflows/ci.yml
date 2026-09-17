@@ -17,12 +17,22 @@ jobs:
         outputs:
             jobs: ${{ steps.select.outputs.jobs }}
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 2
                   persist-credentials: false
             - id: select
               run: node .github/scripts/ci/check.mjs select HEAD^1 HEAD
+
+    android-lint:
+        needs: select
+        if: ${{ contains(fromJSON(needs.select.outputs.jobs), 'android-lint') }}
+        uses: ./.github/workflows/android-lint.yml
+
+    apple-lint:
+        needs: select
+        if: ${{ contains(fromJSON(needs.select.outputs.jobs), 'apple-lint') }}
+        uses: ./.github/workflows/apple-lint.yml
 
     dependency-review:
         needs: select
@@ -69,6 +79,11 @@ jobs:
         if: ${{ contains(fromJSON(needs.select.outputs.jobs), 'repo-lint') }}
         uses: ./.github/workflows/repo-lint.yml
 
+    rust-cli-test:
+        needs: select
+        if: ${{ contains(fromJSON(needs.select.outputs.jobs), 'rust-cli-test') }}
+        uses: ./.github/workflows/rust-cli-test.yml
+
     rust-lint:
         needs: select
         if: ${{ contains(fromJSON(needs.select.outputs.jobs), 'rust-lint') }}
@@ -94,6 +109,8 @@ jobs:
         if: ${{ always() }}
         needs:
             - select
+            - android-lint
+            - apple-lint
             - dependency-review
             - desktop-lint
             - docs-verify-build
@@ -103,13 +120,14 @@ jobs:
             - mobile-lint
             - mobile-podfile-lock
             - repo-lint
+            - rust-cli-test
             - rust-lint
             - rust-test
             - server-lint
             - web-lint
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
             - run: node .github/scripts/ci/check.mjs result

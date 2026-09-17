@@ -2332,7 +2332,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
 name = "ensu-desktop"
-version = "0.1.20-beta"
+version = "0.1.21-beta"
 dependencies = [
  "ente-assets",
  "ente-core",
@@ -2351,6 +2351,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tauri-plugin-process",
+ "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "uuid",
  "windows-sys 0.61.2",
@@ -2396,6 +2397,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ente-auth-wasm"
+version = "0.0.0"
+dependencies = [
+ "ente-wasm-lib",
+]
+
+[[package]]
 name = "ente-cast"
 version = "0.0.0"
 dependencies = [
@@ -2421,11 +2429,37 @@ name = "ente-cast-wasm"
 version = "0.0.0"
 dependencies = [
  "ente-cast",
- "ente-core",
  "ente-wasm-lib",
- "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
  "thiserror 2.0.18",
+ "tsify",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "ente-cli-next"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dialoguer",
+ "dirs 5.0.1",
+ "ente-accounts",
+ "ente-core",
+ "ente-photos",
+ "ente-test-support",
+ "keyring",
+ "mockito",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -2440,20 +2474,15 @@ dependencies = [
 name = "ente-contacts"
 version = "0.0.0"
 dependencies = [
- "ente-accounts",
  "ente-core",
  "ente-legacy",
  "ente-test-support",
- "hmac 0.13.0",
  "md-5 0.11.0",
  "mockito",
  "serde",
  "serde_json",
- "sha1 0.11.0",
  "thiserror 2.0.18",
  "tokio",
- "uuid",
- "zeroize",
 ]
 
 [[package]]
@@ -2541,11 +2570,12 @@ dependencies = [
 name = "ente-ensu-wasm"
 version = "0.0.0"
 dependencies = [
- "ente-core",
  "ente-ensu-crypto",
  "ente-wasm-lib",
- "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
  "thiserror 2.0.18",
+ "tsify",
  "wasm-bindgen",
 ]
 
@@ -2598,22 +2628,25 @@ version = "0.0.0"
 dependencies = [
  "ente-accounts",
  "ente-core",
+ "ente-test-support",
+ "hmac 0.13.0",
  "serde",
  "serde_json",
+ "sha1 0.11.0",
  "sha2 0.11.0",
  "thiserror 2.0.18",
+ "tokio",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
 name = "ente-legacy-wasm"
 version = "0.0.0"
 dependencies = [
- "ente-accounts",
  "ente-core",
  "ente-legacy",
  "ente-wasm-lib",
- "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "thiserror 2.0.18",
@@ -2656,12 +2689,10 @@ dependencies = [
 name = "ente-locker-frb"
 version = "0.0.0"
 dependencies = [
- "ente-accounts",
  "ente-assets",
  "ente-core",
  "ente-frb-lib",
  "ente-frb-log",
- "ente-legacy",
  "ente-ml",
  "flutter_rust_bridge",
 ]
@@ -2724,8 +2755,10 @@ dependencies = [
  "ente-core",
  "ente-paste",
  "ente-wasm-lib",
- "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
  "thiserror 2.0.18",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -2735,9 +2768,13 @@ name = "ente-photos"
 version = "0.0.0"
 dependencies = [
  "ente-assets",
+ "ente-collections",
+ "ente-core",
+ "ente-exif",
  "ente-location",
  "quick-xml",
  "rusqlite",
+ "serde",
  "tempfile",
  "thiserror 2.0.18",
 ]
@@ -2755,6 +2792,7 @@ dependencies = [
  "ente-location",
  "ente-ml",
  "ente-photos",
+ "ente-vecdb",
  "flutter_rust_bridge",
  "log",
 ]
@@ -2860,6 +2898,8 @@ name = "ente-test-support"
 version = "0.0.0"
 dependencies = [
  "dirs 5.0.1",
+ "ente-accounts",
+ "ente-core",
  "postgresql_embedded",
  "tokio",
  "uuid",
@@ -2870,6 +2910,15 @@ name = "ente-uniffi-log"
 version = "0.0.0"
 dependencies = [
  "log",
+]
+
+[[package]]
+name = "ente-vecdb"
+version = "0.0.0"
+dependencies = [
+ "log",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -9422,6 +9471,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-single-instance"
+version = "2.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cd0cb5c412a5071b69bab6a6df1583cbb89460d4a83b6a24769b08d15b6b1e1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "windows-sys 0.60.2",
+ "zbus 5.15.0",
+]
+
+[[package]]
 name = "tauri-plugin-updater"
 version = "2.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10247,9 +10312,9 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "uniffi"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8c6dec3fc6645f71a16a3fa9ff57991028153bd194ca97f4b55e610c73ce66a"
+checksum = "46eefd5468602930da46b1f49d3448c6dfc2e81295f93120f23f8174fd70267f"
 dependencies = [
  "anyhow",
  "cargo_metadata 0.19.2",
@@ -10261,9 +10326,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_bindgen"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ed0150801958d4825da56a41c71f000a457ac3a4613fa9647df78ac4b6b6881"
+checksum = "c4a0c9b375d32e1365cdb2bdd7cb495eecf6fac851ddbad077412b4ee1888514"
 dependencies = [
  "anyhow",
  "askama",
@@ -10287,9 +10352,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_core"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0ef62e69762fbb9386dcb6c87cd3dd05d525fa8a3a579a290892e60ddbda47e"
+checksum = "eec017b112701681f6fbbe5d92014b5c468eb0b177a94389de03ceec40665095"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -10300,9 +10365,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_internal_macros"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98f51ebca0d9a4b2aa6c644d5ede45c56f73906b96403c08a1985e75ccb64a01"
+checksum = "4641669b48fefbc5e80ff08c5004d9c7617fb91232131a6734ab6712779cb04c"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -10313,9 +10378,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_macros"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db9d12529f1223d014fd501e5f29ca0884d15d6ed5ddddd9f506e55350327dc3"
+checksum = "eeb8617ee814de22caf7417bf514715ba0b3f46bd9d5a5d794413fd8282cb737"
 dependencies = [
  "camino",
  "fs-err",
@@ -10330,9 +10395,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_meta"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9df6d413db2827c68588f8149d30d49b71d540d46539e435b23a7f7dbd4d4f86"
+checksum = "58d5b94fc92803d21b2928bd15c6f06e57609b95caf98ea561c99cda1b6d2a25"
 dependencies = [
  "anyhow",
  "siphasher",
@@ -10342,9 +10407,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_pipeline"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a806dddc8208f22efd7e95a5cdf88ed43d0f3271e8f63b47e757a8bbdb43b63a"
+checksum = "032739b3ec725576914c15899dedaf080163ced86b6934566c20ec2b20ce90ca"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -10355,9 +10420,9 @@ dependencies = [
 
 [[package]]
 name = "uniffi_udl"
-version = "0.31.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d1a7339539bf6f6fa3e9b534dece13f778bda2d54b1a6d4e40b4d6090ac26e7"
+checksum = "fc0a1d0a0252ce1af9e8ce78ba67ac0d8937fb2bedaf10cbddd43d3614d06ec6"
 dependencies = [
  "anyhow",
  "textwrap",

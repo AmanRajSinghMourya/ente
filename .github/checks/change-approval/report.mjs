@@ -4,6 +4,9 @@ export function writeReport({
     files: { binaries, large, guardrails, configs },
     dependencies,
     rust,
+    swift,
+    web,
+    android,
 }) {
     const categories = [
         {
@@ -43,6 +46,21 @@ export function writeReport({
             plural: "Rust lint policy files",
             count: rust.length,
         },
+        {
+            singular: "Swift lint policy file",
+            plural: "Swift lint policy files",
+            count: swift.length,
+        },
+        {
+            singular: "Web lint policy file",
+            plural: "Web lint policy files",
+            count: web.length,
+        },
+        {
+            singular: "Android lint policy file",
+            plural: "Android lint policy files",
+            count: android.length,
+        },
     ].filter(({ count }) => count);
     const summary = categories
         .map(
@@ -76,7 +94,15 @@ export function writeReport({
         );
     if (rust.length)
         sections.push(
-            `## Rust lint declarations and files containing unsafe\n\n${list(rust.map(code))}`,
+            `## Rust lint declarations and files containing unsafe\n\n${list(rust.map(({ path, reasons }) => `${code(path)}: ${reasons.map(code).join("; ")}`))}`,
+        );
+    if (swift.length)
+        sections.push(`## Swift lint directives\n\n${list(swift.map(code))}`);
+    if (web.length)
+        sections.push(`## Web lint directives\n\n${list(web.map(code))}`);
+    if (android.length)
+        sections.push(
+            `## Android lint directives\n\n${list(android.map(code))}`,
         );
     const detail = sections.join("\n\n");
 
@@ -102,7 +128,10 @@ function list(items) {
 }
 
 function code(path) {
-    return `\`${path}\``;
+    const fence = "`".repeat(
+        Math.max(0, ...(path.match(/`+/g) ?? []).map((run) => run.length)) + 1,
+    );
+    return `${fence}${path.startsWith("`") || path.endsWith("`") ? ` ${path} ` : path}${fence}`;
 }
 
 function withSize({ path, size }) {

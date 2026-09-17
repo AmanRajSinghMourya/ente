@@ -37,6 +37,7 @@ import "package:photos/ui/tools/editor/video_editor_page.dart";
 import "package:photos/ui/viewer/file/file_app_bar.dart";
 import "package:photos/ui/viewer/file/file_bottom_bar.dart";
 import "package:photos/ui/viewer/file/file_viewer_filmstrip_coordinator.dart";
+import "package:photos/ui/viewer/file/file_viewer_image_page_readiness.dart";
 import 'package:photos/ui/viewer/file/file_widget.dart';
 import "package:photos/ui/viewer/file/gallery_file_viewer_filmstrip.dart";
 import "package:photos/ui/viewer/file/ocr/inline_text_detection.dart";
@@ -49,8 +50,7 @@ import 'package:photos/ui/viewer/gallery/gallery.dart';
 import 'package:photos/utils/dialog_util.dart';
 
 const _socialRightInset = 24.0;
-const _socialBottomBarClearance = 130.0;
-const _videoStreamControlHeight = 32.0;
+const _socialBottomBarClearance = 98.0;
 const _galleryBottomBarHeight = 60.0;
 const _galleryCaptionGap = 12.0;
 const _galleryCaptionLineHeight = 16.0;
@@ -139,7 +139,7 @@ class _DetailPageState extends State<DetailPage> {
           isGuestView: false,
           itemCount: widget.config.files.length,
         )
-        ? GalleryFileViewerFilmstripLayout.additionalBottomInset
+        ? GalleryFileViewerFilmstripLayout.compact.additionalBottomInset
         : 0;
   }
 
@@ -187,6 +187,8 @@ class _BodyState extends State<_Body> {
   late PageController _pageController;
   final _selectedIndexNotifier = ValueNotifier(0);
   late final FileViewerFilmstripCoordinator _filmstripCoordinator;
+  late final FileViewerImagePageReadinessRegistration
+  _imagePageReadinessRegistration;
   final _inlineTextDetectionController = InlineTextDetectionController();
   bool _isFirstOpened = true;
   bool isGuestView = false;
@@ -201,6 +203,8 @@ class _BodyState extends State<_Body> {
   final Map<EnteFile, VideoStreamChangeController>
   _videoStreamChangeControllers = Map.identity();
   ValueNotifier<double>? _bottomControlsAdditionalInsetNotifier;
+  GalleryFileViewerFilmstripLayout _filmstripLayout =
+      GalleryFileViewerFilmstripLayout.compact;
 
   @override
   void initState() {
@@ -228,7 +232,12 @@ class _BodyState extends State<_Body> {
           Bus.instance.fire(PauseVideoEvent(fileTag: selectedFile!.tag));
         }
       },
+      waitsForImageFrame: (identity) =>
+          identity is EnteFile &&
+          (identity.fileType == FileType.image ||
+              identity.fileType == FileType.livePhoto),
     );
+    _imagePageReadinessRegistration = _registerImagePageReadiness;
     _guestViewEventSubscription = Bus.instance.on<GuestViewEvent>().listen((
       event,
     ) {
@@ -270,6 +279,9 @@ class _BodyState extends State<_Body> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _filmstripLayout = GalleryFileViewerFilmstripLayout.fromMediaQuery(
+      MediaQuery.of(context),
+    );
     _bottomControlsAdditionalInsetNotifier = InheritedDetailPageState.of(
       context,
     ).bottomControlsAdditionalInsetNotifier;
@@ -395,6 +407,7 @@ class _BodyState extends State<_Body> {
                     mode: widget.config.mode,
                     isGuestView: isGuestView,
                     hasFilmstrip: _shouldShowFilmstrip,
+                    filmstripLayout: _filmstripLayout,
                     enableFullScreenNotifier: fullScreenNotifier,
                   );
                 },
@@ -408,6 +421,7 @@ class _BodyState extends State<_Body> {
                     mode: widget.config.mode,
                     isGuestView: isGuestView,
                     hasFilmstrip: _shouldShowFilmstrip,
+                    filmstripLayout: _filmstripLayout,
                   );
                 },
               ),
@@ -521,6 +535,7 @@ class _BodyState extends State<_Body> {
                       enableFullScreenNotifier: InheritedDetailPageState.of(
                         context,
                       ).enableFullScreenNotifier,
+                      layout: _filmstripLayout,
                       onEvent: _filmstripCoordinator.handleEvent,
                     );
                   },
@@ -589,6 +604,9 @@ class _BodyState extends State<_Body> {
               _evaluateQrIfEligible(file);
             }
           },
+          onImagePageReadinessRegistration: _shouldShowFilmstrip
+              ? _imagePageReadinessRegistration
+              : null,
           qrDetectionsNotifier: _qrHelper?.qrDetectionsNotifier,
           playbackSpeed: _playbackSpeed,
           streamChangeController: _videoStreamChangeControllerFor(file),
@@ -648,6 +666,18 @@ class _BodyState extends State<_Body> {
       controller: _pageController,
       itemCount: _files!.length,
     );
+  }
+
+  void _registerImagePageReadiness(
+    Object fileIdentity,
+    ValueListenable<bool> readiness, {
+    required bool isAttached,
+  }) {
+    if (isAttached) {
+      _filmstripCoordinator.attachImagePage(fileIdentity, readiness);
+    } else {
+      _filmstripCoordinator.detachImagePage(fileIdentity, readiness);
+    }
   }
 
   void _evaluateQrIfEligible(EnteFile file) {
@@ -875,7 +905,7 @@ class _BodyState extends State<_Body> {
     if (notifier == null) return;
     if (!_shouldShowFilmstrip) _filmstripCoordinator.reset();
     final inset = _shouldShowFilmstrip
-        ? GalleryFileViewerFilmstripLayout.additionalBottomInset
+        ? _filmstripLayout.additionalBottomInset
         : 0.0;
     notifier.value = inset;
   }
@@ -930,6 +960,7 @@ class _GalleryFileViewerBottomOverlay extends StatelessWidget {
   final DetailPageMode mode;
   final bool isGuestView;
   final bool hasFilmstrip;
+  final GalleryFileViewerFilmstripLayout filmstripLayout;
   final ValueListenable<bool> enableFullScreenNotifier;
 
   const _GalleryFileViewerBottomOverlay({
@@ -937,6 +968,7 @@ class _GalleryFileViewerBottomOverlay extends StatelessWidget {
     required this.mode,
     required this.isGuestView,
     required this.hasFilmstrip,
+    required this.filmstripLayout,
     required this.enableFullScreenNotifier,
   });
 
@@ -951,11 +983,8 @@ class _GalleryFileViewerBottomOverlay extends StatelessWidget {
     }
 
     final safePadding = MediaQuery.paddingOf(context);
-    final captionStyle = getEnteTextTheme(
-      context,
-    ).mini.copyWith(color: textBaseDark.withValues(alpha: 0.8));
     final filmstripInset = hasFilmstrip
-        ? GalleryFileViewerFilmstripLayout.additionalBottomInset
+        ? filmstripLayout.additionalBottomInset
         : 0.0;
     return ValueListenableBuilder<bool>(
       valueListenable: enableFullScreenNotifier,
@@ -1017,20 +1046,13 @@ class _GalleryFileViewerBottomOverlay extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: GestureDetector(
                         onTap: () => showDetailsSheet(context, file),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('"', style: captionStyle),
-                            Flexible(
-                              child: Text(
-                                captionText,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: captionStyle,
-                              ),
-                            ),
-                            Text('"', style: captionStyle),
-                          ],
+                        child: Text(
+                          captionText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: getEnteTextTheme(context).mini.copyWith(
+                            color: textBaseDark.withValues(alpha: 0.8),
+                          ),
                         ),
                       ),
                     ),
@@ -1050,12 +1072,14 @@ class _GallerySocialOverlay extends StatelessWidget {
   final DetailPageMode mode;
   final bool isGuestView;
   final bool hasFilmstrip;
+  final GalleryFileViewerFilmstripLayout filmstripLayout;
 
   const _GallerySocialOverlay({
     required this.file,
     required this.mode,
     required this.isGuestView,
     required this.hasFilmstrip,
+    required this.filmstripLayout,
   });
 
   @override
@@ -1072,11 +1096,8 @@ class _GallerySocialOverlay extends StatelessWidget {
       right: padding.right + _socialRightInset,
       bottom:
           padding.bottom +
-          _socialBottomBarClearance -
-          (file.fileType == FileType.video ? _videoStreamControlHeight : 0) +
-          (hasFilmstrip
-              ? GalleryFileViewerFilmstripLayout.additionalBottomInset
-              : 0),
+          _socialBottomBarClearance +
+          (hasFilmstrip ? filmstripLayout.additionalBottomInset : 0),
       child: ValueListenableBuilder<bool>(
         valueListenable: fullScreenNotifier,
         builder: (context, isFullScreen, child) => IgnorePointer(

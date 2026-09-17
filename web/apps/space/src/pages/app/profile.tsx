@@ -23,11 +23,14 @@ const initialPostLoadingIndicatorDelayMs = 350;
 
 const Page: React.FC = () => {
     const router = useSpaceRouter();
+    const initialSection =
+        router.query.section == "latest" ? "latest" : undefined;
     const {
         profile,
         profileLoadError,
         profileLoadStatus,
         publishPost,
+        setLocalFeedPosts,
         setPostPublication,
     } = useSpaceAppState();
     const [friendsCount, setFriendsCount] = useState(0);
@@ -96,7 +99,11 @@ const Page: React.FC = () => {
         return () => window.clearTimeout(timeoutID);
     }, [isInitialPostsLoading]);
 
-    if (profileLoadStatus != "ready" || !profile) {
+    if (
+        profileLoadStatus != "ready" ||
+        !profile ||
+        (initialSection == "latest" && isPostsLoading)
+    ) {
         return (
             <SpaceRouteFallback
                 background={spaceAppBackgroundColor}
@@ -119,6 +126,7 @@ const Page: React.FC = () => {
             <SpacePageMeta themeColor={spaceAppBackgroundColor} />
             <ProfileScreen
                 friendsCount={friendsCount}
+                initialSection={initialSection}
                 isPostsLoading={isPostsLoading}
                 isStatsLoading={isPostsLoading}
                 postItems={postItems}
@@ -135,6 +143,14 @@ const Page: React.FC = () => {
                     await deleteCurrentPost(spaceId, postId);
                     setPostPublication((current) =>
                         current?.post.postId == postId ? null : current,
+                    );
+                    setLocalFeedPosts((currentPosts) =>
+                        currentPosts.filter(
+                            (item) =>
+                                item.status == "pending" ||
+                                item.status == "failed" ||
+                                item.post.postId != postId,
+                        ),
                     );
                     setPosts((currentPosts) =>
                         currentPosts.filter((post) => post.postId != postId),
@@ -157,6 +173,21 @@ const Page: React.FC = () => {
                               }
                             : current,
                     );
+                    setLocalFeedPosts((currentPosts) =>
+                        currentPosts.map((item) =>
+                            (item.status == "posted" ||
+                                item.status == "ready") &&
+                            item.post.postId == postId
+                                ? {
+                                      ...item,
+                                      post: {
+                                          ...item.post,
+                                          caption: normalizedCaption,
+                                      },
+                                  }
+                                : item,
+                        ),
+                    );
                     setPosts((currentPosts) =>
                         currentPosts.map((post) =>
                             post.postId == postId
@@ -172,6 +203,7 @@ const Page: React.FC = () => {
                 onOpenProfilePhoto={() =>
                     void router.push(spaceRoutes.profilePhoto)
                 }
+                onOpenSettings={() => void router.push(spaceRoutes.settings)}
                 onLoadPostImage={loadCurrentSpacePostAssetURL}
                 onSetPostLiked={async (postId, liked) => {
                     await setCurrentPostLiked(actorSpaceId, postId, liked);

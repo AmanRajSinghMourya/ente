@@ -283,13 +283,13 @@
 					"$(SRCROOT)/Ensu/Generated",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 0.1.20;
+				MARKETING_VERSION = 0.1.21;
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/Ensu/Generated/ensuFFI.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = io.ente.ensu.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Ensu/Generated";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ensu.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ensu";
 			};
@@ -309,13 +309,13 @@
 					"$(SRCROOT)/Ensu/Generated",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 0.1.20;
+				MARKETING_VERSION = 0.1.21;
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/Ensu/Generated/ensuFFI.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = io.ente.ensu.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Ensu/Generated";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ensu.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ensu";
 			};
@@ -383,6 +383,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Debug;
 		};
@@ -440,6 +441,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -476,7 +478,7 @@
 					"$(inherited)",
 					"$(TARGET_TEMP_DIR)/ensu_rust",
 				);
-				MARKETING_VERSION = 0.1.20;
+				MARKETING_VERSION = 0.1.21;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -493,7 +495,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Ensu/Generated";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -530,7 +532,7 @@
 					"$(inherited)",
 					"$(TARGET_TEMP_DIR)/ensu_rust",
 				);
-				MARKETING_VERSION = 0.1.20;
+				MARKETING_VERSION = 0.1.21;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -547,7 +549,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "$(APP_STORE_PROFILE_SPECIFIER)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Ensu/Generated";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

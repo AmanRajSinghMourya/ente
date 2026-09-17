@@ -1300,7 +1300,7 @@ const PostQuotePreview: React.FC<{
                     appearance: "none",
                     bgcolor: "transparent",
                     border: 0,
-                    borderRadius: "20%",
+                    borderRadius: "28px",
                     color: "inherit",
                     cursor: canOpen ? "pointer" : "default",
                     display: "inline-flex",
@@ -1744,8 +1744,8 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
     const showInviteEmptyState = friendsCount == 0 && Boolean(profileLink);
     const emptyConversationsCopy =
         friendsCount == 0
-            ? "No messages yet. Once you add friends, you'll see their likes, replies and messages here."
-            : "No messages yet. You'll see your friends' likes, replies and messages here.";
+            ? "No messages yet. Once you add friends, you'll see their likes, replies, pokes and messages here."
+            : "No messages yet. You'll see your friends' likes, replies, pokes and messages here.";
     const conversationSections = React.useMemo(
         () => conversationTimeSections(conversations, newConversationIds),
         [conversations, newConversationIds],

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { updateFileItem, updateInfoItem } from "../src/services/remote";
+import { updateFileItem, updateInfoItem } from "../src/services/items";
 import {
     getEncryptedFileRecord,
     replaceLockerCache,
     type EncryptedFileRecord,
-} from "../src/services/remote-cache";
+} from "../src/services/locker-cache";
 
 const { encryptBlob, decryptMetadataJSON } = vi.hoisted(() => ({
     encryptBlob: vi.fn(),
@@ -23,10 +23,9 @@ vi.mock("ente-locker-wasm", () => ({
     decryptBox: () => "file-key",
     decryptMetadataJSON,
     encryptBlob,
-    stringToB64: (value: string) => value,
 }));
 vi.mock("../src/services/authenticated-session", () => ({}));
-vi.mock("../src/services/remote-read", () => ({
+vi.mock("../src/services/sync/decrypt", () => ({
     decryptCollectionKey: () => "collection-key",
 }));
 
@@ -89,11 +88,13 @@ test.each(["file", "note"] as const)(
             });
 
         expect(encryptBlob).toHaveBeenCalledWith(
-            expect.any(String),
+            expect.any(Uint8Array),
             "file-key",
         );
         const metadata = JSON.parse(
-            encryptBlob.mock.calls[0]![0] as string,
+            new TextDecoder().decode(
+                encryptBlob.mock.calls[0]![0] as Uint8Array,
+            ),
         ) as Record<string, unknown>;
         expect(typeof metadata.editedTime).toBe("number");
         expect(metadata).toEqual({

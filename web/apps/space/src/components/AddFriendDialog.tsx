@@ -19,14 +19,7 @@ import {
     spaceText,
     spaceTextMuted,
 } from "styles/colors";
-import {
-    friendRequestErrorMessage,
-    isSpaceFriendLimitError,
-} from "utils/friend-errors";
-import {
-    maximumSpaceFriendCount,
-    spaceFriendLimitMessage,
-} from "utils/friend-limits";
+import { friendRequestErrorMessage } from "utils/friend-errors";
 
 const green = "#08C225";
 const dangerColor = "#F63A3A";
@@ -58,6 +51,7 @@ export const SpaceAddFriendDialog: React.FC<SpaceAddFriendDialogProps> = ({
     const [errorMessage, setErrorMessage] = React.useState<string>();
     const [isSharing, setIsSharing] = React.useState(false);
     const [shareErrorMessage, setShareErrorMessage] = React.useState<string>();
+    const hasError = errorMessage !== undefined;
 
     const submit = () => {
         if (isSubmitting || isSent) return;
@@ -65,8 +59,8 @@ export const SpaceAddFriendDialog: React.FC<SpaceAddFriendDialogProps> = ({
         const normalizedUsername = normalizeSpaceUsername(username);
         const validationError = normalizedUsername
             ? spaceUsernameValidationError(normalizedUsername)
-            : "Enter a username.";
-        if (validationError) {
+            : "";
+        if (validationError !== undefined) {
             setErrorMessage(validationError);
             return;
         }
@@ -99,22 +93,12 @@ export const SpaceAddFriendDialog: React.FC<SpaceAddFriendDialogProps> = ({
             );
             return;
         }
-        const sentRequestCount = friendRequests.filter(
-            (request) => request.direction == "sent",
-        ).length;
-        if (friends.length + sentRequestCount >= maximumSpaceFriendCount) {
-            setErrorMessage(spaceFriendLimitMessage);
-            return;
-        }
-
         setErrorMessage(undefined);
         setIsSubmitting(true);
         void onAddFriend(normalizedUsername)
             .then(() => setIsSent(true))
             .catch((error: unknown) => {
-                if (!isSpaceFriendLimitError(error)) {
-                    log.error("Failed to send space friend request", error);
-                }
+                log.error("Failed to send space friend request", error);
                 setErrorMessage(
                     friendRequestErrorMessage(error, normalizedUsername),
                 );
@@ -214,7 +198,7 @@ export const SpaceAddFriendDialog: React.FC<SpaceAddFriendDialogProps> = ({
                         textAlign: "center",
                     }}
                 >
-                    Enter your friend&apos;s username to add them on Space
+                    Enter your friend&apos;s username
                 </Box>
                 <Box
                     component="label"
@@ -224,15 +208,15 @@ export const SpaceAddFriendDialog: React.FC<SpaceAddFriendDialogProps> = ({
                         sx={{
                             alignItems: "center",
                             bgcolor: spaceSurface,
-                            border: `1px solid ${errorMessage ? dangerColor : "transparent"}`,
+                            border: `1px solid ${hasError ? dangerColor : "transparent"}`,
                             borderRadius: "14px",
                             display: "flex",
                             height: 48,
                             px: "14px",
                             width: "100%",
                             "&:focus-within": {
-                                borderColor: green,
-                                boxShadow: `0 0 0 1px ${green}`,
+                                borderColor: hasError ? dangerColor : green,
+                                boxShadow: `0 0 0 1px ${hasError ? dangerColor : green}`,
                             },
                         }}
                     >
@@ -257,7 +241,7 @@ export const SpaceAddFriendDialog: React.FC<SpaceAddFriendDialogProps> = ({
                             autoCorrect="off"
                             autoFocus
                             aria-label="Friend's username"
-                            aria-invalid={Boolean(errorMessage) || undefined}
+                            aria-invalid={hasError || undefined}
                             disabled={isSubmitting || isSent}
                             onChange={(
                                 event: React.ChangeEvent<HTMLInputElement>,

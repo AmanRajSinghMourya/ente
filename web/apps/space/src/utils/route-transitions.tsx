@@ -81,16 +81,10 @@ const routeSlideDirection = (
     targetPath: string | undefined,
     direction: SpaceRouteMotionDirection,
 ): SpaceRouteMotionDirection => {
-    if (
-        (currentPath == "/app" || currentPath == "/layout-demo") &&
-        targetPath == "/app/settings"
-    ) {
+    if (currentPath == "/app" && targetPath == "/app/settings") {
         return "back";
     }
-    if (
-        currentPath == "/app/settings" &&
-        (targetPath == "/app" || targetPath == "/layout-demo")
-    ) {
+    if (currentPath == "/app/settings" && targetPath == "/app") {
         return "forward";
     }
     return direction;
@@ -290,9 +284,13 @@ export const useSpaceRouteTransitionPopState = () => {
     asPathRef.current = router.asPath;
 
     React.useEffect(() => {
+        const scrollRestoration = window.history.scrollRestoration;
+        window.history.scrollRestoration = "manual";
         recordRouteReplace(routePath(router.asPath));
 
         router.beforePopState((state) => {
+            if (state.as == asPathRef.current) return false;
+
             const currentPath = routePath(asPathRef.current);
             const targetPath = routePath(state.as);
 
@@ -314,6 +312,9 @@ export const useSpaceRouteTransitionPopState = () => {
             return false;
         });
 
-        return () => router.beforePopState(() => true);
+        return () => {
+            window.history.scrollRestoration = scrollRestoration;
+            router.beforePopState(() => true);
+        };
     }, [router]);
 };

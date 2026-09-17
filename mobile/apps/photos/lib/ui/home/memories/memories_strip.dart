@@ -3,7 +3,6 @@ import "dart:math";
 import "dart:typed_data";
 
 import "package:collection/collection.dart";
-import "package:ente_pure_utils/ente_pure_utils.dart";
 import 'package:flutter/material.dart';
 import "package:flutter_animate/flutter_animate.dart";
 import "package:photos/core/event_bus.dart";
@@ -12,7 +11,6 @@ import "package:photos/db/ml/db.dart";
 import "package:photos/db/offline_files_db.dart";
 import "package:photos/events/collection_updated_event.dart";
 import "package:photos/events/diff_sync_complete_event.dart";
-import "package:photos/events/event.dart";
 import "package:photos/events/files_updated_event.dart";
 import "package:photos/events/local_photos_updated_event.dart";
 import "package:photos/events/memories_changed_event.dart";
@@ -20,20 +18,21 @@ import "package:photos/events/memories_setting_changed.dart";
 import "package:photos/events/memory_seen_event.dart";
 import "package:photos/events/ml_consent_changed_event.dart";
 import "package:photos/events/people_changed_event.dart";
-import "package:photos/models/file/file.dart";
 import "package:photos/models/memories/smart_memory.dart";
 import "package:photos/models/memory_lane/memory_lane_models.dart";
+import "package:photos/models/ml/face/person.dart";
 import "package:photos/service_locator.dart";
 import "package:photos/services/collections_service.dart";
 import "package:photos/services/machine_learning/face_ml/person/person_service.dart";
+import "package:photos/services/memory_lane/memory_lane_cache_service.dart";
 import "package:photos/services/memory_lane/memory_lane_service.dart";
+import "package:photos/ui/home/memories/all_memories_page.dart";
 import "package:photos/ui/home/memories/crafting_memories_card.dart";
 import 'package:photos/ui/home/memories/memory_card.dart';
 import "package:photos/ui/home/memories/memory_card_constants.dart";
 import "package:photos/ui/home/memories/memory_cover_util.dart";
 import "package:photos/ui/home/memories/memory_lane_card.dart";
 import "package:photos/ui/home/memories/memory_video_prefetcher.dart";
-import "package:photos/ui/viewer/people/memory_lane_page.dart";
 
 class MemoryCardWrapper {
   final String id;
@@ -68,36 +67,36 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
   int _fetchMemoriesGeneration = 0;
   String? _lastWarmSignature;
   MemoryLanePersonTimeline? _memoryLane;
-  EnteFile? _oldestMemoryLaneFile;
+  MemoryLaneSchedule? _memoryLaneSchedule;
+  Uint8List? _oldestMemoryLaneFace;
   Uint8List? _newestMemoryLaneFace;
-  String? _memoryLanePersonName;
+  PersonEntity? _memoryLanePerson;
   final _videoPrefetcher = MemoryVideoPrefetcher();
   final _scrollController = ScrollController();
   bool _shouldShowCraftingMemories = false;
-  late Future<void> _shouldShowCraftingMemoriesLoaded;
-  late final Future<void> _memoryLaneLoaded;
-  late List<SmartMemory> _initialMemories;
-  late Future<List<SmartMemory>> _memories;
+  List<SmartMemory> _memories = [];
+  final _emptyMemoriesLoaded = Completer<void>();
+  late final Future<void> _cardDataLoaded;
 
   @override
   void initState() {
     super.initState();
-    _initialMemories = _getInitialMemories();
-    _shouldShowCraftingMemoriesLoaded = CraftingMemoriesCardWidget.shouldShow()
-        .then((value) {
-          _shouldShowCraftingMemories = value;
-        });
-
-    _fetchMemories(null);
+    _cardDataLoaded = Future.wait<void>([
+      Future.any<void>([
+        Future.wait<void>([_fetchMemories(), _fetchMemoryLane()]),
+        _emptyMemoriesLoaded.future,
+      ]),
+      _fetchCraftingMemoriesShouldShow(),
+    ]);
 
     _memoriesSettingSubscription = Bus.instance
         .on<MemoriesSettingChanged>()
-        .listen(_fetchMemories);
+        .listen((_) => _fetchMemories());
     _memoriesChangedSubscription = Bus.instance
         .on<MemoriesChangedEvent>()
-        .listen(_fetchMemories);
+        .listen((_) => _fetchMemories());
     _memorySeenSubscription = Bus.instance.on<MemorySeenEvent>().listen(
-      _fetchMemories,
+      (_) => _fetchMemories(),
     );
     _mlConsentChangedSubscription = Bus.instance
         .on<MLConsentChangedEvent>()
@@ -114,7 +113,6 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
     _diffSyncCompleteSubscription = Bus.instance
         .on<DiffSyncCompleteEvent>()
         .listen((_) => _hideMemoryLaneIfFilesMissingOrHidden());
-    _memoryLaneLoaded = _loadScheduledMemoryLane();
     MemoryLaneService.instance.readyPersonIds.addListener(
       _onMemoryLaneReadyTimelinesChanged,
     );
@@ -162,45 +160,36 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
       return const SizedBox.shrink();
     }
     return FutureBuilder(
-      future: _memories,
-      initialData: _initialMemories,
+      future: _cardDataLoaded,
       builder: (context, snapshot) {
-        final memories = snapshot.data ?? [];
-        return FutureBuilder(
-          future: _shouldShowCraftingMemoriesLoaded,
-          builder: (context, _) {
-            final cardHeight = _cardWidth / kMemoryCardAspectRatio;
-            return FutureBuilder(
-              future: _memoryLaneLoaded,
-              builder: (context, _) {
-                final cards = _buildCards(memories, cardHeight);
-                if (cards.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(top: 12, bottom: 10),
-                  child: SizedBox(
-                    height: cardHeight + 2,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: kMemoryCardStripGap / 2.0,
-                      ),
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: cards.length,
-                      itemBuilder: (context, i) => KeyedSubtree(
-                        key: ValueKey(cards[i].id),
-                        child: cards[i].widget(),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+        final cardHeight = _cardWidth / kMemoryCardAspectRatio;
+        if (snapshot.connectionState != ConnectionState.done) {
+          return SizedBox(height: cardHeight + 24);
+        }
+        if (_memories.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final cards = _buildCards(_memories, cardHeight);
+        return Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 10),
+          child: SizedBox(
+            height: cardHeight + 2,
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(
+                horizontal: kMemoryCardStripGap / 2.0,
+              ),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              scrollDirection: Axis.horizontal,
+              itemCount: cards.length,
+              itemBuilder: (context, i) => KeyedSubtree(
+                key: ValueKey(cards[i].id),
+                child: cards[i].widget(),
+              ),
+            ),
+          ),
         ).animate().fadeIn(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeInOutCirc,
@@ -220,22 +209,77 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
     return indexedMemories.map((entry) => entry.$2).toList();
   }
 
-  List<SmartMemory> _getInitialMemories() {
-    return _sortMemories(
-      (memoriesCacheService.currentMemoriesSync ?? [])
-          .where((memory) => memory.shouldShowNow())
-          .toList(),
-    );
-  }
-
   List<MemoryCardWrapper> _buildCards(
     List<SmartMemory> memories,
     double cardHeight,
   ) {
     final memoryLane = _memoryLane;
-    final oldestMemoryLaneFile = _oldestMemoryLaneFile;
+    final memoryLanePerson = _memoryLanePerson;
+    final oldestMemoryLaneFace = _oldestMemoryLaneFace;
     final newestMemoryLaneFace = _newestMemoryLaneFace;
+    final hasMemoryLane =
+        flagService.internalUser &&
+        MemoryLaneService.instance.isFeatureEnabled &&
+        memoryLane != null &&
+        (memoryLane.isCluster || memoryLanePerson != null) &&
+        oldestMemoryLaneFace != null &&
+        newestMemoryLaneFace != null;
+    final hasSeenMemoryLane =
+        hasMemoryLane && _memoryLaneSchedule?.lastCompletelySeenAt != null;
     final hasContent = memories.isNotEmpty || memoryLane != null;
+    final cardBuilders = <MemoryCardWrapper Function(VoidCallback onTap)>[
+      if (hasMemoryLane)
+        (onTap) => MemoryCardWrapper(
+          id: "memoryLane_${memoryLane.personId}",
+          widget: () => MemoryLaneCardWidget(
+            personId: memoryLane.personId,
+            isSeen: hasSeenMemoryLane,
+            oldestFace: oldestMemoryLaneFace,
+            face: newestMemoryLaneFace,
+            personName: memoryLanePerson?.data.name ?? "",
+            size: Size(_cardWidth, cardHeight),
+            onTap: onTap,
+          ),
+        ),
+      for (final memory in memories)
+        (onTap) => MemoryCardWrapper(
+          id: memory.id,
+          widget: () => MemoryCardWidget(
+            memory: memory,
+            width: _cardWidth,
+            height: cardHeight,
+            onTap: onTap,
+          ),
+        ),
+    ];
+    final cards = cardBuilders.indexed
+        .map(
+          (entry) => entry.$2(() async {
+            await openAllMemoriesPage(
+              context: context,
+              allMemories: memories,
+              memoryLane: hasMemoryLane ? memoryLane : null,
+              memoryLanePerson: hasMemoryLane ? memoryLanePerson : null,
+              isFromMemoriesStrip: true,
+              isMemoryLaneSeen: hasSeenMemoryLane,
+              initialPageIndex: entry.$1,
+            );
+            if (!mounted) return;
+            final schedule = await MemoryLaneCacheService.instance
+                .getCurrentMemoriesStripSchedule();
+            if (!mounted) return;
+            setState(() {
+              _memoryLaneSchedule =
+                  schedule?.personID == _memoryLane?.personId &&
+                      schedule?.isCluster == _memoryLane?.isCluster
+                  ? schedule
+                  : null;
+            });
+          }),
+        )
+        .toList();
+    final memoryLaneCard = hasMemoryLane ? cards.first : null;
+    final memoryLaneIndex = getMemoryLaneInsertionIndex(memories);
     return [
       if (_shouldShowCraftingMemories && hasContent)
         MemoryCardWrapper(
@@ -253,82 +297,46 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
             },
           ),
         ),
-      if (flagService.internalUser &&
-          MemoryLaneService.instance.isFeatureEnabled &&
-          memoryLane != null &&
-          oldestMemoryLaneFile != null &&
-          newestMemoryLaneFace != null)
-        MemoryCardWrapper(
-          id: "memoryLane_${memoryLane.personId}",
-          widget: () => MemoryLaneCardWidget(
-            oldestFile: oldestMemoryLaneFile,
-            face: newestMemoryLaneFace,
-            personName: _memoryLanePersonName ?? "",
-            size: Size(_cardWidth, cardHeight),
-            onTap: () => _openMemoryLanePage(memoryLane),
-          ),
-        ),
-      ...memories.indexed.map(
-        (entry) => MemoryCardWrapper(
-          id: entry.$2.id,
-          widget: () => MemoryCardWidget(
-            memories: memories,
-            width: _cardWidth,
-            height: cardHeight,
-            index: entry.$1,
-          ),
-        ),
-      ),
+      ...cards.skip(hasMemoryLane ? 1 : 0).take(memoryLaneIndex),
+      if (memoryLaneCard != null && !hasSeenMemoryLane) memoryLaneCard,
+      ...cards.skip((hasMemoryLane ? 1 : 0) + memoryLaneIndex),
+      if (memoryLaneCard != null && hasSeenMemoryLane) memoryLaneCard,
     ];
   }
 
-  Future<void> _openMemoryLanePage(MemoryLanePersonTimeline memoryLane) async {
-    if (memoryLane.isCluster) {
-      await routeToPage(
-        context,
-        MemoryLanePage.cluster(clusterID: memoryLane.personId),
-      );
-    } else {
-      final person = await PersonService.instance.getPerson(
-        memoryLane.personId,
-      );
-      if (person == null || !mounted) return;
-      await routeToPage(context, MemoryLanePage(person: person));
-    }
+  Future<void> _fetchCraftingMemoriesShouldShow() async {
+    _shouldShowCraftingMemories = await CraftingMemoriesCardWidget.shouldShow();
   }
 
-  void _fetchMemories(Event? event) {
+  Future<void> _fetchMemories() async {
     final fetchGeneration = ++_fetchMemoriesGeneration;
-    setState(() {
-      if (event is MemoriesSettingChanged &&
-          memoriesCacheService.showAnyMemories) {
-        _initialMemories = _getInitialMemories();
+    try {
+      final memories = _sortMemories(await memoriesCacheService.getMemories());
+      if (!mounted || fetchGeneration != _fetchMemoriesGeneration) {
+        return;
       }
-      _memories = memoriesCacheService
-          .getMemories()
-          .then(_sortMemories)
-          .then((memories) {
-            if (!mounted || fetchGeneration != _fetchMemoriesGeneration) {
-              return memories;
-            }
-            if (_scrollController.hasClients) {
-              _scrollController.jumpTo(0);
-            }
-            if (memories.isEmpty || !memoriesCacheService.showAnyMemories) {
-              _cancelPendingWarm();
-              return <SmartMemory>[];
-            } else {
-              _scheduleWarmCovers(memories);
-            }
-            return memories;
-          })
-          .onError((_, _) {
-            if (mounted && fetchGeneration == _fetchMemoriesGeneration) {
-              _cancelPendingWarm();
-            }
-            return [];
-          });
-    });
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+      if (memories.isEmpty || !memoriesCacheService.showAnyMemories) {
+        _cancelPendingWarm();
+        setState(() => _memories = []);
+        if (!_emptyMemoriesLoaded.isCompleted) {
+          _emptyMemoriesLoaded.complete();
+        }
+        return;
+      }
+      _scheduleWarmCovers(memories);
+      setState(() => _memories = memories);
+    } catch (_) {
+      if (mounted && fetchGeneration == _fetchMemoriesGeneration) {
+        _cancelPendingWarm();
+        setState(() => _memories = []);
+        if (!_emptyMemoriesLoaded.isCompleted) {
+          _emptyMemoriesLoaded.complete();
+        }
+      }
+    }
   }
 
   void _scheduleWarmCovers(List<SmartMemory> memories) {
@@ -382,7 +390,7 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
     _videoPrefetcher.clearPending();
   }
 
-  Future<void> _loadScheduledMemoryLane() async {
+  Future<void> _fetchMemoryLane() async {
     if (!flagService.internalUser) {
       return;
     }
@@ -391,36 +399,36 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
     if (timeline == null) {
       return;
     }
-    final newestFaceCrop = await MemoryLaneService.instance.getNewestFaceCrop(
-      timeline,
-    );
-    final oldestEntry = timeline.entries.first;
-    final oldestFile = (await MemoryLaneService.instance.getTimelineFiles([
-      oldestEntry.fileId,
-    ]))[oldestEntry.fileId];
-    final personName = timeline.isCluster
-        ? null
-        : (await PersonService.instance.getPerson(
-            timeline.personId,
-          ))?.data.name;
-    if (!mounted ||
-        newestFaceCrop == null ||
-        oldestFile == null ||
-        !hasGrantedMLConsent) {
+    final faceCrops = await MemoryLaneService.instance
+        .getOldestAndNewestFaceCrops(timeline);
+    PersonEntity? person;
+    if (!timeline.isCluster) {
+      person = await PersonService.instance.getPerson(timeline.personId);
+    }
+    if (!mounted || faceCrops == null || !hasGrantedMLConsent) {
       return;
     }
+    final schedule = await MemoryLaneCacheService.instance
+        .getCurrentMemoriesStripSchedule();
+    if (!mounted || !hasGrantedMLConsent) return;
+    _memoryLaneSchedule =
+        schedule?.personID == timeline.personId &&
+            schedule?.isCluster == timeline.isCluster
+        ? schedule
+        : null;
     _memoryLane = timeline;
-    _oldestMemoryLaneFile = oldestFile;
-    _newestMemoryLaneFace = newestFaceCrop;
-    _memoryLanePersonName = personName;
+    _oldestMemoryLaneFace = faceCrops.oldest;
+    _newestMemoryLaneFace = faceCrops.newest;
+    _memoryLanePerson = person;
   }
 
   void _hideMemoryLane() {
     setState(() {
       _memoryLane = null;
-      _oldestMemoryLaneFile = null;
+      _memoryLaneSchedule = null;
+      _oldestMemoryLaneFace = null;
       _newestMemoryLaneFace = null;
-      _memoryLanePersonName = null;
+      _memoryLanePerson = null;
     });
   }
 
@@ -443,7 +451,7 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
       return;
     }
     var shouldHide = false;
-    var personName = _memoryLanePersonName;
+    var memoryLanePerson = _memoryLanePerson;
     if (memoryLane.isCluster) {
       if (!isLocalGalleryMode) {
         final assignedClusterIDs = <String>{
@@ -464,7 +472,7 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
           person == null ||
           person.data.isIgnored ||
           person.data.hideFromMemories;
-      personName = person?.data.name;
+      memoryLanePerson = person;
     }
     if (!shouldHide) {
       final mlDataDB = isLocalGalleryMode
@@ -481,9 +489,9 @@ class _MemoriesStripWidgetState extends State<MemoriesStripWidget> {
       return;
     }
     if (!shouldHide) {
-      if (_memoryLanePersonName != personName) {
+      if (_memoryLanePerson != memoryLanePerson) {
         setState(() {
-          _memoryLanePersonName = personName;
+          _memoryLanePerson = memoryLanePerson;
         });
       }
       return;

@@ -1,8 +1,9 @@
 import { wrap } from "comlink";
-import { readAndFree } from "ente-utils/wasm";
 import { workerReady } from "ente-utils/worker";
 import type { FileLinkWorker } from "./file-link.worker";
 import type {
+    EncryptedBlob,
+    EncryptedBox,
     OpenSessionInput,
     Session,
     WrappedRootContactKey,
@@ -16,10 +17,7 @@ export const openSession = async (input: OpenSessionInput): Promise<Session> =>
     (await wasm()).openSession(input);
 
 export const encryptBoxWithRecoveryKey = (session: Session, dataB64: string) =>
-    readAndFree(session.encryptWithRecoveryKey(dataB64), (box) => ({
-        encryptedData: box.encryptedData,
-        nonce: box.nonce,
-    }));
+    session.encryptWithRecoveryKey(dataB64);
 
 export const openCollectionKey = async (
     session: Session,
@@ -60,18 +58,6 @@ export const contactsGetProfilePicture = async (
         contactID,
     );
 
-type BytesOrB64 = Uint8Array | string;
-
-interface EncryptedBlob {
-    encryptedData: BytesOrB64;
-    decryptionHeader: BytesOrB64;
-}
-
-interface EncryptedBox {
-    encryptedData: BytesOrB64;
-    nonce: BytesOrB64;
-}
-
 export const prepareFileLink = async (session: Session, fileKeyB64: string) => {
     const worker = new Worker(new URL("file-link.worker.ts", import.meta.url));
     const RemoteWorker = wrap<typeof FileLinkWorker>(worker);
@@ -106,59 +92,36 @@ export const openFileLinkSecret = async (
 export const generateKey = async () => (await wasm()).cryptoGenerateKey();
 
 export const encryptBox = async (dataB64: string, keyB64: string) =>
-    readAndFree((await wasm()).cryptoEncryptBox(dataB64, keyB64), (box) => ({
-        encryptedData: box.encryptedData,
-        nonce: box.nonce,
-    }));
+    (await wasm()).cryptoEncryptBox(dataB64, keyB64);
+
+export const encryptBoxBytes = async (data: Uint8Array, keyB64: string) =>
+    (await wasm()).cryptoEncryptBoxBytes(data, keyB64);
 
 export const decryptBox = async (
     box: EncryptedBox,
-    key: Uint8Array | string,
+    keyB64: string,
 ): Promise<string> =>
-    (await wasm()).cryptoDecryptBox(
-        toB64String(box.encryptedData),
-        toB64String(box.nonce),
-        toB64String(key),
-    );
+    (await wasm()).cryptoDecryptBox(box.encryptedData, box.nonce, keyB64);
 
 export const decryptBoxBytes = async (
     box: EncryptedBox,
-    key: Uint8Array | string,
-): Promise<Uint8Array<ArrayBuffer>> =>
-    fromB64String(await decryptBox(box, key));
+    keyB64: string,
+): Promise<Uint8Array> =>
+    (await wasm()).cryptoDecryptBoxBytes(box.encryptedData, box.nonce, keyB64);
 
-export const encryptBlob = async (dataB64: string, keyB64: string) =>
-    readAndFree((await wasm()).cryptoEncryptBlob(dataB64, keyB64), (blob) => ({
-        encryptedData: blob.encryptedData,
-        decryptionHeader: blob.decryptionHeader,
-    }));
+export const encryptBlob = async (data: Uint8Array, keyB64: string) =>
+    (await wasm()).cryptoEncryptBlob(data, keyB64);
 
 export const decryptMetadataJSON = async (
     blob: EncryptedBlob,
-    key: Uint8Array | string,
+    keyB64: string,
 ): Promise<unknown> => {
-    const wasmModule = await wasm();
-    const encryptedData = toB64String(blob.encryptedData);
-    const decryptionHeader = toB64String(blob.decryptionHeader);
-    const keyB64 = toB64String(key);
-    let plaintextB64: string;
-    try {
-        plaintextB64 = wasmModule.cryptoDecryptBlob(
-            encryptedData,
-            decryptionHeader,
-            keyB64,
-        );
-    } catch (error) {
-        if (!(error instanceof Error && error.name == "stream_truncated")) {
-            throw error;
-        }
-        plaintextB64 = wasmModule.cryptoDecryptBlobLegacy(
-            encryptedData,
-            decryptionHeader,
-            keyB64,
-        );
-    }
-    return JSON.parse(new TextDecoder().decode(fromB64String(plaintextB64)));
+    const plaintext = (await wasm()).cryptoDecryptBlobLegacy(
+        blob.encryptedData,
+        blob.decryptionHeader,
+        keyB64,
+    );
+    return JSON.parse(new TextDecoder().decode(plaintext));
 };
 
 export const boxSeal = async (
@@ -180,32 +143,4 @@ export const createStreamDecryptor = async (
 export const encryptFileStreamWithKey = async (
     dataB64: string,
     keyB64: string,
-) =>
-    readAndFree(
-        (await wasm()).cryptoEncryptStreamWithKey(dataB64, keyB64),
-        (file) => ({
-            encryptedData: file.encryptedData,
-            decryptionHeader: file.decryptionHeader,
-            md5Hash: file.md5Hash,
-        }),
-    );
-
-export const stringToB64 = (value: string): string =>
-    toB64String(new TextEncoder().encode(value));
-
-export const b64ToBytes = (value: string): Uint8Array<ArrayBuffer> =>
-    fromB64String(value);
-
-const toB64String = (value: Uint8Array | string): string => {
-    if (typeof value == "string") return value;
-    let binary = "";
-    for (const byte of value) binary += String.fromCharCode(byte);
-    return btoa(binary);
-};
-
-const fromB64String = (value: string): Uint8Array<ArrayBuffer> => {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-};
+) => (await wasm()).cryptoEncryptStreamWithKey(dataB64, keyB64);

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "apps/cli",
+    "apps/cli-next",
     "apps/ensu/src-tauri",
     "bindings/frb/lib",
     "bindings/frb/locker",
@@ -11,6 +12,7 @@ members = [
     "bindings/uniffi/cast",
     "bindings/uniffi/ensu",
     "bindings/uniffi/log",
+    "bindings/wasm/auth",
     "bindings/wasm/cast",
     "bindings/wasm/ensu",
     "bindings/wasm/legacy",
@@ -38,6 +40,7 @@ members = [
     "crates/photos",
     "crates/space",
     "crates/test-support",
+    "crates/vecdb",
     "tools/codegen",
     "tools/location-dataset",
 ]
@@ -46,6 +49,10 @@ members = [
 edition = "2024"
 
 [workspace.dependencies]
+anyhow = "1.0.103"
+chrono = { version = "0.4.44", default-features = false }
+clap = "4.6.1"
+dialoguer = { version = "0.11.0", default-features = false }
 dirs = "5.0.1"
 ente-accounts = { path = "crates/accounts" }
 ente-assets = { path = "crates/assets" }
@@ -68,6 +75,7 @@ ente-photos = { path = "crates/photos" }
 ente-space = { path = "crates/space" }
 ente-test-support = { path = "crates/test-support" }
 ente-uniffi-log = { path = "bindings/uniffi/log" }
+ente-vecdb = { path = "crates/vecdb" }
 ente-wasm-lib = { path = "bindings/wasm/lib" }
 fast_image_resize = { version = "5.5.0", features = ["image"] }
 flate2 = "1.1.9"
@@ -79,6 +87,7 @@ hkdf = "0.13.0"
 hmac = "0.13.0"
 image = "0.25.10"
 js-sys = "0.3.102"
+keyring = { version = "3.6.3", default-features = false }
 log = "0.4.29"
 md-5 = "0.11.0"
 mockito = "1.7.2"
@@ -100,8 +109,8 @@ tempfile = "3.27.0"
 thiserror = "2.0.18"
 tokio = "1.41.0"
 tsify = { version = "0.5.8", default-features = false, features = ["js"] }
-uniffi = { version = "=0.31.0" }
-uniffi_bindgen = { version = "=0.31.0", default-features = false, features = ["cargo-metadata"] }
+uniffi = { version = "=0.31.2" }
+uniffi_bindgen = { version = "=0.31.2", default-features = false, features = ["cargo-metadata"] }
 url = "2.5.8"
 urlencoding = "2.1.3"
 uuid = "1.23.1"
@@ -122,6 +131,7 @@ dbg_macro = "deny"
 debug_assert_with_mut_call = "deny"
 derive_partial_eq_without_eq = "deny"
 empty_drop = "deny"
+expect_used = "deny"
 fallible_impl_from = "deny"
 implicit_clone = "deny"
 inefficient_to_string = "deny"
@@ -146,6 +156,8 @@ unwrap_used = "deny"
 [profile.dev.package.argon2]
 opt-level = 3
 
-# Unoptimized HNSW construction makes the vecdb recall fixtures dominate test runtime.
 [profile.dev.package.ente-ml]
+opt-level = 3
+
+[profile.dev.package.ente-vecdb]
 opt-level = 3

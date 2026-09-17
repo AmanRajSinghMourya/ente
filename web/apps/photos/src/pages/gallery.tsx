@@ -85,11 +85,10 @@ import log from "ente-base/log";
 import {
     clearSessionStorage,
     haveMasterKeyInSession,
-    masterKeyFromSession,
-} from "ente-base/session";
+} from "ente-base/session-storage";
 import { savedAuthToken } from "ente-base/token";
 import type { Location } from "ente-base/types";
-import { ensureContactsReady } from "ente-contacts";
+import { initContacts, pullContacts } from "ente-contacts";
 import { DownloadStatusNotifications } from "ente-gallery/components/DownloadStatusNotifications";
 import { FullScreenDropZone } from "ente-gallery/components/FullScreenDropZone";
 import type { UploadTypeSelectorIntent } from "ente-gallery/components/Upload";
@@ -105,6 +104,7 @@ import {
     useSettingsSnapshot,
     useUserDetailsSnapshot,
 } from "ente-new/photos/components/utils/use-snapshot";
+import { masterKeyFromSession } from "ente-new/photos/services/account-keys";
 import { reauthenticateWithAppLock } from "ente-new/photos/services/app-lock";
 import {
     addToCollection,
@@ -522,17 +522,19 @@ const Page: React.FC = () => {
             setIsFirstLoad(getAndClearIsFirstLogin());
 
             const user = ensureLocalUser();
-            void ensureContactsReady(
+            void initContacts(
                 user.id,
                 session,
                 contactsGetDiff,
                 contactsGetProfilePicture,
-            ).catch((error: unknown) => {
-                log.warn(
-                    "[gallery] Failed to warm contacts display cache",
-                    error,
-                );
-            });
+            )
+                .then(pullContacts)
+                .catch((error: unknown) => {
+                    log.warn(
+                        "[gallery] Failed to warm contacts display cache",
+                        error,
+                    );
+                });
             const userDetails = await savedUserDetailsOrTriggerPull();
             dispatch({
                 type: "mount",
@@ -708,13 +710,13 @@ const Page: React.FC = () => {
             return;
         }
 
-        const selected = {
+        const selected: SelectedState = {
             ownCount: 0,
             count: 0,
             collectionID: activeCollectionID,
             context:
                 barMode == "people" && activePersonID
-                    ? { mode: "people" as const, personID: activePersonID }
+                    ? { mode: "people", personID: activePersonID }
                     : {
                           mode: barMode as
                               | "albums"
@@ -729,7 +731,6 @@ const Page: React.FC = () => {
                 selected.ownCount++;
             }
             selected.count++;
-            // @ts-expect-error Selection code needs type fixing
             selected[item.id] = true;
         });
         setSelected(selected);
@@ -738,13 +739,13 @@ const Page: React.FC = () => {
     const handleSelectAll = () => {
         if (!user || !filteredFiles.length) return;
 
-        const selected = {
+        const selected: SelectedState = {
             ownCount: 0,
             count: 0,
             collectionID: activeCollectionID,
             context:
                 barMode == "people" && activePersonID
-                    ? { mode: "people" as const, personID: activePersonID }
+                    ? { mode: "people", personID: activePersonID }
                     : {
                           mode: barMode as
                               | "albums"
@@ -759,7 +760,6 @@ const Page: React.FC = () => {
                 selected.ownCount++;
             }
             selected.count++;
-            // @ts-expect-error Selection code needs type fixing
             selected[item.id] = true;
         });
         setSelected(selected);
