@@ -705,7 +705,7 @@ class _FileSelectionOverlayBarState extends State<FileSelectionOverlayBar> {
       }
 
       await Future.wait(addFutures);
-      await CollectionService.instance.sync();
+      await CollectionService.instance.syncAfterMutation();
       _logger.info(
         'Completed add-to operation for ${ownedFiles.length} file(s).',
       );
