@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.license          = { :type => 'AGPL-3.0-only' }
   s.author           = { 'Ente' => 'support@ente.io' }
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'ente_screen_brightness/Sources/ente_screen_brightness/**/*.swift'
   s.dependency 'Flutter'
   s.platform = :ios, '15.1'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
