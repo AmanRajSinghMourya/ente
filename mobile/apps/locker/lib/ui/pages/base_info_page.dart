@@ -411,7 +411,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       }
     }
 
-    await CollectionService.instance.sync();
+    await CollectionService.instance.syncAfterMutation();
   }
 
   Future<void> _createNewFile(InfoItem infoItem) async {
@@ -438,7 +438,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       );
     }
 
-    await CollectionService.instance.sync();
+    await CollectionService.instance.syncAfterMutation();
     Bus.instance.fire(UserDetailsRefreshEvent());
 
     if (!mounted) return;

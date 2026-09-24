@@ -1,8 +1,10 @@
+import "package:ente_events/event_bus.dart";
 import "package:ente_strings/ente_strings.dart";
 import "package:ente_ui/utils/dialog_util.dart";
 import "package:ente_ui/utils/toast_util.dart";
 import "package:flutter/material.dart";
 import "package:locker/core/errors.dart";
+import "package:locker/events/collections_updated_event.dart";
 import "package:locker/models/info/info_item.dart";
 import "package:locker/services/collections/collections_service.dart";
 import "package:locker/services/favorites_service.dart";
@@ -11,7 +13,6 @@ import "package:locker/services/files/sync/metadata_updater_service.dart";
 import "package:locker/services/files/sync/models/file.dart";
 import "package:locker/services/info_file_service.dart";
 import "package:locker/services/trash/models/trash_file.dart";
-import "package:locker/services/trash/trash_service.dart";
 import "package:locker/ui/components/delete_confirmation_sheet.dart";
 import "package:locker/ui/components/file_edit_sheet.dart";
 import "package:locker/ui/components/share_link_sheet.dart";
@@ -184,7 +185,7 @@ class FileActions {
         }
       }
 
-      await CollectionService.instance.sync();
+      await CollectionService.instance.syncAfterMutation();
       await dialog?.hide();
       onSuccess?.call();
 
@@ -374,8 +375,8 @@ class FileActions {
         }
       }
 
-      await CollectionService.instance.sync();
-      await TrashService.instance.syncTrash();
+      Bus.instance.fire(CollectionsUpdatedEvent('files_trashed'));
+      await CollectionService.instance.syncAfterMutation(includeTrash: true);
 
       await dialog?.hide();
 

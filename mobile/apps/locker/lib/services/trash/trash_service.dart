@@ -251,7 +251,7 @@ class TrashService {
     }
     await _enteDio.post("/collections/restore-files", data: params);
     await _db.deleteTrashFiles(files.map((e) => e.uploadedFileID!).toList());
-    await CollectionService.instance.sync();
+    await CollectionService.instance.syncAfterMutation();
     Bus.instance.fire(CollectionsUpdatedEvent("file_restore"));
     Bus.instance.fire(UserDetailsRefreshEvent());
   }
