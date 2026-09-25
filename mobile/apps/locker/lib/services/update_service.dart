@@ -16,8 +16,6 @@ class UpdateService {
   static const String _updateNotificationsEnabledKey =
       "update_notifications_enabled";
   static const String kChangeLogShownVersionKey = "update_change_log_key";
-  static const String kChangeLogOpenedVersionKey =
-      "change_log_opened_version_key";
   static const int currentChangeLogVersion = 2;
   static const String _lockerIndependentPackageName =
       "io.ente.locker.independent";
@@ -129,16 +127,6 @@ class UpdateService {
   Future<void> markChangeLogShown() async {
     if (!_isInitialized) return;
     await _prefs!.setInt(kChangeLogShownVersionKey, currentChangeLogVersion);
-  }
-
-  bool get hasUnopenedChangeLog =>
-      _isInitialized &&
-      (_prefs!.getInt(kChangeLogOpenedVersionKey) ?? 0) <
-          currentChangeLogVersion;
-
-  Future<void> markChangeLogOpened() async {
-    if (!_isInitialized) return;
-    await _prefs!.setInt(kChangeLogOpenedVersionKey, currentChangeLogVersion);
   }
 
   Future<void> resetChangeLogShown() async {

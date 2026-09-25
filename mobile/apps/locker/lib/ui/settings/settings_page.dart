@@ -161,33 +161,17 @@ class SettingsWidget extends StatelessWidget {
   }
 }
 
-class AppVersionWidget extends StatefulWidget {
+class AppVersionWidget extends StatelessWidget {
   const AppVersionWidget({super.key});
 
   @override
-  State<AppVersionWidget> createState() => _AppVersionWidgetState();
-}
-
-class _AppVersionWidgetState extends State<AppVersionWidget> {
-  late bool _showDot;
-
-  @override
-  void initState() {
-    super.initState();
-    _showDot = UpdateService.instance.hasUnopenedChangeLog;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return ente_ui.AppVersionWidget(showDot: _showDot, onTap: _openChangeLog);
+    return ente_ui.AppVersionWidget(onTap: () => _openChangeLog(context));
   }
 
-  Future<void> _openChangeLog() async {
-    if (_showDot) {
-      setState(() => _showDot = false);
-      await UpdateService.instance.markChangeLogOpened();
-    }
-    if (mounted) {
+  Future<void> _openChangeLog(BuildContext context) async {
+    await UpdateService.instance.markChangeLogShown();
+    if (context.mounted) {
       await showChangeLogSheet(context);
     }
   }
