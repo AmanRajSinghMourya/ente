@@ -533,47 +533,75 @@ class _ContactSuggestionsState extends State<_ContactSuggestions> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: ShaderMask(
-                  blendMode: BlendMode.dstIn,
-                  shaderCallback: (bounds) {
-                    final fadeStop = (arrowSize / bounds.width).clamp(0.0, 0.5);
-                    return LinearGradient(
-                      colors: const [
-                        Colors.transparent,
-                        Colors.black,
-                        Colors.black,
-                        Colors.transparent,
-                      ],
-                      stops: [0, fadeStop, 1 - fadeStop, 1],
-                    ).createShader(bounds);
-                  },
-                  child: ListView.separated(
-                    key: const ValueKey("contact-suggestions-scroll"),
-                    controller: widget.scrollController,
-                    primary: false,
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: arrowSize),
-                    itemCount: widget.contacts.length,
-                    itemBuilder: (context, index) {
-                      final contact = widget.contacts[index];
-                      return SizedBox(
-                        width: itemWidth,
-                        child: _ContactSuggestion(
-                          key: ValueKey(
-                            "contact-${contact.email.trim().toLowerCase()}",
-                          ),
-                          suggestion: contact,
-                          onTap: () => widget.onToggle(contact),
-                          onLongPress: () => showVerifyIdentitySheet(
-                            context,
-                            self: false,
-                            email: contact.email,
-                          ),
+                child: ListView.separated(
+                  key: const ValueKey("contact-suggestions-scroll"),
+                  controller: widget.scrollController,
+                  primary: false,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: arrowSize),
+                  itemCount: widget.contacts.length,
+                  itemBuilder: (context, index) {
+                    final contact = widget.contacts[index];
+                    return SizedBox(
+                      width: itemWidth,
+                      child: _ContactSuggestion(
+                        key: ValueKey(
+                          "contact-${contact.email.trim().toLowerCase()}",
                         ),
-                      );
-                    },
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: Spacing.lg),
+                        suggestion: contact,
+                        onTap: () => widget.onToggle(contact),
+                        onLongPress: () => showVerifyIdentitySheet(
+                          context,
+                          self: false,
+                          email: contact.email,
+                        ),
+                      ),
+                    );
+                  },
+                  separatorBuilder: (_, _) => const SizedBox(width: Spacing.lg),
+                ),
+              ),
+              PositionedDirectional(
+                start: 0,
+                top: 0,
+                bottom: 0,
+                width: arrowSize,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: AlignmentDirectional.centerStart,
+                        end: AlignmentDirectional.centerEnd,
+                        colors: [
+                          context.componentColors.backgroundBase,
+                          context.componentColors.backgroundBase.withValues(
+                            alpha: 0,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              PositionedDirectional(
+                end: 0,
+                top: 0,
+                bottom: 0,
+                width: arrowSize,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: AlignmentDirectional.centerStart,
+                        end: AlignmentDirectional.centerEnd,
+                        colors: [
+                          context.componentColors.backgroundBase.withValues(
+                            alpha: 0,
+                          ),
+                          context.componentColors.backgroundBase,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
