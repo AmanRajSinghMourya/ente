@@ -1,0 +1,1 @@
+- Prevented failed link creation from leaving albums in Links without a URL.

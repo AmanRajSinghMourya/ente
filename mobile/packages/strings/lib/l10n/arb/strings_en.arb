@@ -4987,7 +4987,7 @@
   "@shareAllPersonPhotosDescription": {"placeholders": {"name": {"type": "String"}}},
   "personShareFailedTitle": "Could not share photos",
   "personShareFailedBody": "The shared album could not be created. Your photos and selection are unchanged. Please try again.",
-  "personShareRollbackFailed": "The share did not finish, and the album “{name}” could not be removed. It remains in Albums and may have an active public link. Review or delete it there before trying again. Your original photos are safe.",
+  "personShareRollbackFailed": "The share did not finish, and the album “{name}” could not be removed. It may still appear in Albums or Links and may have an active public link. Review or delete it before trying again. Your original photos are safe.",
   "@personShareRollbackFailed": {"placeholders": {"name": {"type": "String"}}},
   "sharedByYou": "Shared by you",
   "sharedByOwner": "Shared by {owner}",

@@ -60,8 +60,14 @@ class AddEmailToCollectionResult {
 class CollectionActions {
   final Logger logger = Logger((CollectionActions).toString());
   final CollectionsService collectionsService;
+  final Future<CreateRequest> Function(
+    String name, {
+    required int visibility,
+    required int subType,
+  })?
+  createRequest;
 
-  CollectionActions(this.collectionsService);
+  CollectionActions(this.collectionsService, {this.createRequest});
 
   Future<bool> enableUrl(
     BuildContext context,
@@ -137,7 +143,7 @@ class CollectionActions {
     BuildContext context,
     List<EnteFile> files,
   ) async {
-    late final Collection newCollection;
+    Collection? newCollection;
     try {
       logger.info("creating album for sharing files");
       final EnteFile fileWithMinCreationTime = files.reduce(
@@ -150,8 +156,9 @@ class CollectionActions {
         fileWithMinCreationTime.creationTime!,
         fileWithMaxCreationTime.creationTime!,
       );
-      final CreateRequest req = await collectionsService
-          .buildCollectionCreateRequest(
+      final CreateRequest req =
+          await (createRequest ??
+              collectionsService.buildCollectionCreateRequest)(
             dummyName,
             visibility: visibleVisibility,
             subType: subTypeSharedFilesCollection,
@@ -161,24 +168,37 @@ class CollectionActions {
       logger.info("adding files to share to new album");
       await collectionsService.addOrCopyToCollection(collection.id, files);
       logger.info("creating public link for the newly created album");
-      try {
-        await CollectionsService.instance.createShareUrl(collection);
-      } catch (e) {
-        if (e is SharingNotPermittedForFreeAccountsError) {
-          if (newCollection.isQuickLinkCollection() &&
-              !newCollection.hasSharees) {
-            await trashCollectionKeepingPhotos(newCollection);
-          }
-          rethrow;
-        }
+      await collectionsService.createShareUrl(collection);
+      if (!collection.hasLink) {
+        throw StateError("Share URL was not created");
       }
       return collection;
     } catch (e, s) {
+      logger.severe("Failing to create link for selected files", e, s);
+      if (newCollection != null) {
+        try {
+          await trashCollectionKeepingPhotos(newCollection);
+        } catch (cleanupError, cleanupStack) {
+          logger.severe(
+            "Could not remove failed quick-link album ${newCollection.id}",
+            cleanupError,
+            cleanupStack,
+          );
+          if (!context.mounted) return null;
+          await showErrorDialog(
+            context,
+            context.strings.personShareFailedTitle,
+            context.strings.personShareRollbackFailed(
+              name: newCollection.displayName,
+            ),
+          );
+          return null;
+        }
+      }
       if (e is SharingNotPermittedForFreeAccountsError) {
         if (!context.mounted) return null;
         await _showUnSupportedAlert(context);
       } else {
-        logger.severe("Failing to create link for selected files", e, s);
         if (!context.mounted) return null;
         await showGenericErrorDialog(context: context, error: e);
       }
