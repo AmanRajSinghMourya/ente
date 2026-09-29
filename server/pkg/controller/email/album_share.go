@@ -9,7 +9,6 @@ import (
 	"github.com/ente/museum/ente"
 	emailUtil "github.com/ente/museum/pkg/utils/email"
 	log "github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 var sendAlbumShareTemplatedEmail = emailUtil.SendTemplatedEmailV2
@@ -48,7 +47,6 @@ func (c *EmailNotificationController) sendAlbumShareEmail(senderID, recipientID 
 		"base.html", "album_shared.html", map[string]interface{}{
 			"SenderEmail": sender.Email,
 			"AlbumCount":  albumCount,
-			"PhotosURL":   viper.GetString("apps.photos"),
 		}, nil)
 	if err != nil {
 		log.WithError(err).Error("Could not send album share email")

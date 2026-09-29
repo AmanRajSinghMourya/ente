@@ -59,7 +59,6 @@ The `apps` section specifies the base endpoints Museum uses when linking to or i
 
 | Variable               | Description                                             | Default                     |
 | ---------------------- | ------------------------------------------------------- | --------------------------- |
-| `apps.photos`          | Photos web app endpoint for album share email links     | `https://photos.ente.com`   |
 | `apps.public-albums`   | Albums app base endpoint for public sharing             | `https://albums.ente.com`   |
 | `apps.embed-albums`    | Embed app base endpoint                                 | `https://embed.ente.com`    |
 | `apps.public-locker`   | Public Locker (share) app base endpoint                 | `https://share.ente.com`    |

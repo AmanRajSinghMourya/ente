@@ -10,7 +10,6 @@ import (
 	"github.com/ente/museum/internal/testutil"
 	"github.com/ente/museum/pkg/repo"
 	"github.com/ente/museum/pkg/repo/remotestore"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,9 +34,6 @@ func setupAlbumShareEmailTest(t *testing.T, recipientEmail string) (*EmailNotifi
 
 func TestAlbumShareEmailRecipientAndCopy(t *testing.T) {
 	controller, senderID, recipientID := setupAlbumShareEmailTest(t, "recipient@example.com")
-	originalURL := viper.Get("apps.photos")
-	t.Cleanup(func() { viper.Set("apps.photos", originalURL) })
-	viper.Set("apps.photos", "https://photos.example.com")
 	for _, tc := range []struct {
 		count   int
 		subject string
@@ -53,7 +49,7 @@ func TestAlbumShareEmailRecipientAndCopy(t *testing.T) {
 				require.Equal(t, "base.html", base)
 				require.Equal(t, "album_shared.html", template)
 				require.Equal(t, map[string]interface{}{
-					"SenderEmail": "sender@example.com", "AlbumCount": tc.count, "PhotosURL": "https://photos.example.com",
+					"SenderEmail": "sender@example.com", "AlbumCount": tc.count,
 				}, data)
 				return nil
 			}

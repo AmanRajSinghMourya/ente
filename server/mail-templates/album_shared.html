@@ -3,5 +3,5 @@
 
 <p>{{.SenderEmail}} shared {{if eq .AlbumCount 1}}an album{{else}}{{.AlbumCount}} albums{{end}} with you.</p>
 
-<p><a href="{{.PhotosURL}}" class="button" style="background: #0055d4; border-radius: 3px; text-decoration: none !important; color: #fff !important; font-weight: bold; padding: 10px 30px; display: inline-block;">Open Ente Photos</a></p>
+<p>Open Ente Photos to view {{if eq .AlbumCount 1}}it{{else}}them{{end}}.</p>
 {{end}}
