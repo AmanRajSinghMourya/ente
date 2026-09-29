@@ -7,7 +7,6 @@ import (
 
 	"github.com/ente/museum/pkg/controller"
 	"github.com/ente/museum/pkg/controller/access"
-	"github.com/ente/museum/pkg/controller/email"
 	"github.com/ente/museum/pkg/controller/public"
 	"github.com/ente/museum/pkg/repo/cast"
 	socialrepo "github.com/ente/museum/pkg/repo/social"
@@ -25,9 +24,14 @@ const (
 	CollectionDiffLimit = 2500
 )
 
+type CollectionEmailNotifier interface {
+	OnLinkJoined(ownerID, otherUserID int64, role ente.CollectionParticipantRole)
+	QueueAlbumShareEmail(senderID, recipientID int64, albumCount int)
+}
+
 type CollectionController struct {
 	CollectionLinkCtrl    *public.CollectionLinkController
-	EmailCtrl             *email.EmailNotificationController
+	EmailCtrl             CollectionEmailNotifier
 	AccessCtrl            access.Controller
 	BillingCtrl           *controller.BillingController
 	UserLookup            controller.UserLookup

@@ -10,6 +10,7 @@ import (
 	discordCtrl "github.com/ente/museum/pkg/controller/discord"
 	"github.com/ente/museum/pkg/controller/lock"
 	"github.com/ente/museum/pkg/repo"
+	"github.com/ente/museum/pkg/repo/remotestore"
 	storageBonusRepo "github.com/ente/museum/pkg/repo/storagebonus"
 	"github.com/ente/museum/pkg/utils/email"
 	"github.com/ente/museum/pkg/utils/time"
@@ -60,6 +61,7 @@ const (
 
 type EmailNotificationController struct {
 	UserRepo                           *repo.UserRepository
+	RemoteStoreRepo                    *remotestore.Repository
 	UsageRepo                          *repo.UsageRepository
 	BillingRepo                        *repo.BillingRepository
 	StorageBonusRepo                   *storageBonusRepo.Repository

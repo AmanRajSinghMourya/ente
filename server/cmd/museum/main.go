@@ -107,6 +107,7 @@ func main() {
 		panic(err)
 	}
 
+	viper.SetDefault("apps.photos", "https://photos.ente.com")
 	viper.SetDefault("apps.public-albums", "https://albums.ente.com")
 	viper.SetDefault("apps.embed-albums", "https://embed.ente.com")
 	viper.SetDefault("apps.custom-domain.cname", "my.ente.com")
@@ -232,6 +233,7 @@ func main() {
 	defer rateLimiter.Stop()
 
 	emailNotificationCtrl := &email.EmailNotificationController{
+		RemoteStoreRepo:         remoteStoreRepository,
 		UserRepo:                userRepo,
 		UsageRepo:               usageRepo,
 		BillingRepo:             billingRepo,

@@ -117,6 +117,7 @@ func newBatchShareTestController(
 ) *CollectionController {
 	return &CollectionController{
 		AccessCtrl:     access.NewAccessController(collectionRepo, nil),
+		EmailCtrl:      &recordingCollectionEmails{},
 		CollectionRepo: collectionRepo,
 		UserLookup:     newShareTestUserLookup(db),
 	}
@@ -183,7 +184,7 @@ func addShareTestShare(
 	role ente.CollectionParticipantRole,
 ) {
 	t.Helper()
-	if err := collectionRepo.Share(collectionID, ownerID, shareeID, "share-key", role, 1); err != nil {
+	if _, err := collectionRepo.Share(collectionID, ownerID, shareeID, "share-key", role, 1); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -363,7 +364,7 @@ func TestAutomaticShareLifecycle(t *testing.T) {
 	ctx := context.Background()
 
 	manualCollectionID := createShareTestCollection(t, collectionRepo, ownerID)
-	if err := collectionRepo.Share(
+	if _, err := collectionRepo.Share(
 		manualCollectionID,
 		ownerID,
 		shareeID,
@@ -438,7 +439,7 @@ func TestUnShareContextBumpsCollectionForDeletedShareRow(t *testing.T) {
 	db, collectionRepo, ownerID, shareeID := setupCollectionShareTest(t)
 	ctx := context.Background()
 	collectionID := createShareTestCollection(t, collectionRepo, ownerID)
-	if err := collectionRepo.Share(
+	if _, err := collectionRepo.Share(
 		collectionID,
 		ownerID,
 		shareeID,
@@ -480,7 +481,7 @@ func TestUncategorizedCollectionsOnlyAllowViewerShares(t *testing.T) {
 		Role:         ente.VIEWER,
 	}
 
-	status, err := controller.shareCollectionWithUserID(
+	status, _, err := controller.shareCollectionWithUserID(
 		context.Background(),
 		ownerID,
 		shareeID,
@@ -490,7 +491,7 @@ func TestUncategorizedCollectionsOnlyAllowViewerShares(t *testing.T) {
 	requireCollectionShareStatus(t, status, ente.CollectionShared, err)
 
 	item.Role = ente.ADMIN
-	_, err = controller.shareCollectionWithUserID(
+	_, _, err = controller.shareCollectionWithUserID(
 		context.Background(),
 		ownerID,
 		shareeID,
@@ -567,6 +568,7 @@ func TestBulkShareAndUnshareReturnPerCollectionStatuses(t *testing.T) {
 func TestBulkShareAutomaticRecipientMustBeInSameFamily(t *testing.T) {
 	db, collectionRepo, ownerID, shareeID := setupCollectionShareTest(t)
 	controller := &CollectionController{
+		EmailCtrl:      &recordingCollectionEmails{},
 		CollectionRepo: collectionRepo,
 		UserRepo:       &repo.UserRepository{DB: db},
 		UserLookup:     newShareTestUserLookup(db),
@@ -780,7 +782,7 @@ func TestBatchShareRollsBackWhenAnyWriteFails(t *testing.T) {
 	collectionID := createShareTestCollection(t, collectionRepo, ownerID)
 	originalCollectionTime := collectionUpdationTime(t, db, collectionID)
 
-	err := collectionRepo.BatchShare(
+	_, err := collectionRepo.BatchShare(
 		context.Background(),
 		collectionID,
 		ownerID,
@@ -829,7 +831,7 @@ func TestBatchShareRejectsDeletedCollection(t *testing.T) {
 		t.Fatalf("unauthorized BatchShare() error = %v, want %v", err, ente.ErrPermissionDenied)
 	}
 
-	err = collectionRepo.BatchShare(
+	_, err = collectionRepo.BatchShare(
 		context.Background(),
 		collectionID,
 		ownerID,
