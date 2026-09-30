@@ -306,6 +306,7 @@ class _AddPeopleSheetState extends State<_AddPeopleSheet> {
       }
     });
     if (added) {
+      _clearEmail();
       _scrollSelectedPeopleToEnd();
     }
   }
