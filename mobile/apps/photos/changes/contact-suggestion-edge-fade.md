@@ -1,1 +1,2 @@
-- Fixed visual artifacts at the edges of suggested contacts when adding people to an album.
+- Fixed visual artifacts and extra leading space in suggested contacts when adding people to an album.
+- Contact arrows now scroll three people at a time, and searches with no matches show an empty state without collapsing the sheet.

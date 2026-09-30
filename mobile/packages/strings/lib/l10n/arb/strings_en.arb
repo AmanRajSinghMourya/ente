@@ -2804,6 +2804,7 @@
   },
   "noResult": "No result",
   "noResultsFound": "No results found",
+  "noMatchingResultsFound": "No matching results found",
   "noSessionsFound": "No sessions found!",
   "noSimilarImagesFound": "No similar images found",
   "noSuggestionsForPerson": "No suggestions for {personName}",
