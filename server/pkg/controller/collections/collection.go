@@ -26,7 +26,7 @@ const (
 )
 
 type CollectionPushNotifier interface {
-	QueueAlbumSharePush(ctx context.Context, recipients []int64)
+	NotifyAlbumShare(ctx context.Context, recipients []int64)
 }
 
 type CollectionController struct {

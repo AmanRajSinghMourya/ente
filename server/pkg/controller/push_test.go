@@ -209,20 +209,20 @@ func TestAlbumSharePushOnlyInternalIOSRecipients(t *testing.T) {
 		return jsonResponse(http.StatusOK, `{}`), nil
 	})}}}
 	viper.Set("internal.silent", false)
-	c.sendAlbumSharePush(context.Background(), []int64{2})
+	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Empty(t, messages, "ordinary users must not receive push")
 	_, err = db.Exec(`INSERT INTO remote_store (user_id, key_name, key_value) VALUES (2, 'internalUser', 'false')`)
 	require.NoError(t, err)
-	c.sendAlbumSharePush(context.Background(), []int64{2})
+	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Empty(t, messages, "the internal flag must be true")
 	_, err = db.Exec(`UPDATE remote_store SET key_value = 'true' WHERE user_id = 2 AND key_name = 'internalUser'`)
 	require.NoError(t, err)
-	c.sendAlbumSharePush(context.Background(), []int64{1})
+	c.NotifyAlbumShare(context.Background(), []int64{1})
 	viper.Set("internal.silent", true)
-	c.sendAlbumSharePush(context.Background(), []int64{2})
+	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Empty(t, messages)
 	viper.Set("internal.silent", false)
-	c.sendAlbumSharePush(context.Background(), []int64{1, 2})
+	c.NotifyAlbumShare(context.Background(), []int64{1, 2})
 	require.Len(t, messages, 1)
 	require.Equal(t, "ios-device", messages[0]["token"])
 	require.Equal(t, map[string]any{"title": "Ente Photos", "body": "An album was shared with you"}, messages[0]["notification"])
@@ -233,7 +233,7 @@ func TestAlbumSharePushOnlyInternalIOSRecipients(t *testing.T) {
 	require.Nil(t, messages[0]["android"])
 	require.Nil(t, messages[0]["data"])
 	require.NoError(t, r.AddToken(1, ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device"}))
-	c.sendAlbumSharePush(context.Background(), []int64{2})
+	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Len(t, messages, 1, "token registered to another account must not receive the alert")
 }
 
@@ -300,7 +300,7 @@ func TestAlbumSharePushSurvivesSlowDelivery(t *testing.T) {
 	}}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	c.QueueAlbumSharePush(ctx, []int64{1})
+	go c.NotifyAlbumShare(ctx, []int64{1})
 	select {
 	case <-done:
 	case <-time.After(10 * time.Second):

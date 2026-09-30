@@ -66,11 +66,7 @@ func NewPushController(pushRepo *repo.PushTokenRepository, taskLockRepo *repo.Ta
 	return &PushController{PushRepo: pushRepo, TaskLockRepo: taskLockRepo, HostName: hostName, fcm: client}
 }
 
-func (c *PushController) QueueAlbumSharePush(ctx context.Context, recipients []int64) {
-	go c.sendAlbumSharePush(ctx, recipients)
-}
-
-func (c *PushController) sendAlbumSharePush(ctx context.Context, recipients []int64) {
+func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int64) {
 	if viper.GetBool("internal.silent") || c.fcm == nil {
 		return
 	}

@@ -55,8 +55,8 @@ func (c *CollectionController) Share(ctx *gin.Context, req ente.AlterShareReques
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	if added {
-		c.notifyAlbumShare(ctx, collection, []int64{toUserID})
+	if added && c.PushCtrl != nil && collection.Type == "album" && collection.App == string(ente.Photos) {
+		go c.PushCtrl.NotifyAlbumShare(ctx.Request.Context(), []int64{toUserID})
 	}
 	sharees, err := c.GetSharees(ctx, req.CollectionID, fromUserID)
 	if err != nil {
@@ -117,7 +117,9 @@ func (c *CollectionController) BatchShare(ctx *gin.Context, shares []ente.AlterS
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	c.notifyAlbumShare(ctx, collection, added)
+	if len(added) > 0 && c.PushCtrl != nil && collection.Type == "album" && collection.App == string(ente.Photos) {
+		go c.PushCtrl.NotifyAlbumShare(ctx.Request.Context(), added)
+	}
 	sharees, err := c.GetSharees(ctx, collection.ID, fromUserID)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
@@ -207,7 +209,7 @@ func (c *CollectionController) BulkShare(
 		})
 	}
 	if notify && c.PushCtrl != nil {
-		c.PushCtrl.QueueAlbumSharePush(ctx.Request.Context(), []int64{req.RecipientUserID})
+		go c.PushCtrl.NotifyAlbumShare(ctx.Request.Context(), []int64{req.RecipientUserID})
 	}
 	return results, nil
 }
@@ -688,10 +690,4 @@ func (c *CollectionController) GetPublicDiff(ctx *gin.Context, sinceTime int64) 
 	}
 	scrubDeletedFiles(diff)
 	return diff, hasMore, nil
-}
-
-func (c *CollectionController) notifyAlbumShare(ctx *gin.Context, collection ente.Collection, recipients []int64) {
-	if c.PushCtrl != nil && collection.Type == "album" && collection.App == string(ente.Photos) && len(recipients) > 0 {
-		c.PushCtrl.QueueAlbumSharePush(ctx.Request.Context(), recipients)
-	}
 }
