@@ -106,6 +106,7 @@ class _AddPeopleSheetState extends State<_AddPeopleSheet> {
   final _contactsScrollController = ScrollController();
   final _shareLinkKey = GlobalKey();
   late final List<UserSuggestion> _contacts;
+  String _emailText = "";
   bool _emailIsValid = false;
   bool _emailHasNoAccount = false;
 
@@ -177,6 +178,10 @@ class _AddPeopleSheetState extends State<_AddPeopleSheet> {
                   emailHasNoAccount: _emailHasNoAccount,
                   shareKey: _shareLinkKey,
                   onChanged: (value) {
+                    if (value == _emailText) {
+                      return;
+                    }
+                    _emailText = value;
                     if (_contactsScrollController.hasClients) {
                       _contactsScrollController.jumpTo(0);
                     }
