@@ -100,9 +100,7 @@ class _ShareCollectionPageState extends State<ShareCollectionPage> {
                       context.strings.emptyAlbumShareMessage,
                       textAlign: TextAlign.center,
                       style: TextStyles.body.copyWith(
-                        color: Theme.of(context).brightness == Brightness.light
-                            ? const Color(0xFF737373)
-                            : context.componentColors.textLight,
+                        color: context.componentColors.textLight,
                       ),
                     ),
                   ),
