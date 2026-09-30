@@ -1,0 +1,1 @@
+- Fixed visual artifacts at the edges of suggested contacts when adding people to an album.
