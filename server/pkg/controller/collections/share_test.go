@@ -121,6 +121,7 @@ func newBatchShareTestController(
 	collectionRepo *repo.CollectionRepository,
 ) *CollectionController {
 	return &CollectionController{
+		PushCtrl:       &museumcontroller.PushController{},
 		AccessCtrl:     access.NewAccessController(collectionRepo, nil),
 		CollectionRepo: collectionRepo,
 		UserLookup:     newShareTestUserLookup(db),
@@ -572,6 +573,7 @@ func TestBulkShareAndUnshareReturnPerCollectionStatuses(t *testing.T) {
 func TestBulkShareAutomaticRecipientMustBeInSameFamily(t *testing.T) {
 	db, collectionRepo, ownerID, shareeID := setupCollectionShareTest(t)
 	controller := &CollectionController{
+		PushCtrl:       &museumcontroller.PushController{},
 		CollectionRepo: collectionRepo,
 		UserRepo:       &repo.UserRepository{DB: db},
 		UserLookup:     newShareTestUserLookup(db),
@@ -1058,11 +1060,13 @@ func TestAlbumSharePushEligibility(t *testing.T) {
 	db, r, owner, recipient := setupCollectionShareTest(t)
 	c := newBatchShareTestController(db, r)
 	var calls atomic.Int32
+	var expected int32
 	c.PushCtrl = albumSharePushFunc(func(context.Context, []int64) { calls.Add(1) })
 	for _, collection := range []ente.Collection{
 		{Type: "album", App: string(ente.Photos)},
 		{Type: "album", App: string(ente.Locker)},
 		{Type: "folder", App: string(ente.Photos)},
+		{Type: "favorites", App: string(ente.Photos)},
 		{Type: "uncategorized", App: string(ente.Photos)},
 	} {
 		id := createShareTestCollection(t, r, owner)
@@ -1085,11 +1089,12 @@ func TestAlbumSharePushEligibility(t *testing.T) {
 			require.Equal(t, 1, collectionShareCount(t, db, id))
 			require.NoError(t, r.UnShare(id, recipient))
 		}
-		if collection.Type == "album" && collection.App == string(ente.Photos) {
-			require.Eventually(t, func() bool { return calls.Load() == 3 }, time.Second, time.Millisecond)
+		if collection.App == string(ente.Photos) {
+			expected += 3
+			require.Eventually(t, func() bool { return calls.Load() == expected }, time.Second, time.Millisecond)
 		}
 	}
-	require.Never(t, func() bool { return calls.Load() > 3 }, 50*time.Millisecond, time.Millisecond)
+	require.Never(t, func() bool { return calls.Load() > expected }, 50*time.Millisecond, time.Millisecond)
 }
 
 func TestAlbumShareDoesNotWaitForPush(t *testing.T) {

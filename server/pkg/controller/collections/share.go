@@ -55,7 +55,7 @@ func (c *CollectionController) Share(ctx *gin.Context, req ente.AlterShareReques
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	if added && c.PushCtrl != nil && collection.Type == "album" && collection.App == string(ente.Photos) {
+	if added && collection.App == string(ente.Photos) {
 		go c.PushCtrl.NotifyAlbumShare(ctx.Request.Context(), []int64{toUserID})
 	}
 	sharees, err := c.GetSharees(ctx, req.CollectionID, fromUserID)
@@ -117,7 +117,7 @@ func (c *CollectionController) BatchShare(ctx *gin.Context, shares []ente.AlterS
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	if len(added) > 0 && c.PushCtrl != nil && collection.Type == "album" && collection.App == string(ente.Photos) {
+	if len(added) > 0 && collection.App == string(ente.Photos) {
 		go c.PushCtrl.NotifyAlbumShare(ctx.Request.Context(), added)
 	}
 	sharees, err := c.GetSharees(ctx, collection.ID, fromUserID)
@@ -187,7 +187,7 @@ func (c *CollectionController) BulkShare(
 	notify := false
 	results := make([]ente.BulkCollectionShareResult, 0, len(req.Collections))
 	for _, item := range req.Collections {
-		status, addedAlbum, err := c.shareCollectionWithUserID(
+		status, addedShare, err := c.shareCollectionWithUserID(
 			ctx,
 			fromUserID,
 			req.RecipientUserID,
@@ -202,13 +202,13 @@ func (c *CollectionController) BulkShare(
 			}).Warn("bulk collection share failed")
 			status = ente.CollectionShareOperationFailed
 		}
-		notify = notify || (err == nil && addedAlbum)
+		notify = notify || (err == nil && addedShare)
 		results = append(results, ente.BulkCollectionShareResult{
 			CollectionID: item.CollectionID,
 			Status:       status,
 		})
 	}
-	if notify && c.PushCtrl != nil {
+	if notify {
 		go c.PushCtrl.NotifyAlbumShare(ctx.Request.Context(), []int64{req.RecipientUserID})
 	}
 	return results, nil
@@ -262,7 +262,7 @@ func (c *CollectionController) shareCollectionWithUserID(
 			item.Role,
 			updationTime,
 		)
-		return ente.CollectionShared, added && collection.Type == "album" && collection.App == string(ente.Photos), err
+		return ente.CollectionShared, added && collection.App == string(ente.Photos), err
 	}
 	status, err := c.CollectionRepo.ShareAutomatically(
 		ctx,
