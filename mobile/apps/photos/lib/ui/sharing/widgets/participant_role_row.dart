@@ -43,36 +43,56 @@ class ParticipantRoleRow extends StatefulWidget {
 
 class _ParticipantRoleRowState extends State<ParticipantRoleRow> {
   bool _isChangingRole = false;
+  final _menuKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
     final role = widget.collection.getRole(widget.user.id);
-    return ParticipantRow(
-      user: widget.user,
-      role: role,
-      currentUserID: widget.currentUserID,
-      trailing: _isChangingRole
-          ? SizedBox.square(
-              dimension: IconSizes.small,
-              child: CircularProgressIndicator(
-                color: context.componentColors.textLight,
-                strokeWidth: 2,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: _isChangingRole ? null : _showMenu,
+      child: ParticipantRow(
+        user: widget.user,
+        role: role,
+        currentUserID: widget.currentUserID,
+        trailing: _isChangingRole
+            ? SizedBox.square(
+                dimension: IconSizes.small,
+                child: CircularProgressIndicator(
+                  color: context.componentColors.textLight,
+                  strokeWidth: 2,
+                ),
+              )
+            : EntePopupMenuButton<_ParticipantRoleAction>(
+                key: _menuKey,
+                optionsBuilder: () => _options(context),
+                onSelected: _onSelected,
+                child: HugeIcon(
+                  icon: albumSharingRoleIcon(role),
+                  color: context.componentColors.textBase,
+                  size: IconSizes.small,
+                  strokeWidth: 1.6,
+                ),
               ),
-            )
-          : EntePopupMenuButton<_ParticipantRoleAction>(
-              optionsBuilder: () => _options(context),
-              onSelected: (action) => action == _ParticipantRoleAction.remove
-                  ? _removeParticipant()
-                  : _changeRole(action.role!),
-              child: HugeIcon(
-                icon: albumSharingRoleIcon(role),
-                color: context.componentColors.textBase,
-                size: IconSizes.small,
-                strokeWidth: 1.6,
-              ),
-            ),
+      ),
     );
   }
+
+  Future<void> _showMenu() async {
+    final action = await showEntePopupMenu<_ParticipantRoleAction>(
+      context: _menuKey.currentContext!,
+      options: _options(context),
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    await _onSelected(action);
+  }
+
+  Future<void> _onSelected(_ParticipantRoleAction action) =>
+      action == _ParticipantRoleAction.remove
+      ? _removeParticipant()
+      : _changeRole(action.role!);
 
   List<EntePopupMenuOption<_ParticipantRoleAction>> _options(
     BuildContext context,
