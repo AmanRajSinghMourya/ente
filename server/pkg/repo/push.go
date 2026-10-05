@@ -70,7 +70,7 @@ func (repo *PushTokenRepository) RemoveTokensForUser(userID int64) error {
 func (repo *PushTokenRepository) GetFCMTokensForAlbumShare(ctx context.Context, userIDs []int64) ([]string, error) {
 	rows, err := repo.DB.QueryContext(ctx, `SELECT p.fcm_token FROM push_tokens p
 		JOIN remote_store r ON r.user_id = p.user_id AND r.key_name = $2 AND r.key_value = 'true'
-		WHERE r.user_id = ANY($1) AND p.apns_token <> ''`, pq.Array(userIDs), string(ente.IsInternalUser))
+		WHERE r.user_id = ANY($1)`, pq.Array(userIDs), string(ente.IsInternalUser))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}

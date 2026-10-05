@@ -187,7 +187,7 @@ func hasLog(hook *logtest.Hook, level log.Level, substr string) bool {
 	return false
 }
 
-func TestAlbumSharePushOnlyInternalIOSRecipients(t *testing.T) {
+func TestAlbumSharePushOnlyInternalRecipients(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
@@ -197,10 +197,10 @@ func TestAlbumSharePushOnlyInternalIOSRecipients(t *testing.T) {
 		testutil.InsertUser(t, db, u)
 	}
 	r := &repo.PushTokenRepository{DB: db}
-	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device"}))
-	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "android-device"}))
-	_, err := db.Exec(`INSERT INTO push_tokens (user_id, fcm_token, apns_token) VALUES (2, 'empty-apns', '')`)
-	require.NoError(t, err)
+	ios, android := "ios", "android"
+	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device", Platform: &ios}))
+	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "android-device", Platform: &android}))
+	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "ios-without-apns", Platform: &ios}))
 	var messages []map[string]any
 	c := &PushController{PushRepo: r, fcm: &fcmClient{projectID: "test", httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		var body struct{ Message map[string]any }
@@ -211,7 +211,7 @@ func TestAlbumSharePushOnlyInternalIOSRecipients(t *testing.T) {
 	viper.Set("internal.silent", false)
 	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Empty(t, messages, "ordinary users must not receive push")
-	_, err = db.Exec(`INSERT INTO remote_store (user_id, key_name, key_value) VALUES (2, 'internalUser', 'false')`)
+	_, err := db.Exec(`INSERT INTO remote_store (user_id, key_name, key_value) VALUES (2, 'internalUser', 'false')`)
 	require.NoError(t, err)
 	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Empty(t, messages, "the internal flag must be true")
@@ -223,18 +223,26 @@ func TestAlbumSharePushOnlyInternalIOSRecipients(t *testing.T) {
 	require.Empty(t, messages)
 	viper.Set("internal.silent", false)
 	c.NotifyAlbumShare(context.Background(), []int64{1, 2})
-	require.Len(t, messages, 1)
-	require.Equal(t, "ios-device", messages[0]["token"])
-	require.Equal(t, map[string]any{"title": "Ente Photos", "body": "An album was shared with you"}, messages[0]["notification"])
-	require.Equal(t, map[string]any{
-		"headers": map[string]any{"apns-push-type": "alert", "apns-priority": "10", "apns-expiration": "0"},
-		"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
-	}, messages[0]["apns"])
-	require.Nil(t, messages[0]["android"])
-	require.Nil(t, messages[0]["data"])
+	require.Len(t, messages, 3)
+	var tokens []string
+	for _, message := range messages {
+		tokens = append(tokens, message["token"].(string))
+		require.Equal(t, map[string]any{"title": "Ente Photos", "body": "An album was shared with you"}, message["notification"])
+		require.Equal(t, map[string]any{
+			"headers": map[string]any{"apns-push-type": "alert", "apns-priority": "10", "apns-expiration": "0"},
+			"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
+		}, message["apns"])
+		require.Nil(t, message["android"])
+		require.Nil(t, message["data"])
+	}
+	require.ElementsMatch(t, []string{"ios-device", "android-device", "ios-without-apns"}, tokens)
 	require.NoError(t, r.AddToken(1, ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device"}))
+	messages = nil
 	c.NotifyAlbumShare(context.Background(), []int64{2})
-	require.Len(t, messages, 1, "token registered to another account must not receive the alert")
+	require.Len(t, messages, 2)
+	for _, message := range messages {
+		require.NotEqual(t, "ios-device", message["token"], "token registered to another account must not receive the alert")
+	}
 }
 
 func TestPushTokenFollowsCurrentAccount(t *testing.T) {
