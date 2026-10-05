@@ -16,12 +16,15 @@ type PushHandler struct {
 }
 
 func (h *PushHandler) AddToken(c *gin.Context) {
-	var req ente.PushTokenRequest
+	platform := "ios"
+	req := ente.PushTokenRequest{Platform: &platform}
 	err := handler.BindJSON(c, &req)
 	if err != nil {
 		handler.Error(c, stacktrace.Propagate(err, ""))
 		return
 	}
+	sessionHash := auth.HashToken(auth.GetToken(c))
+	req.SessionTokenHash = sessionHash[:]
 	err = h.PushController.AddToken(auth.GetUserID(c.Request.Header), req)
 	if err != nil {
 		handler.Error(c, stacktrace.Propagate(err, ""))

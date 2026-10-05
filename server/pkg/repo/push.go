@@ -15,15 +15,15 @@ type PushTokenRepository struct {
 }
 
 func (repo *PushTokenRepository) AddToken(userID int64, token ente.PushTokenRequest) error {
-	_, err := repo.DB.Exec(`INSERT INTO push_tokens(user_id, fcm_token, apns_token) VALUES($1, $2, $3) 
+	_, err := repo.DB.Exec(`INSERT INTO push_tokens(user_id, fcm_token, apns_token, session_token_hash, platform) VALUES($1, $2, $3, $4, COALESCE($5, 'ios'))
 			ON CONFLICT (fcm_token) DO UPDATE
-			SET user_id = $1, apns_token = $3`,
-		userID, token.FCMToken, token.APNSToken)
+			SET user_id = $1, apns_token = $3, session_token_hash = $4, platform = EXCLUDED.platform`,
+		userID, token.FCMToken, token.APNSToken, token.SessionTokenHash, token.Platform)
 	return stacktrace.Propagate(err, "")
 }
 
 func (repo *PushTokenRepository) GetTokensToBeNotified(lastNotificationTime int64, limit int) ([]ente.PushToken, error) {
-	rows, err := repo.DB.Query(`SELECT user_id, fcm_token, created_at, last_notified_at FROM push_tokens WHERE last_notified_at < $1 LIMIT $2`, lastNotificationTime, limit)
+	rows, err := repo.DB.Query(`SELECT user_id, fcm_token, created_at, last_notified_at FROM push_tokens WHERE platform = 'ios' AND last_notified_at < $1 LIMIT $2`, lastNotificationTime, limit)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
