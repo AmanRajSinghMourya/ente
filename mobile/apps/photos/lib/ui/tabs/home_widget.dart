@@ -57,6 +57,7 @@ import "package:photos/services/update_service.dart";
 import "package:photos/states/user_details_state.dart";
 import "package:photos/theme/ente_theme.dart";
 import "package:photos/ui/collections/collection_action_sheet.dart";
+import "package:photos/ui/common/web_page.dart";
 import "package:photos/ui/components/buttons/button_widget.dart";
 import "package:photos/ui/components/models/button_type.dart";
 import "package:photos/ui/extents_page_view.dart";
@@ -416,10 +417,12 @@ class _HomeWidgetState extends State<HomeWidget> {
       final dialog = createProgressDialog(context, "Loading...");
       final publicUrl = collection.publicURLs[0];
       if (!publicUrl.enableDownload) {
-        await showErrorDialog(
+        await routeToPage(
           context,
-          context.strings.canNotOpenTitle,
-          context.strings.canNotOpenBody,
+          WebPage(
+            collection.displayName,
+            uri.replace(scheme: "https").toString(),
+          ),
         );
         return;
       }

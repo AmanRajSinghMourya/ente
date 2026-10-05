@@ -1,0 +1,1 @@
+- Allowed viewing public albums with downloads disabled in the in-app browser.
