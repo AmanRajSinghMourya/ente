@@ -48,33 +48,30 @@ class _ParticipantRoleRowState extends State<ParticipantRoleRow> {
   @override
   Widget build(BuildContext context) {
     final role = widget.collection.getRole(widget.user.id);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return ParticipantRow(
+      user: widget.user,
+      role: role,
+      currentUserID: widget.currentUserID,
       onLongPress: _isChangingRole ? null : _showMenu,
-      child: ParticipantRow(
-        user: widget.user,
-        role: role,
-        currentUserID: widget.currentUserID,
-        trailing: _isChangingRole
-            ? SizedBox.square(
-                dimension: IconSizes.small,
-                child: CircularProgressIndicator(
-                  color: context.componentColors.textLight,
-                  strokeWidth: 2,
-                ),
-              )
-            : EntePopupMenuButton<_ParticipantRoleAction>(
-                key: _menuKey,
-                optionsBuilder: () => _options(context),
-                onSelected: _onSelected,
-                child: HugeIcon(
-                  icon: albumSharingRoleIcon(role),
-                  color: context.componentColors.textBase,
-                  size: IconSizes.small,
-                  strokeWidth: 1.6,
-                ),
+      trailing: _isChangingRole
+          ? SizedBox.square(
+              dimension: IconSizes.small,
+              child: CircularProgressIndicator(
+                color: context.componentColors.textLight,
+                strokeWidth: 2,
               ),
-      ),
+            )
+          : EntePopupMenuButton<_ParticipantRoleAction>(
+              key: _menuKey,
+              optionsBuilder: () => _options(context),
+              onSelected: _onSelected,
+              child: HugeIcon(
+                icon: albumSharingRoleIcon(role),
+                color: context.componentColors.textBase,
+                size: IconSizes.small,
+                strokeWidth: 1.6,
+              ),
+            ),
     );
   }
 

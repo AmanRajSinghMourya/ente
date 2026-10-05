@@ -43,6 +43,29 @@ void main() {
     PersonService.init(_FakeEntityService(), _FakeMLDataDB(), preferences);
   });
 
+  testWidgets('participant row highlights while pressed', (tester) async {
+    await _pumpRow(tester);
+    final surface = find.byKey(const ValueKey('menu-item-surface'));
+    final colors = tester.element(surface).componentColors;
+    Color? surfaceColor() =>
+        (tester.widget<AnimatedContainer>(surface).decoration! as BoxDecoration)
+            .color;
+
+    expect(surfaceColor(), colors.fillLight);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('friend@example.com')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(surfaceColor(), colors.fillDarker);
+    expect(find.text('Remove'), findsNothing);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(surfaceColor(), colors.fillLight);
+    expect(find.text('Remove'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   for (final target in ['email', 'avatar', 'space', 'icon']) {
     testWidgets('long press on $target opens participant menu', (tester) async {
       await _pumpRow(tester);
