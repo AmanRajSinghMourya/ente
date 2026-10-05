@@ -148,8 +148,8 @@ class _StatusBarWidgetState extends State<StatusBarWidget> {
             : const SizedBox.shrink(),
         if (_showErrorBanner) HeaderErrorWidget(error: _syncError),
         if (_shouldShowLargeBackupBanner) _largeBackupBanner(context),
-        if (_showMlBanner && !_showErrorBanner) _mlBanner(context),
-        if (_showVerificationBanner()) _recoveryKeyBanner(context),
+        if (_showMlBanner && !_showErrorBanner) const _MachineLearningBanner(),
+        if (_showVerificationBanner()) const _RecoveryKeyBanner(),
       ],
     );
   }
@@ -175,7 +175,22 @@ class _StatusBarWidgetState extends State<StatusBarWidget> {
     );
   }
 
-  Widget _mlBanner(BuildContext context) {
+  bool _showVerificationBanner() {
+    if (_showErrorBanner ||
+        _showErrorBanner ||
+        flagService.recoveryKeyVerified) {
+      return false;
+    }
+    final DateTime installTime = localSettings.getInstallDateTime();
+    return DateTime.now().difference(installTime).inDays >= 3;
+  }
+}
+
+class _MachineLearningBanner extends StatelessWidget {
+  const _MachineLearningBanner();
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = context.strings;
     return _bannerPadding(
       BannerComponent(
@@ -194,8 +209,13 @@ class _StatusBarWidgetState extends State<StatusBarWidget> {
       ),
     );
   }
+}
 
-  Widget _recoveryKeyBanner(BuildContext context) {
+class _RecoveryKeyBanner extends StatelessWidget {
+  const _RecoveryKeyBanner();
+
+  @override
+  Widget build(BuildContext context) {
     return _bannerPadding(
       BannerComponent(
         leadingIcon: HugeIcons.strokeRoundedAlertCircle,
@@ -212,23 +232,13 @@ class _StatusBarWidgetState extends State<StatusBarWidget> {
       ),
     );
   }
+}
 
-  Widget _bannerPadding(Widget child) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: child,
-    );
-  }
-
-  bool _showVerificationBanner() {
-    if (_showErrorBanner ||
-        _showErrorBanner ||
-        flagService.recoveryKeyVerified) {
-      return false;
-    }
-    final DateTime installTime = localSettings.getInstallDateTime();
-    return DateTime.now().difference(installTime).inDays >= 3;
-  }
+Widget _bannerPadding(Widget child) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    child: child,
+  );
 }
 
 class SyncStatusWidget extends StatefulWidget {

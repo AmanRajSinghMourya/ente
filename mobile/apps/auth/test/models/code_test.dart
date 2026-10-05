@@ -5,6 +5,23 @@ import 'package:ente_auth/models/code_display.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('omits malformed OTP input from parsing errors', () {
+    const rawData = 'otpauth://totp:invalid/Example?secret=JBSWY3DPEHPK3PXP';
+
+    expect(
+      () => Code.fromOTPAuthUrl(rawData),
+      throwsA(
+        isA<FormatException>()
+            .having((error) => error.source, 'source', isNull)
+            .having(
+              (error) => error.toString(),
+              'description',
+              'FormatException: OTP URL is malformed',
+            ),
+      ),
+    );
+  });
+
   test("parseCodeFromRawData", () {
     final code1 = Code.fromOTPAuthUrl(
       "otpauth://totp/example%20finance%3Aee%40ff.gg?secret=ASKZNWOU6SVYAMVS",

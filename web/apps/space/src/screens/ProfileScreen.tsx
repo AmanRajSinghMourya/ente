@@ -28,7 +28,10 @@ import {
 } from "components/FileViewer";
 import { SpacePostComposer } from "components/PostComposer";
 import { SpacePostPhotoInput } from "components/PostPhotoInput";
-import { SpacePostPhotosBadge } from "components/PostPhotosBadge";
+import {
+    SpacePostPhotosBadge,
+    SpacePostVideoBadge,
+} from "components/PostPhotosBadge";
 import { SpaceLoadingSpinner } from "components/RouteFallback";
 import { SpaceShareIcon } from "components/ShareInviteButton";
 import { SpaceSkipLink } from "components/SkipLink";
@@ -405,7 +408,13 @@ const ProfilePostTile: React.FC<ProfilePostTileProps> = ({
                 />
             ) : null}
             {!isUnavailable && (
-                <SpacePostPhotosBadge count={photoCount} inset={8} />
+                <>
+                    <SpacePostPhotosBadge count={photoCount} inset={8} />
+                    <SpacePostVideoBadge
+                        durationMs={item.photos?.[0]?.video?.durationMs}
+                        size={18}
+                    />
+                </>
             )}
             {isUnavailable && (
                 <Box

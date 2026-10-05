@@ -99,6 +99,7 @@ func (c *CollectionController) GetCollection(ctx *gin.Context, userID int64, cID
 		return ente.Collection{}, stacktrace.Propagate(err, "")
 	}
 	if resp.Role != nil && *resp.Role != ente.OWNER {
+		collection.MagicMetadata = nil
 		collection.PublicURLs = ente.FilterPublicURLsForRole(collection.PublicURLs, *resp.Role)
 	}
 	return collection, nil
@@ -123,6 +124,12 @@ func (c *CollectionController) GetFile(ctx *gin.Context, collectionID int64, fil
 		if !slices.Contains(cIDs, collectionID) {
 			return nil, stacktrace.Propagate(ente.ErrPermissionDenied, "")
 		}
+		if file.Action != nil && (*file.Action == ente.ActionRemove || *file.Action == ente.ActionDeleteSuggested) {
+			return nil, stacktrace.Propagate(&ente.ErrFileNotFoundInAlbum, "")
+		}
+		file.MagicMetadata = nil
+		file.Action = nil
+		file.ActionUserID = nil
 	}
 	if file.IsDeleted {
 		return nil, stacktrace.Propagate(&ente.ErrFileNotFoundInAlbum, "")

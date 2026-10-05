@@ -4,7 +4,6 @@ import {
     type ContextMenuPosition,
 } from "@/components/FileContextMenu";
 import type { GalleryBarMode } from "@/components/gallery/reducer";
-import { StarIcon } from "@/components/icons/StarIcon";
 import {
     selectedFavoriteCount as countSelectedFavorites,
     type SelectedState,
@@ -17,6 +16,8 @@ import {
     handleSelectCreator,
     handleSelectCreatorMulti,
 } from "@/utils/photoFrame";
+import { StarIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import AlbumOutlinedIcon from "@mui/icons-material/AlbumOutlined";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
@@ -1114,7 +1115,12 @@ const FileThumbnail: React.FC<FileThumbnailProps> = ({
             )}
             {isFav && (
                 <FavoriteOverlay>
-                    <StarIcon fontSize="small" />
+                    <HugeiconsIcon
+                        icon={StarIcon}
+                        size={20}
+                        fill="currentColor"
+                        aria-hidden
+                    />
                 </FavoriteOverlay>
             )}
 

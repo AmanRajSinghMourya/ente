@@ -13,7 +13,7 @@ export const SpacePostPhotosCounter = ({
         <Box
             component="span"
             aria-live="polite"
-            aria-label={`Photo ${index + 1} of ${count}`}
+            aria-label={`Item ${index + 1} of ${count}`}
             sx={{
                 alignItems: "center",
                 bgcolor: compact

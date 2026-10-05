@@ -101,6 +101,8 @@ class FlagService {
 
   bool get videoEditorSpeedEnabled => internalUser;
 
+  bool get progressiveOriginalVideoPlayback => internalUser;
+
   bool get facesTimeline => true;
   bool get ritualsFlag => true;
 
@@ -123,13 +125,11 @@ class FlagService {
 
   bool get useRustForHeicDecoder => internalUser;
 
-  bool get petEnabled => internalUser;
+  bool get petEnabled => false;
 
   bool get qrFeatureEnabled => true;
 
   bool get ocrOverlayEnabled => true;
-
-  bool get rustOcr => internalUser;
 
   bool get enableBgLocalUploadPriority => internalUser;
 

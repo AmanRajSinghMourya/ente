@@ -36,9 +36,12 @@ List<Code> _parseEntries<T>(Iterable<T> entries, Code Function(T entry) parse) {
     try {
       codes.add(parse(entry));
     } catch (error, stackTrace) {
-      // Match the import UI's existing behavior: preserve valid entries when
-      // one entry in a multi-code export is malformed.
-      _logger.severe('Could not parse import entry', error, stackTrace);
+      // Parser errors may contain OTP secrets.
+      _logger.warning(
+        'Skipping malformed import entry (${error.runtimeType})',
+        null,
+        stackTrace,
+      );
     }
   }
   return codes;

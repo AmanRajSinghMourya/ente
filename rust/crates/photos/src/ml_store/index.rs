@@ -403,7 +403,6 @@ mod tests {
         let clip = create_usearch_files(&directory, "ente.ml.vectordb.clip.usearch");
         let centroid =
             create_usearch_files(&directory, "ente.ml.vectordb.cluster_centroid.usearch");
-        let pet = create_usearch_files(&directory, "ente.ml.vectordb.pet.dog_face.usearch");
         let offline = create_usearch_files(&directory, "ente.ml.offline.vectordb.clip.usearch");
 
         assert_eq!(
@@ -418,7 +417,6 @@ mod tests {
             FillOutcome::Completed
         );
         assert!(centroid.iter().all(|path| !path.exists()));
-        assert!(all_exist(&pet));
         assert!(all_exist(&offline));
     }
 

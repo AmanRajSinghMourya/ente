@@ -145,7 +145,7 @@ class _MachineLearningSettingsPageState
     return SettingsPageScaffold(
       title: context.strings.mlConsent,
       children: [
-        _buildDisabledMLDescription(context),
+        const _MLConsentDescription(),
         const SizedBox(height: 20),
         Center(
           child: Image.asset(
@@ -241,34 +241,6 @@ class _MachineLearningSettingsPageState
     }
   }
 
-  Widget _buildDisabledMLDescription(BuildContext context) {
-    final colors = context.componentColors;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          context.strings.mlConsentDescription,
-          textAlign: TextAlign.left,
-          style: TextStyles.mini.copyWith(color: colors.textLight),
-        ),
-        const SizedBox(height: 6),
-        GestureDetector(
-          onTap: () async => _openMLPrivacyPolicy(context),
-          child: Text(
-            context.strings.mlConsentPrivacy,
-            textAlign: TextAlign.left,
-            style: TextStyles.mini.copyWith(
-              color: colors.textLight,
-              decoration: TextDecoration.underline,
-              decorationColor: colors.textLight,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildDisabledConsentAckRow(BuildContext context) {
     final colors = context.componentColors;
 
@@ -298,19 +270,6 @@ class _MachineLearningSettingsPageState
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Future<void> _openMLPrivacyPolicy(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (BuildContext context) {
-          return WebPage(
-            context.strings.privacyPolicyTitle,
-            "https://ente.com/privacy",
-          );
-        },
       ),
     );
   }
@@ -377,6 +336,52 @@ class _MachineLearningSettingsPageState
             ? MLStatusWidget(showDecryptionWarning: _mlDecryptionRecordsReady)
             : const ModelLoadingState(),
       ],
+    );
+  }
+}
+
+class _MLConsentDescription extends StatelessWidget {
+  const _MLConsentDescription();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.componentColors;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.strings.mlConsentDescription,
+          textAlign: TextAlign.left,
+          style: TextStyles.mini.copyWith(color: colors.textLight),
+        ),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: () async => _openMLPrivacyPolicy(context),
+          child: Text(
+            context.strings.mlConsentPrivacy,
+            textAlign: TextAlign.left,
+            style: TextStyles.mini.copyWith(
+              color: colors.textLight,
+              decoration: TextDecoration.underline,
+              decorationColor: colors.textLight,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openMLPrivacyPolicy(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (BuildContext context) {
+          return WebPage(
+            context.strings.privacyPolicyTitle,
+            "https://ente.com/privacy",
+          );
+        },
+      ),
     );
   }
 }

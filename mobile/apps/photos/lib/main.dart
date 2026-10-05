@@ -251,6 +251,7 @@ Future<void> runBackgroundTask(
   Duration? mlSelfStop,
   Duration? mlLockWait,
   MlRunControl? control,
+  bool Function()? shouldStop,
 }) async {
   // Created at task start so a stop that fires before ML begins stays
   // latched for the whole task.
@@ -290,7 +291,7 @@ Future<void> runBackgroundTask(
       "[BG TASK] No recent foreground activity, proceeding with background work",
     );
 
-    await _runMinimally(taskId, tlog, mlRunControl, mlLockWait);
+    await _runMinimally(taskId, tlog, mlRunControl, mlLockWait, shouldStop);
   } finally {
     mlSelfStopTimer?.cancel();
     mlForegroundWatchTimer.cancel();
@@ -302,8 +303,10 @@ Future<void> _runMinimally(
   TimeLogger tlog,
   MlRunControl mlRunControl,
   Duration? mlLockWait,
+  bool Function()? shouldStop,
 ) async {
   try {
+    if (shouldStop?.call() ?? false) return;
     final PackageInfo packageInfo = await PackageInfo.fromPlatform();
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await _scheduleHeartBeat(prefs, true);
@@ -357,12 +360,14 @@ Future<void> _runMinimally(
     SocialNotificationCoordinator.instance.init(prefs);
     await NotificationService.instance.initializeForBackground();
 
+    if (shouldStop?.call() ?? false) return;
     _logger.info("[BG TASK] update notification");
     updateService.showUpdateNotification().ignore();
     _logger.info("[BG TASK] sync starting");
     await _sync('bgTaskActiveProcess');
     _logger.info("[BG TASK] sync completed");
 
+    if (shouldStop?.call() ?? false) return;
     _logger.info("[BG TASK] locale fetch");
     final locale = await getLocale();
     await initializeDateFormatting(locale?.languageCode ?? "en");
@@ -390,8 +395,10 @@ Future<void> _runMinimally(
         _logger.warning("[BG TASK] person sync failed", e, s);
       }
     }
+    if (shouldStop?.call() ?? false) return;
     await _homeWidgetSync(true);
 
+    if (shouldStop?.call() ?? false) return;
     if ((isLocalGalleryMode || flagService.enableMLInBackground) &&
         hasGrantedMLConsent) {
       await controller.init();
@@ -404,6 +411,7 @@ Future<void> _runMinimally(
         try {
           PersonService.init(entityService, MLDataDB.instance, prefs);
           await MLService.instance.init();
+          if (shouldStop?.call() ?? false) return;
           final disposition = await MLService.instance.runAllML(
             force: false,
             allowImageIndexing: BgTaskUtils.allowsImageIndexing(taskId),
@@ -417,6 +425,7 @@ Future<void> _runMinimally(
         }
       }
     }
+    if (shouldStop?.call() ?? false) return;
     _logger.info("[BG TASK] smart albums sync");
     if (hasGrantedMLConsent && !PersonService.isInitialized) {
       PersonService.init(entityService, MLDataDB.instance, prefs);

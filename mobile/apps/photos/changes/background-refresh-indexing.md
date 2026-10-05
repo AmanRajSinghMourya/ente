@@ -1,1 +1,0 @@
-- Native background tasks now request refresh every 15 minutes and processing every hour, and refresh can index up to 100 files while continuing to sync remote ML results.

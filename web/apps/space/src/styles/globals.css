@@ -95,3 +95,75 @@ html[data-space-route-motion="back"]::view-transition-new(root) {
     --pswp-bg: #000000;
     height: 100svh;
 }
+
+.space-video-control {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+        opacity 160ms ease,
+        visibility 160ms;
+}
+
+.space-photo-placeholder[aria-busy="true"] {
+    animation: space-preview-shimmer 1.4s ease-in-out infinite;
+    background-color: #171717;
+    background-image: linear-gradient(
+        90deg,
+        #171717 0%,
+        #242424 42%,
+        #2d2d2d 50%,
+        #242424 58%,
+        #171717 100%
+    );
+    background-size: 200% 100%;
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
+    overflow: hidden;
+}
+
+@keyframes space-preview-shimmer {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: -100% 0;
+    }
+}
+
+.space-video-control[aria-hidden="false"] {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.space-video-spinner {
+    display: block;
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: space-video-spin 800ms linear infinite;
+}
+
+@keyframes space-video-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .space-photo-placeholder[aria-busy="true"] {
+        animation: none;
+    }
+
+    .space-video-control {
+        transition: none;
+    }
+
+    .space-video-spinner {
+        animation: none;
+    }
+}

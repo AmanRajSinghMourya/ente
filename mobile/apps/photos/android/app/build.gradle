@@ -48,12 +48,6 @@ repositories {
     }
 }
 
-configurations.configureEach {
-    // mobile_ocr also declares Microsoft's stock AAR. The custom AAR exposes
-    // the same Java API and must be the sole source of libonnxruntime.so.
-    exclude group: 'com.microsoft.onnxruntime', module: 'onnxruntime-android'
-}
-
 android {
     namespace = "io.ente.photos"
 

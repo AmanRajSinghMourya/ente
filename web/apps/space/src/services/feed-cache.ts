@@ -6,7 +6,7 @@ import { CachedSpacePost } from "services/post-cache";
 import type { SpacePost, SpacePostPage } from "services/space";
 import { z } from "zod";
 
-const spaceFeedCacheVersion = 2;
+const spaceFeedCacheVersion = 3;
 const spaceFeedCacheSize = 10;
 
 const SpaceFeedCacheSnapshotSchema = z.object({

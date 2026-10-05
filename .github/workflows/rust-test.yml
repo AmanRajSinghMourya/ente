@@ -12,6 +12,9 @@ env:
 jobs:
     test:
         runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                suite: [workspace, cli]
         timeout-minutes: 30
         defaults:
             run:
@@ -61,6 +64,7 @@ jobs:
                       ~/.cache/.theseus/postgresql
 
             - run: cargo test --locked --workspace --exclude ente-cli-next --features museum,ente-ml/ml-assets
+              if: matrix.suite == 'workspace'
               # postgresql_embedded downloads its binaries from GitHub.
               # GITHUB_TOKEN raises the API rate limit for those downloads.
               env:
@@ -68,7 +72,9 @@ jobs:
 
             # Avoid unifying SQLCipher into other packages' SQLite tests.
             - run: cargo test --locked -p ente-cli-next --features museum
+              if: matrix.suite == 'cli'
               env:
                   GITHUB_TOKEN: ${{ github.token }}
 
             - run: apps/cli-next/scripts/test-with-keyring-linux.sh --features museum
+              if: matrix.suite == 'cli'

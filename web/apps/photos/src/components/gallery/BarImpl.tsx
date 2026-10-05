@@ -1,8 +1,7 @@
 import { CollectionsSortOptions } from "@/components/CollectionsSortOptions";
-import { StarIcon } from "@/components/icons/StarIcon";
 import { PeopleSortOptions } from "@/components/PeopleSortOptions";
 import type { PeopleSortBy } from "@/utils/people-sort";
-import { Link05Icon, PinIcon } from "@hugeicons/core-free-icons";
+import { Link05Icon, PinIcon, StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -506,7 +505,14 @@ const CollectionBarCardIcon: React.FC<CollectionBarCardIconProps> = ({
 }) => (
     // A collection can show all four status icons at once.
     <CollectionBarCardIcon_>
-        {attributes.has("userFavorites") && <StarIcon fontSize="small" />}
+        {attributes.has("userFavorites") && (
+            <HugeiconsIcon
+                icon={StarIcon}
+                size={20}
+                fill="currentColor"
+                aria-hidden
+            />
+        )}
         {(attributes.has("pinned") || attributes.has("shareePinned")) && (
             <HugeiconsIcon icon={PinIcon} size={18} />
         )}

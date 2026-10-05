@@ -21,8 +21,7 @@ import {
 } from "@/components/CollectionDialog/styles";
 import { CollectionsSortOptions } from "@/components/CollectionsSortOptions";
 import type { RemotePullOpts } from "@/components/gallery";
-import { StarIcon } from "@/components/icons/StarIcon";
-import { Delete02Icon } from "@hugeicons/core-free-icons";
+import { Delete02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -823,7 +822,13 @@ const AlbumCard: React.FC<AlbumCardProps> = ({
                     }}
                 >
                     {isFavorite && (
-                        <StarIcon sx={{ fontSize: 20, color: "white" }} />
+                        <HugeiconsIcon
+                            icon={StarIcon}
+                            size={20}
+                            color="white"
+                            fill="currentColor"
+                            aria-hidden
+                        />
                     )}
                     {isPinned && (
                         <PushPinIcon sx={{ fontSize: 20, color: "white" }} />

@@ -1,0 +1,1 @@
+- Added links to Ente Photos and Auth in Locker settings.

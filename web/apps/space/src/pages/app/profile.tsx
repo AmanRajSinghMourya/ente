@@ -127,8 +127,8 @@ const Page: React.FC = () => {
                 showPostLoadingIndicator={showInitialPostLoadingIndicator}
                 onBack={() => void router.push(spaceRoutes.home)}
                 onPostSubmitted={() => void router.push(spaceRoutes.home)}
-                onCreatePost={async (image, caption) => {
-                    await publishPost(image, caption);
+                onCreatePost={async (images, caption) => {
+                    await publishPost(images, caption);
                 }}
                 onDeletePost={async (postId) => {
                     const spaceId = profile.spaceId;

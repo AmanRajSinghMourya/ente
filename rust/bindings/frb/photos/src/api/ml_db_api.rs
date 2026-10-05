@@ -3,9 +3,8 @@ use std::sync::OnceLock;
 
 use ente_photos::ml_db;
 pub use ente_photos::ml_db::{
-    ClipEmbedding, ClipRow, ClusterCentroidRow, ClusterSummary, EmbeddingVector,
-    FaceDbInfoForClustering, FaceRow, FaceWithoutEmbedding, FdStatus, PetBodyRow, PetBodyVectorRow,
-    PetFaceRow, PetFaceVectorRow, PetRowsForFiles, PreviewInfo,
+    ClipEmbedding, ClusterSummary, EmbeddingVector, FaceDbInfoForClustering, FaceRow,
+    FaceWithoutEmbedding, FdStatus, PreviewInfo,
 };
 use ente_photos::ml_store;
 pub use ente_photos::ml_store::{FillOutcome, FillState, Index};
@@ -25,6 +24,7 @@ pub fn decide_ml_db_backend(prefer_rust: bool) -> bool {
 #[frb]
 pub enum MlDbError {
     Downgrade { message: String },
+    Index { message: String },
     Other { message: String },
 }
 
@@ -42,6 +42,9 @@ impl From<ml_store::Error> for MlDbError {
     fn from(error: ml_store::Error) -> Self {
         match error {
             ml_store::Error::Database(error) => Self::from(error),
+            ml_store::Error::Index(_) => Self::Index {
+                message: ente_core::error::chain(&error),
+            },
             other => Self::Other {
                 message: ente_core::error::chain(&other),
             },
@@ -82,52 +85,6 @@ pub struct _FaceDbInfoForClustering {
     pub is_sideways: bool,
 }
 
-#[frb(mirror(PetFaceRow))]
-pub struct _PetFaceRow {
-    pub file_id: i64,
-    pub pet_face_id: String,
-    pub detection_json: String,
-    pub face_vector_id: Option<i64>,
-    pub species: i64,
-    pub face_score: f64,
-    pub image_height: i64,
-    pub image_width: i64,
-    pub ml_version: i64,
-}
-
-#[frb(mirror(PetBodyRow))]
-pub struct _PetBodyRow {
-    pub file_id: i64,
-    pub pet_body_id: String,
-    pub detection_json: String,
-    pub body_vector_id: Option<i64>,
-    pub species: i64,
-    pub score: f64,
-    pub image_height: i64,
-    pub image_width: i64,
-    pub ml_version: i64,
-}
-
-#[frb(mirror(PetFaceVectorRow))]
-pub struct _PetFaceVectorRow {
-    pub pet_face_id: String,
-    pub face_vector_id: Option<i64>,
-    pub species: i64,
-}
-
-#[frb(mirror(PetBodyVectorRow))]
-pub struct _PetBodyVectorRow {
-    pub pet_body_id: String,
-    pub body_vector_id: Option<i64>,
-    pub species: i64,
-}
-
-#[frb(mirror(PetRowsForFiles))]
-pub struct _PetRowsForFiles {
-    pub faces: Vec<PetFaceVectorRow>,
-    pub bodies: Vec<PetBodyVectorRow>,
-}
-
 #[frb(mirror(ClipEmbedding))]
 pub struct _ClipEmbedding {
     pub file_id: i64,
@@ -141,22 +98,10 @@ pub struct _EmbeddingVector {
     pub embedding: Vec<f32>,
 }
 
-#[frb(mirror(ClipRow))]
-pub struct _ClipRow {
-    pub file_id: i64,
-    pub embedding: Vec<u8>,
-}
-
 #[frb(mirror(ClusterSummary))]
 pub struct _ClusterSummary {
     pub avg: Vec<u8>,
     pub count: i64,
-}
-
-#[frb(mirror(ClusterCentroidRow))]
-pub struct _ClusterCentroidRow {
-    pub cluster_id: String,
-    pub avg: Vec<u8>,
 }
 
 #[frb(mirror(FdStatus))]
@@ -354,14 +299,6 @@ impl MlStore {
 
     pub fn stats(&self, index: Index) -> Result<VecDbStats, MlDbError> {
         Ok(to_api_stats(self.inner.stats(index)?))
-    }
-
-    pub fn clear_non_pet_tables(&self) -> Result<(), MlDbError> {
-        Ok(self.inner.db().clear_non_pet_tables()?)
-    }
-
-    pub fn clear_pet_tables(&self) -> Result<(), MlDbError> {
-        Ok(self.inner.db().clear_pet_tables()?)
     }
 
     pub fn bulk_insert_faces(&self, faces: Vec<FaceRow>) -> Result<(), MlDbError> {
@@ -644,45 +581,6 @@ impl MlStore {
         Ok(self.inner.db().get_file_ids_of_cluster_id(&cluster_id)?)
     }
 
-    pub fn get_cluster_centroid_vector_id_map(
-        &self,
-        cluster_ids: Vec<String>,
-        create_if_missing: bool,
-    ) -> Result<HashMap<String, i64>, MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .get_cluster_centroid_vector_id_map(&cluster_ids, create_if_missing)?)
-    }
-
-    pub fn delete_cluster_centroid_vector_id_mapping(
-        &self,
-        cluster_id: String,
-    ) -> Result<(), MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .delete_cluster_centroid_vector_id_mapping(&cluster_id)?)
-    }
-
-    pub fn clear_cluster_centroid_vector_id_mappings(&self) -> Result<(), MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .clear_cluster_centroid_vector_id_mappings()?)
-    }
-
-    pub fn upsert_cluster_summary_rows(
-        &self,
-        summary: HashMap<String, ClusterSummary>,
-    ) -> Result<(), MlDbError> {
-        Ok(self.inner.db().upsert_cluster_summary_rows(&summary)?)
-    }
-
-    pub fn delete_cluster_summary_row(&self, cluster_id: String) -> Result<(), MlDbError> {
-        Ok(self.inner.db().delete_cluster_summary_row(&cluster_id)?)
-    }
-
     pub fn get_all_cluster_summary(
         &self,
         min_cluster_size: Option<i64>,
@@ -698,25 +596,6 @@ impl MlStore {
             .inner
             .db()
             .get_cluster_to_cluster_summary(&cluster_ids)?)
-    }
-
-    pub fn count_cluster_summaries(&self) -> Result<i64, MlDbError> {
-        Ok(self.inner.db().count_cluster_summaries()?)
-    }
-
-    pub fn get_cluster_summary_page(
-        &self,
-        before_cluster_id: Option<String>,
-        limit: i64,
-    ) -> Result<Vec<ClusterCentroidRow>, MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .get_cluster_summary_page(before_cluster_id.as_deref(), limit)?)
-    }
-
-    pub fn reset_cluster_tables(&self, faces: bool) -> Result<(), MlDbError> {
-        Ok(self.inner.db().reset_cluster_tables(faces)?)
     }
 
     pub fn get_clusters_for_memory_lane(
@@ -916,118 +795,11 @@ impl MlStore {
             .get_clip_vectorizable_file_count(minimum_ml_version)?)
     }
 
-    pub fn insert_clip_rows(&self, embeddings: Vec<ClipEmbedding>) -> Result<(), MlDbError> {
-        Ok(self.inner.db().insert_clip_rows(&embeddings)?)
-    }
-
-    pub fn delete_clip_rows(&self, file_ids: Vec<i64>) -> Result<(), MlDbError> {
-        Ok(self.inner.db().delete_clip_rows(&file_ids)?)
-    }
-
-    pub fn delete_all_clip_rows(&self) -> Result<(), MlDbError> {
-        Ok(self.inner.db().delete_all_clip_rows()?)
-    }
-
-    pub fn count_clip_rows(&self) -> Result<i64, MlDbError> {
-        Ok(self.inner.db().count_clip_rows()?)
-    }
-
-    pub fn get_clip_rows_page(&self, limit: i64, offset: i64) -> Result<Vec<ClipRow>, MlDbError> {
-        Ok(self.inner.db().get_clip_rows_page(limit, offset)?)
-    }
-
-    pub fn bulk_insert_pet_faces(&self, pet_faces: Vec<PetFaceRow>) -> Result<(), MlDbError> {
-        Ok(self.inner.db().bulk_insert_pet_faces(&pet_faces)?)
-    }
-
-    pub fn bulk_insert_pet_bodies(&self, pet_bodies: Vec<PetBodyRow>) -> Result<(), MlDbError> {
-        Ok(self.inner.db().bulk_insert_pet_bodies(&pet_bodies)?)
-    }
-
-    pub fn update_pet_face_vector_ids(
-        &self,
-        pet_face_id_to_vector_id: HashMap<String, i64>,
-    ) -> Result<(), MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .update_pet_face_vector_ids(&pet_face_id_to_vector_id)?)
-    }
-
-    pub fn update_pet_body_vector_ids(
-        &self,
-        pet_body_id_to_vector_id: HashMap<String, i64>,
-    ) -> Result<(), MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .update_pet_body_vector_ids(&pet_body_id_to_vector_id)?)
-    }
-
-    pub fn get_pet_faces_for_file_id(
-        &self,
-        file_upload_id: i64,
-    ) -> Result<Vec<PetFaceRow>, MlDbError> {
-        Ok(self.inner.db().get_pet_faces_for_file_id(file_upload_id)?)
-    }
-
-    pub fn get_pet_bodies_for_file_id(
-        &self,
-        file_upload_id: i64,
-    ) -> Result<Vec<PetBodyRow>, MlDbError> {
-        Ok(self.inner.db().get_pet_bodies_for_file_id(file_upload_id)?)
-    }
-
     pub fn pet_indexed_file_ids(
         &self,
         minimum_ml_version: i64,
     ) -> Result<HashMap<i64, i64>, MlDbError> {
         Ok(self.inner.db().pet_indexed_file_ids(minimum_ml_version)?)
-    }
-
-    pub fn get_pet_indexed_file_count(&self, minimum_ml_version: i64) -> Result<i64, MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .get_pet_indexed_file_count(minimum_ml_version)?)
-    }
-
-    pub fn get_pet_rows_for_files(&self, file_ids: Vec<i64>) -> Result<PetRowsForFiles, MlDbError> {
-        Ok(self.inner.db().get_pet_rows_for_files(&file_ids)?)
-    }
-
-    pub fn delete_pet_rows_for_files(
-        &self,
-        file_ids: Vec<i64>,
-        pet_face_ids: Vec<String>,
-        pet_body_ids: Vec<String>,
-    ) -> Result<(), MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .delete_pet_rows_for_files(&file_ids, &pet_face_ids, &pet_body_ids)?)
-    }
-
-    pub fn get_pet_face_vector_id_map(
-        &self,
-        pet_face_ids: Vec<String>,
-        create_if_missing: bool,
-    ) -> Result<HashMap<String, i64>, MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .get_pet_face_vector_id_map(&pet_face_ids, create_if_missing)?)
-    }
-
-    pub fn get_pet_body_vector_id_map(
-        &self,
-        pet_body_ids: Vec<String>,
-        create_if_missing: bool,
-    ) -> Result<HashMap<String, i64>, MlDbError> {
-        Ok(self
-            .inner
-            .db()
-            .get_pet_body_vector_id_map(&pet_body_ids, create_if_missing)?)
     }
 
     pub fn put_repeated_text_embedding_cache(
@@ -1102,6 +874,8 @@ impl MlStore {
 
 #[cfg(test)]
 mod tests {
+    use ente_vecdb::VecDbError;
+
     use super::{FillOutcome, FillReport, MlDbError, ml_db, ml_store};
 
     #[test]
@@ -1136,6 +910,15 @@ mod tests {
             error,
             MlDbError::Downgrade { message }
                 if message == "currentVersion(16) cannot be greater than toVersion(15)"
+        ));
+    }
+
+    #[test]
+    fn store_index_errors_map_to_the_index_variant() {
+        let error = MlDbError::from(ml_store::Error::Index(VecDbError::Closed));
+        assert!(matches!(
+            error,
+            MlDbError::Index { message } if message == "vector db was deleted"
         ));
     }
 

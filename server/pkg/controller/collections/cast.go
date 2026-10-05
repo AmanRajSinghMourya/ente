@@ -18,6 +18,7 @@ func (c *CollectionController) GetCastCollection(ctx *gin.Context) (*ente.Collec
 	if collection.IsDeleted {
 		return nil, stacktrace.Propagate(ente.ErrNotFound, "collection is deleted")
 	}
+	collection.MagicMetadata = nil
 	return &collection, nil
 }
 

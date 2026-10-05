@@ -7,6 +7,7 @@ extraFiles:
     - from: build
       to: resources
 beforeBuild: scripts/beforeBuild.js
+beforePack: scripts/beforePack.js
 protocols:
     - name: Ente
       schemes: ["ente"]

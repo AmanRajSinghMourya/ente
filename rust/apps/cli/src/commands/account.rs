@@ -94,7 +94,7 @@ async fn login(
                         Some(method) => method,
                         None => match Select::new()
                             .with_prompt("Choose verification method")
-                            .items(&["TOTP (Authenticator app)", "Passkey"])
+                            .items(["TOTP (Authenticator app)", "Passkey"])
                             .default(0)
                             .interact()
                             .map_err(|error| Error::InvalidInput(error.to_string()))?

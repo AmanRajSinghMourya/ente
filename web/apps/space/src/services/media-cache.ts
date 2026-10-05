@@ -91,6 +91,8 @@ export const cachedSpaceMediaBlobURL = async (
     load: () => Promise<Uint8Array>,
     mediaType?: string,
 ) => {
+    if (mediaType?.startsWith("video/"))
+        return URL.createObjectURL(blobForBytes(await load(), mediaType));
     const storageKey = await spaceMediaStorageKey(cacheKey);
     const cached = spaceMediaURLCache.get(storageKey);
     if (cached) {

@@ -136,7 +136,10 @@ class Code {
   }
 
   static Code fromOTPAuthUrl(String rawData, {CodeDisplay? display}) {
-    Uri uri = Uri.parse(rawData);
+    final uri = Uri.tryParse(rawData);
+    if (uri == null) {
+      throw const FormatException('OTP URL is malformed');
+    }
     final issuer = _getIssuer(uri);
     final account = _getAccount(uri, issuer);
 

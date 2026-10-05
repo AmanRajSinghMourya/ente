@@ -315,7 +315,6 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
 
   Widget _buildOfflinePermissionScreen(BuildContext context) {
     final colorScheme = getEnteColorScheme(context);
-    final textTheme = getEnteTextTheme(context);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -345,48 +344,50 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: 32),
                         _buildPermissionsAnimation(context),
                         const Flexible(child: SizedBox(height: 22)),
-                        Text(
-                          context.strings.grantGalleryPermissionTitle,
-                          textAlign: .center,
-                          textScaler: .noScaling,
-                          style: TextStyle(
-                            fontWeight: .w900,
-                            fontFamily: TextStyles.outfitFontFamily,
-                            package: TextStyles.fontPackage,
-                            fontSize: min(
-                              MediaQuery.of(context).size.width * 0.125,
-                              32,
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 297),
+                          child: Text(
+                            context.strings.bringMemoriesTogether,
+                            textAlign: .center,
+                            textScaler: .noScaling,
+                            style: TextStyle(
+                              fontWeight: .w900,
+                              fontFamily: TextStyles.outfitFontFamily,
+                              package: TextStyles.fontPackage,
+                              fontSize: min(
+                                MediaQuery.of(context).size.width * 0.125,
+                                32,
+                              ),
+                              height: 1.08,
+                              color: colorScheme.textBase,
                             ),
-                            height: 1,
-                            color: colorScheme.textBase,
                           ),
                         ),
                         const Flexible(child: SizedBox(height: 24)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            context.strings.grantGalleryPermissionDesc,
-                            textAlign: TextAlign.center,
-                            style: textTheme.body.copyWith(
-                              color: colorScheme.textMuted,
-                              fontSize: 14,
+                        Text(
+                          context.strings.localGalleryPermissionDesc,
+                          textAlign: TextAlign.center,
+                          style: TextStyles.body.copyWith(
+                            color: colorScheme.contentLight.withValues(
+                              alpha: 0.8,
                             ),
                           ),
                         ),
                         const Flexible(child: SizedBox(height: 32)),
-                        ButtonWidgetV2(
-                          buttonType: ButtonTypeV2.neutral,
-                          labelText: context.strings.continueLabel,
+                        ButtonComponent(
+                          variant: ButtonComponentVariant.neutral,
+                          density: ButtonComponentDensity.compact,
+                          label: context.strings.continueLabel,
                           onTap: _onTapOfflineGrantPermission,
                         ),
-                        const Flexible(child: SizedBox(height: 20)),
+                        const Flexible(child: SizedBox(height: 42)),
                         _buildOfflineTermsAndPrivacy(context),
                         const Flexible(child: SizedBox(height: 24)),
                       ],
@@ -402,51 +403,51 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
   }
 
   Widget _buildOfflineTermsAndPrivacy(BuildContext context) {
-    final textTheme = getEnteTextTheme(context);
+    final colorScheme = getEnteColorScheme(context);
+    final textStyle = TextStyles.body.copyWith(
+      color: colorScheme.contentLight.withValues(alpha: 0.8),
+    );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: StyledText(
-        text: context.strings.byAgreeing,
-        textAlign: TextAlign.center,
-        style: textTheme.bodyMuted,
-        tags: {
-          'terms': StyledTextActionTag(
-            (String? text, Map<String?, String?> attrs) =>
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (BuildContext context) {
-                      return WebPage(
-                        context.strings.termsOfServicesTitle,
-                        "https://ente.com/terms",
-                      );
-                    },
-                  ),
+    return StyledText(
+      text: context.strings.byAgreeing,
+      textAlign: TextAlign.center,
+      style: textStyle,
+      tags: {
+        'terms': StyledTextActionTag(
+          (String? text, Map<String?, String?> attrs) =>
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (BuildContext context) {
+                    return WebPage(
+                      context.strings.termsOfServicesTitle,
+                      "https://ente.com/terms",
+                    );
+                  },
                 ),
-            style: textTheme.bodyMuted.copyWith(
-              decoration: TextDecoration.underline,
-              decorationColor: textTheme.bodyMuted.color,
-            ),
+              ),
+          style: textStyle.copyWith(
+            decoration: TextDecoration.underline,
+            decorationColor: textStyle.color,
           ),
-          'policy': StyledTextActionTag(
-            (String? text, Map<String?, String?> attrs) =>
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (BuildContext context) {
-                      return WebPage(
-                        context.strings.privacyPolicyTitle,
-                        "https://ente.com/privacy",
-                      );
-                    },
-                  ),
+        ),
+        'policy': StyledTextActionTag(
+          (String? text, Map<String?, String?> attrs) =>
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (BuildContext context) {
+                    return WebPage(
+                      context.strings.privacyPolicyTitle,
+                      "https://ente.com/privacy",
+                    );
+                  },
                 ),
-            style: textTheme.bodyMuted.copyWith(
-              decoration: TextDecoration.underline,
-              decorationColor: textTheme.bodyMuted.color,
-            ),
+              ),
+          style: textStyle.copyWith(
+            decoration: TextDecoration.underline,
+            decorationColor: textStyle.color,
           ),
-        },
-      ),
+        ),
+      },
     );
   }
 
@@ -455,7 +456,7 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: SizedBox(
           height: 52,
           child: Row(
@@ -463,7 +464,7 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
             children: [
               HugeIcon(
                 icon: HugeIcons.strokeRoundedMenu01,
-                size: 24,
+                size: 18,
                 color: colorScheme.strokeBase,
               ),
               SvgPicture.asset(
@@ -476,7 +477,7 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
               ),
               HugeIcon(
                 icon: HugeIcons.strokeRoundedUpload01,
-                size: 24,
+                size: 18,
                 color: colorScheme.strokeBase,
               ),
             ],
@@ -487,12 +488,12 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
   }
 
   Widget _buildSkeletonGallery(BuildContext context) {
-    const skeletonColor = Color.fromRGBO(217, 217, 217, 0.4);
+    const skeletonColor = Color.fromRGBO(217, 217, 217, 0.39);
     const memoryAspectRatio = 0.75;
     final topPadding = MediaQuery.of(context).padding.top;
 
     return Padding(
-      padding: EdgeInsets.only(top: topPadding + 56, left: 16, right: 16),
+      padding: EdgeInsets.only(top: topPadding + 56, left: 8, right: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -510,7 +511,7 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
                 return Container(
                   decoration: BoxDecoration(
                     color: skeletonColor,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(13),
                   ),
                 );
               },
@@ -518,8 +519,8 @@ class _GrantPermissionsWidgetState extends State<GrantPermissionsWidget> {
           ),
           const SizedBox(height: 12),
           Container(
-            width: 72,
-            height: 20,
+            width: 71,
+            height: 19,
             decoration: BoxDecoration(
               color: skeletonColor,
               borderRadius: BorderRadius.circular(4),

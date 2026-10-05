@@ -80,6 +80,7 @@ export interface LockerCollection {
 
 export interface LockerUploadCandidate {
     file: File;
+    uploadName?: string;
     relativePath?: string;
     suggestedCollectionNames: string[];
 }

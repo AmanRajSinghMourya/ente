@@ -463,6 +463,17 @@ export const CreateItemDialog: React.FC<CreateItemDialogProps> = ({
                                     ),
                                 )
                             }
+                            onRenameItem={(fileKey, uploadName) => {
+                                if (uploading || completedFileKeys.has(fileKey))
+                                    return;
+                                setSelectedUploadItems((current) =>
+                                    current.map((item) =>
+                                        uploadQueueItemKey(item) === fileKey
+                                            ? { ...item, uploadName }
+                                            : item,
+                                    ),
+                                );
+                            }}
                             onRemoveItem={(fileKey) => {
                                 setSelectedUploadItems((current) =>
                                     current.filter(

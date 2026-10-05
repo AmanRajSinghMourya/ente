@@ -15,6 +15,41 @@ use crate::{
 };
 
 impl AccountSpaceCtx {
+    pub async fn upload_post_video_asset(
+        &self,
+        space_id: &str,
+        post_key: &[u8],
+        plaintext: &[u8],
+        width: i32,
+        height: i32,
+        duration_ms: u32,
+    ) -> Result<PostObjectPayload> {
+        if plaintext.len() < 12
+            || &plaintext[4..8] != b"ftyp"
+            || width <= 0
+            || height <= 0
+            || !(1..=10_000).contains(&duration_ms)
+        {
+            return Err(Error::InvalidInput(
+                "Videos must be MP4 and at most 10 seconds".into(),
+            ));
+        }
+        let mut object = self
+            .upload_post_asset(space_id, post_key, plaintext, None)
+            .await?;
+        object.metadata_cipher = Some(encrypt_post_object_metadata(
+            post_key,
+            &PostObjectMetadata {
+                width: Some(width),
+                height: Some(height),
+                media_type: Some("video/mp4".into()),
+                duration_ms: Some(duration_ms),
+                ..Default::default()
+            },
+        )?);
+        Ok(object)
+    }
+
     pub async fn presign_post_upload(
         &self,
         space_id: &str,
@@ -116,6 +151,7 @@ impl AccountSpaceCtx {
             .await?;
         self.upload_bytes(&presign, &encrypted).await?;
         Ok(PostObjectPayload {
+            video: None,
             object_key: presign.object_key,
             size: Some(encrypted.len() as i64),
             position,

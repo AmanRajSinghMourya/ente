@@ -1,11 +1,11 @@
 import type { RemotePullOpts } from "@/components/gallery";
-import { StarIcon } from "@/components/icons/StarIcon";
 import { downloadAndSaveCollectionFiles } from "@/services/save";
 import {
     CleanIcon,
     Delete02Icon,
     ModernTvIcon,
     RemoveCircleIcon,
+    StarIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
@@ -109,7 +109,14 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = (props) => {
                 </Box>
             );
         if (attributes.has("userFavorites"))
-            return <StarIcon fontSize="small" />;
+            return (
+                <HugeiconsIcon
+                    icon={StarIcon}
+                    size="1em"
+                    fill="currentColor"
+                    aria-hidden
+                />
+            );
         return <></>;
     };
 

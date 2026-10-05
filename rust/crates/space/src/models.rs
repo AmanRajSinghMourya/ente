@@ -138,6 +138,7 @@ pub struct PostContent {
 }
 
 pub struct PostPhoto {
+    pub video: Option<PostVideo>,
     pub asset: PostAsset,
     pub position: Option<i32>,
     pub metadata: Option<PostObjectMetadata>,
@@ -150,6 +151,11 @@ pub struct PostAsset {
     pub encrypted_post_key: String,
     pub key_version: i32,
     pub size: Option<i64>,
+}
+
+pub struct PostVideo {
+    pub asset: PostAsset,
+    pub duration_ms: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -242,6 +248,8 @@ pub struct Conversations {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PostObjectMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -276,6 +276,7 @@ class BackgroundTasks {
               );
             }),
           );
+          var timedOut = false;
           try {
             final remainingBudget =
                 BgTaskUtils.taskTimeoutFor(taskName) - task.elapsed;
@@ -283,12 +284,13 @@ class BackgroundTasks {
               taskName,
               TimeLogger(),
               control: control,
+              shouldStop: () => timedOut || task.isStopping,
               mlSelfStop: BgTaskUtils.mlSelfStopFor(taskName) - task.elapsed,
               mlLockWait: BgTaskUtils.mlLockWaitFor(taskName),
             ).timeout(
               remainingBudget.isNegative ? Duration.zero : remainingBudget,
-              onTimeout: () async {
-                await BgTaskUtils.releaseResourcesForKill(taskName, prefs);
+              onTimeout: () {
+                timedOut = true;
                 throw TimeoutException("Background task timed out");
               },
             );

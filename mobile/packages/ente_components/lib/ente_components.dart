@@ -13,6 +13,7 @@ export 'components/ente_app_icon.dart';
 export 'components/filter_chip_component.dart';
 export 'components/menu_component.dart';
 export 'components/menu_group_component.dart';
+export 'components/more_from_ente_section.dart';
 export 'components/pin_input_component.dart';
 export 'components/popup_menu_component.dart';
 export 'components/selection_controls/checkbox_component.dart';

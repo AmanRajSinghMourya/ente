@@ -1,11 +1,12 @@
 use super::{
-    AccountSpaceCtx, PostPhotoInput, decrypt_post_object_metadata, ensure_post_objects_are_photos,
+    AccountSpaceCtx, PostPhotoInput, decrypt_post_object_metadata, ensure_post_objects_supported,
     retain_content_error,
 };
 use crate::crypto::{decrypt_secretbox_payload, encrypt_secretbox_payload, generate_key};
 use crate::error::{Error, Result};
 use crate::models::{
-    HydratedKeys, Post, PostAsset, PostContent, PostPage, PostPhoto, SpaceActor, SpaceProfile,
+    HydratedKeys, Post, PostAsset, PostContent, PostPage, PostPhoto, PostVideo, SpaceActor,
+    SpaceProfile,
 };
 use crate::transport::{
     CreatePostRequest, CreatePostResponse, LikePostResponse, PostObjectPayload, PostPageResponse,
@@ -55,8 +56,20 @@ impl AccountSpaceCtx {
         caption_plaintext: Option<&[u8]>,
         post_key: Option<&[u8]>,
     ) -> Result<(i64, Vec<u8>)> {
+        self.create_post_with_request_id(space_id, objects, caption_plaintext, post_key, None)
+            .await
+    }
+
+    pub async fn create_post_with_request_id(
+        &self,
+        space_id: &str,
+        objects: &[PostObjectPayload],
+        caption_plaintext: Option<&[u8]>,
+        post_key: Option<&[u8]>,
+        client_request_id: Option<String>,
+    ) -> Result<(i64, Vec<u8>)> {
         let post_key_bytes = post_key.map_or_else(generate_key, ToOwned::to_owned);
-        ensure_post_objects_are_photos(objects, &post_key_bytes)?;
+        ensure_post_objects_supported(objects, &post_key_bytes)?;
         let access = self
             .resolve_owned_space_access(space_id)
             .await?
@@ -71,6 +84,7 @@ impl AccountSpaceCtx {
             None => None,
         };
         let request = CreatePostRequest {
+            client_request_id,
             encrypted_post_key: b64::encode(&encrypt_secretbox_payload(
                 &access.space_key,
                 &post_key_bytes,
@@ -468,7 +482,36 @@ pub(super) fn open_post_content(
             .filter(|object| !object.object_key.trim().is_empty())
             .map(|object| {
                 let metadata = decrypt_post_object_metadata(&decrypted.post_key, &object)?;
+                let video = object
+                    .video
+                    .as_ref()
+                    .map(|video| {
+                        let metadata = decrypt_post_object_metadata(&decrypted.post_key, video)?
+                            .ok_or_else(|| {
+                                Error::InvalidInput("video metadata is required".into())
+                            })?;
+                        let duration_ms = metadata
+                            .duration_ms
+                            .filter(|duration| (1..=10_000).contains(duration))
+                            .ok_or_else(|| Error::InvalidInput("invalid video duration".into()))?;
+                        if metadata.media_type.as_deref() != Some("video/mp4") {
+                            return Err(Error::InvalidInput("invalid video format".into()));
+                        }
+                        Ok(PostVideo {
+                            asset: PostAsset {
+                                space_id: post.space_id.clone(),
+                                post_id: post.post_id,
+                                object_key: video.object_key.clone(),
+                                encrypted_post_key: post.encrypted_post_key.clone(),
+                                key_version: post.key_version,
+                                size: video.size,
+                            },
+                            duration_ms,
+                        })
+                    })
+                    .transpose()?;
                 Ok(PostPhoto {
+                    video,
                     asset: PostAsset {
                         space_id: post.space_id.clone(),
                         post_id: post.post_id,
@@ -524,6 +567,7 @@ mod tests {
             caption_cipher: String::new(),
             key_version: 1,
             objects: vec![PostObjectPayload {
+                video: None,
                 object_key: "photo".into(),
                 size: None,
                 position: None,
@@ -574,6 +618,7 @@ mod tests {
             b64::encode(&secretbox::encrypt_combined(&[0xff], &post_key));
         let mut invalid_metadata = post(5, b64::encode(&valid_post_key));
         invalid_metadata.objects.push(PostObjectPayload {
+            video: None,
             object_key: "photo".into(),
             size: None,
             position: None,

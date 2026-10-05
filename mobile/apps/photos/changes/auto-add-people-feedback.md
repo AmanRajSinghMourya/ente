@@ -1,1 +1,0 @@
-- Keep the loading dialog visible until auto-add finishes updating an album.

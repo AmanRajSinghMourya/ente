@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import { ensureVips } from "./vips.js";
 
 const stamp = "node_modules/.postinstall-stamp";
 
@@ -9,6 +10,9 @@ const treeHash = () =>
     createHash("sha256")
         .update(readFileSync("node_modules/.package-lock.json"))
         .digest("hex");
+
+// The dependency stamp does not cover libvips.
+await ensureVips(process.platform, process.arch, process.cwd());
 
 if (process.argv.includes("--if-needed")) {
     try {
@@ -27,7 +31,6 @@ const run = (cmd) => {
 run("node scripts/patch-electron-builder.mjs");
 run("npm rebuild --ignore-scripts=false ffmpeg-static electron-winstaller");
 run("npm exec -- electron-builder install-app-deps");
-run("node scripts/vips.js");
 run("node scripts/ort.js");
 
 writeFileSync(stamp, treeHash());

@@ -1,4 +1,5 @@
 import {
+    ArrowDown01Icon,
     ArrowLeft02Icon,
     Cancel01Icon,
     FavouriteIcon,
@@ -8,12 +9,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+    alpha,
     Box,
     ClickAwayListener,
     Grow,
     MenuItem,
     MenuList,
     Popper,
+    useMediaQuery,
 } from "@mui/material";
 import { SpaceActionToast } from "components/ActionToast";
 import { SpaceAvatarImage } from "components/AvatarImage";
@@ -22,8 +25,12 @@ import {
     MessageQuickReactions,
     MessageReactionPicker,
 } from "components/MessageReactionPicker";
+import { SpaceMessageText } from "components/MessageText";
 import { SpacePostPhotoInput } from "components/PostPhotoInput";
-import { SpacePostPhotosBadge } from "components/PostPhotosBadge";
+import {
+    SpacePostPhotosBadge,
+    SpacePostVideoBadge,
+} from "components/PostPhotosBadge";
 import { SpaceLoadingSpinner } from "components/RouteFallback";
 import { SpaceShareInviteButton } from "components/ShareInviteButton";
 import { SpaceSkipLink } from "components/SkipLink";
@@ -150,11 +157,12 @@ interface MessagesScreenProps {
 
 interface MessageContextMenuState {
     anchorEl: HTMLElement;
+    anchorOffset?: { x: number; y: number };
     message: SpaceMessage;
     open: boolean;
 }
 
-type MessageActionsOpenSource = "contextmenu" | "touch";
+type MessageActionsOpenSource = "button" | "contextmenu" | "touch";
 
 interface ConversationSection {
     items: SpaceMessageConversation[];
@@ -728,18 +736,31 @@ const ConversationListItem: React.FC<{
                     {showPostThumbnailSlot &&
                         (postThumbnailUrl ? (
                             <Box
-                                component="img"
-                                alt=""
-                                src={postThumbnailUrl}
                                 sx={{
-                                    borderRadius: "20%",
-                                    display: "block",
-                                    height: 44,
-                                    objectFit: "cover",
-                                    objectPosition: "center",
+                                    position: "relative",
                                     width: 44,
+                                    height: 44,
                                 }}
-                            />
+                            >
+                                <Box
+                                    component="img"
+                                    alt=""
+                                    src={postThumbnailUrl}
+                                    sx={{
+                                        borderRadius: "20%",
+                                        display: "block",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                        objectPosition: "center",
+                                        width: "100%",
+                                    }}
+                                />
+                                <SpacePostVideoBadge
+                                    durationMs={
+                                        (activityPost ?? post)?.durationMs
+                                    }
+                                />
+                            </Box>
                         ) : (
                             <Box
                                 aria-label={
@@ -1014,7 +1035,7 @@ const CopyIcon: React.FC = () => (
     </svg>
 );
 
-const messageActionsTransitionDuration = { enter: 140, exit: 100 };
+const messageActionsTransitionDuration = { enter: 300, exit: 100 };
 
 const MessageActionMenuItem: React.FC<{
     icon: React.ReactNode;
@@ -1064,6 +1085,85 @@ const MessageActionMenuItem: React.FC<{
         </Box>
     </MenuItem>
 );
+
+const messageActionsTriggerSize = 24;
+const messageActionsTriggerOffset = -6;
+
+const MessageActionsTrigger: React.FC<{
+    isOpen: boolean;
+    isOwn: boolean;
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}> = ({ isOpen, isOwn, onClick }) => {
+    const iconColor = isOwn ? outgoingMessageText : incomingMessageText;
+
+    return (
+        <Box
+            component="button"
+            type="button"
+            data-message-actions-trigger
+            aria-expanded={isOpen}
+            aria-haspopup="menu"
+            aria-label="Message actions"
+            tabIndex={-1}
+            onClick={onClick}
+            onContextMenu={(event) => {
+                event.preventDefault();
+                onClick(event);
+            }}
+            sx={{
+                WebkitTapHighlightColor: "transparent",
+                alignItems: "center",
+                bgcolor: isOwn ? outgoingBubble : incomingBubble,
+                border: `2px solid ${spaceAppBackgroundColor}`,
+                borderRadius: "50%",
+                boxSizing: "border-box",
+                color: isOpen ? iconColor : alpha(iconColor, 0.72),
+                cursor: "pointer",
+                display: "none",
+                height: messageActionsTriggerSize,
+                justifyContent: "center",
+                opacity: isOpen ? 1 : 0,
+                p: 0,
+                position: "absolute",
+                top: messageActionsTriggerOffset,
+                transform: isOpen ? "none" : "scale(0.8)",
+                transition:
+                    "opacity 140ms ease, transform 140ms ease, color 140ms ease",
+                width: messageActionsTriggerSize,
+                zIndex: 2,
+                ...(isOwn
+                    ? { left: messageActionsTriggerOffset }
+                    : { right: messageActionsTriggerOffset }),
+                "@media (hover: hover) and (pointer: fine)": {
+                    display: "inline-flex",
+                },
+                "&:hover": { color: iconColor },
+                "&:focus-visible": {
+                    opacity: 1,
+                    outline: `2px solid ${green}`,
+                    outlineOffset: 1,
+                    transform: "none",
+                },
+                "& svg": {
+                    transform: isOpen ? "rotate(180deg)" : "none",
+                    transition: "transform 180ms ease",
+                },
+                "@media (prefers-reduced-motion: reduce)": {
+                    transform: "none",
+                    transition: "none",
+                    "& svg": { transition: "none" },
+                },
+            }}
+        >
+            <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                primaryColor="currentColor"
+                size={14}
+                strokeWidth={2}
+            />
+        </Box>
+    );
+};
 
 type MessageActionLabelIcon = "like" | "reply";
 
@@ -1359,16 +1459,21 @@ const PostQuotePreview: React.FC<{
                     </Box>
                 )}
                 {canOpen && <SpacePostPhotosBadge count={photoCount} />}
+                {canOpen && (
+                    <SpacePostVideoBadge durationMs={loadedQuote?.durationMs} />
+                )}
             </Box>
         </QuoteFrame>
     );
 };
 
-const isMessageLongPressIgnoredTarget = (target: EventTarget | null) =>
-    target instanceof Element && Boolean(target.closest("button"));
+const isMessageInteractiveTarget = (target: EventTarget | null) =>
+    target instanceof Element && Boolean(target.closest("a, button"));
 
 const MessageBubble: React.FC<{
     activityPost?: SpaceMessageActivityPost;
+    areActionsOpen: boolean;
+    canOpenActions: boolean;
     canReply: boolean;
     friendName: string;
     groupsWithNext: boolean;
@@ -1379,6 +1484,7 @@ const MessageBubble: React.FC<{
         message: SpaceMessage,
         anchorEl: HTMLElement,
         source: MessageActionsOpenSource,
+        anchorOffset?: MessageContextMenuState["anchorOffset"],
     ) => void;
     onLoadActivityPost?: (post: SpaceMessageActivityPost) => void;
     onOpenQuotePost: (quote: SpaceMessageQuote) => void;
@@ -1388,6 +1494,8 @@ const MessageBubble: React.FC<{
     profile: SetupProfile;
 }> = ({
     activityPost,
+    areActionsOpen,
+    canOpenActions,
     canReply,
     friendName,
     groupsWithNext,
@@ -1429,6 +1537,7 @@ const MessageBubble: React.FC<{
                 : "Replied to you"
             : undefined;
     const hasBodyBubble = !isSystemMessage;
+    const hasActionsTrigger = canOpenActions && !isUnavailable;
     const rowAlignItems = isFriendAdded
         ? "center"
         : isOwn
@@ -1449,6 +1558,23 @@ const MessageBubble: React.FC<{
         | undefined
     >(undefined);
     const [swipeOffset, setSwipeOffset] = React.useState(0);
+    const reactionRef = React.useRef<HTMLSpanElement>(null);
+    const previousReactionRef = React.useRef(message.reaction);
+
+    React.useEffect(() => {
+        if (previousReactionRef.current == message.reaction) return;
+        previousReactionRef.current = message.reaction;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+            return;
+        const animation = reactionRef.current?.animate(
+            [
+                { opacity: 0, transform: "scale(0.85)" },
+                { opacity: 1, transform: "scale(1)" },
+            ],
+            { duration: 160, easing: "ease-out" },
+        );
+        return () => animation?.cancel();
+    }, [message.reaction]);
 
     const clearLongPressTimer = React.useCallback(() => {
         if (longPressTimerRef.current == undefined) return;
@@ -1464,12 +1590,16 @@ const MessageBubble: React.FC<{
     };
 
     const openActions = React.useCallback(
-        (bubbleElement: HTMLElement, source: MessageActionsOpenSource) => {
+        (
+            anchorEl: HTMLElement,
+            source: MessageActionsOpenSource,
+            anchorOffset?: MessageContextMenuState["anchorOffset"],
+        ) => {
             if (isSystemMessage || isUnavailable) return;
             clearLongPressTimer();
             setSwipeOffset(0);
             window.getSelection()?.removeAllRanges();
-            onOpenActions(message, bubbleElement, source);
+            onOpenActions(message, anchorEl, source, anchorOffset);
         },
         [
             clearLongPressTimer,
@@ -1481,10 +1611,29 @@ const MessageBubble: React.FC<{
     );
 
     const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {
-        if (isSystemMessage || isUnavailable) return;
+        if (
+            isSystemMessage ||
+            isUnavailable ||
+            isMessageInteractiveTarget(event.target)
+        )
+            return;
         event.preventDefault();
         event.stopPropagation();
-        openActions(event.currentTarget, "contextmenu");
+        const rect = event.currentTarget.getBoundingClientRect();
+        const offset = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+        };
+        const isPointerInside =
+            offset.x >= 0 &&
+            offset.x <= rect.width &&
+            offset.y >= 0 &&
+            offset.y <= rect.height;
+        openActions(
+            event.currentTarget,
+            "contextmenu",
+            isPointerInside && !gestureStartRef.current ? offset : undefined,
+        );
     };
 
     const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
@@ -1494,7 +1643,7 @@ const MessageBubble: React.FC<{
             isUnavailable ||
             event.button != 0 ||
             gestureStartRef.current ||
-            isMessageLongPressIgnoredTarget(event.target)
+            isMessageInteractiveTarget(event.target)
         ) {
             cancelGesture();
             return;
@@ -1600,6 +1749,10 @@ const MessageBubble: React.FC<{
         didOpenLongPressRef.current = false;
     };
 
+    const handleActionsTriggerClick = (
+        event: React.MouseEvent<HTMLButtonElement>,
+    ) => openActions(event.currentTarget, "button");
+
     React.useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
 
     return (
@@ -1619,6 +1772,10 @@ const MessageBubble: React.FC<{
                 zIndex: isHighlighted ? 3 : message.reaction ? 1 : "auto",
                 "@media (prefers-reduced-motion: reduce)": {
                     transition: "none",
+                },
+                "&:hover [data-message-actions-trigger]": {
+                    opacity: 1,
+                    transform: "none",
                 },
             }}
         >
@@ -1688,6 +1845,10 @@ const MessageBubble: React.FC<{
                                 onKeyDown={(
                                     event: React.KeyboardEvent<HTMLElement>,
                                 ) => {
+                                    if (
+                                        isMessageInteractiveTarget(event.target)
+                                    )
+                                        return;
                                     if (
                                         event.key == "ContextMenu" ||
                                         (event.shiftKey && event.key == "F10")
@@ -1767,14 +1928,17 @@ const MessageBubble: React.FC<{
                                         whiteSpace: "pre-wrap",
                                     }}
                                 >
-                                    {isUnavailable
-                                        ? "Message unavailable"
-                                        : isPoke
-                                          ? pokeText
-                                          : message.text}
+                                    {isUnavailable ? (
+                                        "Message unavailable"
+                                    ) : isPoke ? (
+                                        pokeText
+                                    ) : (
+                                        <SpaceMessageText text={message.text} />
+                                    )}
                                 </Box>
                                 {!isUnavailable && message.reaction && (
                                     <Box
+                                        ref={reactionRef}
                                         component="span"
                                         role="img"
                                         aria-label={`Reaction: ${emojiName(message.reaction)}`}
@@ -1805,6 +1969,13 @@ const MessageBubble: React.FC<{
                                     >
                                         {message.reaction}
                                     </Box>
+                                )}
+                                {hasActionsTrigger && (
+                                    <MessageActionsTrigger
+                                        isOpen={areActionsOpen}
+                                        isOwn={isOwn}
+                                        onClick={handleActionsTriggerClick}
+                                    />
                                 )}
                             </Box>
                         </Box>
@@ -1876,6 +2047,9 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
     );
     const ignoreMessageActionsMouseAwayUntilRef = React.useRef(0);
     const activityPostLoadsInFlightRef = React.useRef<Set<string>>(new Set());
+    const prefersReducedMotion = useMediaQuery(
+        "(prefers-reduced-motion: reduce)",
+    );
     const isThreadOpen = Boolean(selectedFriend);
     const canInteract =
         isThreadOpen && !isThreadReadOnly && !isThreadRecipientLoading;
@@ -1986,6 +2160,24 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
         isCurrentProfileMessage(messageContextMenu.message, profile),
     );
     const isContextMessagePoke = messageContextMenu?.message.kind == "poke";
+    const messageActionsAnchor = React.useMemo(() => {
+        if (!messageContextMenu) return null;
+        const { anchorEl, anchorOffset } = messageContextMenu;
+        if (!anchorOffset) return anchorEl;
+        return {
+            contextElement: anchorEl,
+            getBoundingClientRect: () => {
+                const rect = anchorEl.getBoundingClientRect();
+                return DOMRect.fromRect({
+                    x: rect.left + anchorOffset.x,
+                    y: rect.top + anchorOffset.y,
+                });
+            },
+        };
+    }, [messageContextMenu]);
+    const isMenuBelowBubble =
+        messageActionsAnchor instanceof HTMLElement &&
+        messageActionsAnchor.hasAttribute("data-message-bubble");
 
     const openPostPhotoPicker = () => postPhotoInputRef.current?.click();
 
@@ -2037,15 +2229,23 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
             });
     };
 
+    const canOpenMessageActions = (message: SpaceMessage) =>
+        message.kind != "poke" ||
+        (canInteract && isCurrentProfileMessage(message, profile));
+
     const openMessageActions = (
         message: SpaceMessage,
         anchorEl: HTMLElement,
         source: MessageActionsOpenSource,
+        anchorOffset?: MessageContextMenuState["anchorOffset"],
     ) => {
+        if (!canOpenMessageActions(message)) return;
         if (
-            message.kind == "poke" &&
-            (!canInteract || !isCurrentProfileMessage(message, profile))
+            source == "button" &&
+            messageContextMenu?.open &&
+            messageContextMenu.message.id == message.id
         ) {
+            closeMessageActions();
             return;
         }
         ignoreMessageActionsMouseAwayUntilRef.current =
@@ -2054,6 +2254,7 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                 : 0;
         setMessageContextMenu({
             anchorEl,
+            anchorOffset,
             message: messageByID.get(message.id) ?? message,
             open: true,
         });
@@ -2073,6 +2274,11 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
         if (
             event instanceof MouseEvent &&
             Date.now() < ignoreMessageActionsMouseAwayUntilRef.current
+        )
+            return;
+        if (
+            event.target instanceof Element &&
+            event.target.closest("[data-message-actions-trigger]")
         )
             return;
 
@@ -2188,6 +2394,7 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
         const scroller = threadScrollRef.current;
         if (!scroller) return;
         stickToThreadBottomRef.current = isThreadNearBottom(scroller);
+        if (messageContextMenu?.open) closeMessageActions();
     };
 
     const handleComposerFocus = () => {
@@ -2697,6 +2904,18 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                                                                           ]
                                                                         : undefined
                                                                 }
+                                                                areActionsOpen={
+                                                                    Boolean(
+                                                                        messageContextMenu?.open,
+                                                                    ) &&
+                                                                    messageContextMenu
+                                                                        ?.message
+                                                                        .id ==
+                                                                        message.id
+                                                                }
+                                                                canOpenActions={canOpenMessageActions(
+                                                                    message,
+                                                                )}
                                                                 canReply={
                                                                     canInteract
                                                                 }
@@ -2753,13 +2972,14 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                                 )}
                             </Box>
                             <Popper
-                                anchorEl={messageContextMenu?.anchorEl ?? null}
+                                anchorEl={messageActionsAnchor}
                                 modifiers={[
                                     {
                                         name: "offset",
                                         options: {
                                             offset: [
                                                 0,
+                                                isMenuBelowBubble &&
                                                 messageContextMenu?.message
                                                     .reaction
                                                     ? 24
@@ -2808,6 +3028,10 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                                     >
                                         <Grow
                                             {...(TransitionProps ?? {})}
+                                            easing={{
+                                                enter: "cubic-bezier(0.18, 0.9, 0.3, 1.18)",
+                                                exit: "ease-in",
+                                            }}
                                             style={{
                                                 transformOrigin: `${
                                                     placement.endsWith("end")
@@ -2824,10 +3048,16 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                                                 clearClosedMessageActions();
                                             }}
                                             timeout={
-                                                messageActionsTransitionDuration
+                                                prefersReducedMotion
+                                                    ? 0
+                                                    : messageActionsTransitionDuration
                                             }
                                         >
                                             <Box
+                                                key={
+                                                    messageContextMenu?.message
+                                                        .id
+                                                }
                                                 onKeyDown={(
                                                     event: React.KeyboardEvent<HTMLElement>,
                                                 ) => {

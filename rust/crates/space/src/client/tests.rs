@@ -1234,6 +1234,7 @@ async fn create_post_rejects_video_object_media_type() {
         .create_post(
             "space_owner_main",
             &[PostObjectPayload {
+                video: None,
                 object_key: "object-1".to_owned(),
                 size: None,
                 position: Some(0),

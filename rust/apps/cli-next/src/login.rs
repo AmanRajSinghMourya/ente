@@ -277,7 +277,7 @@ async fn authenticate(
                     (true, true) if interactive => {
                         Select::new()
                             .with_prompt("Verify with")
-                            .items(&["Authenticator code", "Passkey in browser"])
+                            .items(["Authenticator code", "Passkey in browser"])
                             .interact_on(&Term::stderr())?
                             == 1
                     }
