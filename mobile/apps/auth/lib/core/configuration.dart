@@ -44,8 +44,7 @@ class Configuration extends BaseConfiguration
       ),
     );
     if (!isLoggedIn() && !hasOptedForOfflineMode()) {
-      // Logout can be killed before secure-storage deletions reach disk.
-      for (final key in additionalLogoutSecureStorageKeys) {
+      for (final key in lockScreenSecureStorageKeys) {
         await _secureStorage.delete(key: key);
       }
       await _preferences.remove(LockScreenSettings.keyAppLockSet);
@@ -78,7 +77,7 @@ class Configuration extends BaseConfiguration
   ];
 
   @override
-  List<String> get additionalLogoutSecureStorageKeys => [
+  List<String> get lockScreenSecureStorageKeys => [
     LockScreenSettings.saltKey,
     LockScreenSettings.pin,
     LockScreenSettings.password,

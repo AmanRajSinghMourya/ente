@@ -58,8 +58,7 @@ abstract class BaseConfiguration {
 
   List<String> get secureStorageKeys;
 
-  /// Extra keys cleared on logout, but not by the startup account-key reset.
-  List<String> get additionalLogoutSecureStorageKeys => const [];
+  List<String> get lockScreenSecureStorageKeys => const [];
 
   Future<void> init(List<EnteBaseDatabase> dbs) async {
     _databases = dbs;
@@ -82,7 +81,7 @@ abstract class BaseConfiguration {
     await _clearTempFolderOnLogout();
     await _preferences.clear();
     await resetSecureStorage();
-    for (final key in additionalLogoutSecureStorageKeys) {
+    for (final key in lockScreenSecureStorageKeys) {
       await _secureStorage.delete(key: key);
     }
     for (final db in _databases) {

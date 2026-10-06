@@ -38,7 +38,6 @@ class Configuration extends BaseConfiguration
   );
 
   @override
-  // Also cleared on signed-out startup if logout was killed before persistence.
   List<String> get secureStorageKeys => [
     ...BaseConfiguration.accountSecureStorageKeys,
     LockScreenSettings.saltKey,
