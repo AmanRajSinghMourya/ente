@@ -112,6 +112,25 @@ func TestPhotosStorageEligibility(t *testing.T) {
 	}
 }
 
+func TestPhotosStorageReminderUsesAppClock(t *testing.T) {
+	c, db, attempts := setupStorageEmailTest(t, 900)
+	testutil.InsertNotificationHistory(t, db, testutil.NotificationHistoryFixture{UserID: 1, TemplateID: repo.PhotosStorageWarningTemplateID, SentTime: time.Microseconds() - 49*time.MicroSecondsInOneHour})
+	var original string
+	if err := db.QueryRow(`SELECT pg_get_functiondef('now_utc_micro_seconds()'::regprocedure)`).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { storageEmailSQL(t, db, original) })
+	storageEmailSQL(t, db, fmt.Sprintf(`CREATE OR REPLACE FUNCTION now_utc_micro_seconds() RETURNS BIGINT AS $$ SELECT %d::bigint $$ LANGUAGE SQL`, time.Microseconds()-2*time.MicroSecondsInOneHour))
+	ids, err := c.UsageRepo.GetPhotosStorageWarningCandidates(t.Context(), storageEmailCutoff)
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("candidates=%v want=[1] err=%v", ids, err)
+	}
+	c.SendPhotosStorageWarningMails()
+	if fmt.Sprint(*attempts) != "[photos_storage_reminder.html]" {
+		t.Fatalf("attempts=%v", *attempts)
+	}
+}
+
 func TestPhotosStorageReminderPausesAndResumes(t *testing.T) {
 	for _, pause := range []string{`UPDATE usage SET storage_consumed=850`, `UPDATE subscriptions SET product_id='paid'`} {
 		t.Run(pause, func(t *testing.T) {
@@ -164,6 +183,10 @@ func TestPhotosStorageReminderTimingAndCutoff(t *testing.T) {
 			testutil.InsertNotificationHistory(t, db, testutil.NotificationHistoryFixture{UserID: 1, TemplateID: repo.PhotosStorageWarningTemplateID, SentTime: time.Microseconds() - tc.hours*time.MicroSecondsInOneHour})
 			if tc.setup != "" {
 				storageEmailSQL(t, db, tc.setup)
+			}
+			ids, err := c.UsageRepo.GetPhotosStorageWarningCandidates(t.Context(), storageEmailCutoff)
+			if err != nil || len(ids) != tc.want {
+				t.Fatalf("candidates=%v want=%d err=%v", ids, tc.want, err)
 			}
 			c.SendPhotosStorageWarningMails()
 			c.SendPhotosStorageWarningMails()
@@ -374,9 +397,13 @@ func TestStorageMailersSeparateAudiences(t *testing.T) {
 	}{
 		{"free", "", 1100, 1, 0},
 		{"paid before cutoff", `UPDATE subscriptions SET product_id='paid'; UPDATE users SET creation_time=1`, 1100, 0, 1},
+		{"expired paid", `UPDATE subscriptions SET product_id='paid', expiry_time=1`, 1100, 0, 1},
 		{"paid addon", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'ADD_ON_SUPPORT',1000)`, 2001, 0, 1},
+		{"expired addon", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage,valid_till) VALUES('b',1,'ADD_ON_SUPPORT',1000,1)`, 1100, 1, 0},
+		{"revoked addon", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage,is_revoked) VALUES('b',1,'ADD_ON_SUPPORT',1000,true)`, 1100, 1, 0},
 		{"paid exactly full", `UPDATE subscriptions SET product_id='paid'`, 1000, 0, 0},
 		{"free with signup", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'SIGN_UP',3000)`, 2200, 1, 0},
+		{"free with referral", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'REFERRAL',1000)`, 2200, 1, 0},
 		{"family admin free", "", 1100, 0, 0},
 		{"family member free", "", 1100, 0, 0},
 		{"family admin paid", `UPDATE subscriptions SET product_id='paid'`, 1100, 0, 0},
@@ -424,6 +451,34 @@ func TestStorageMailersSeparateAudiences(t *testing.T) {
 	}
 }
 
+func TestLegacyStorageRechecksPaidAddonBeforeSending(t *testing.T) {
+	for _, change := range []string{`UPDATE storage_bonus SET valid_till=1`, `UPDATE storage_bonus SET is_revoked=true`} {
+		t.Run(change, func(t *testing.T) {
+			c, db, _ := setupStorageEmailTest(t, 2001)
+			testutil.InsertUser(t, db, testutil.UserFixture{UserID: 2, Email: "addon@ente.com", CreationTime: storageEmailCutoff})
+			testutil.InsertUsage(t, db, 2, 2001)
+			testutil.InsertSubscription(t, db, testutil.SubscriptionFixture{UserID: 2, Storage: 1000, ProductID: ente.FreePlanProductID, ExpiryTime: time.MicrosecondsAfterHours(24)})
+			storageEmailSQL(t, db, `INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('one',1,'ADD_ON_SUPPORT',1000),('two',2,'ADD_ON_SUPPORT',1000)`)
+			old := sendStorageLimitExceededEmail
+			t.Cleanup(func() { sendStorageLimitExceededEmail = old })
+			attempts := 0
+			sendStorageLimitExceededEmail = func(_ []string, _, _, _, _ string, _ map[string]interface{}, _ []map[string]interface{}) error {
+				attempts++
+				storageEmailSQL(t, db, change)
+				return nil
+			}
+			c.SendStorageLimitExceededMails()
+			if attempts != 1 {
+				t.Fatalf("attempts=%d want=1", attempts)
+			}
+			var count int
+			if err := db.QueryRow(`SELECT count(*) FROM notification_history WHERE template_id=$1`, StorageLimitExceededTemplateID).Scan(&count); err != nil || count != 1 {
+				t.Fatalf("history=%d want=1 err=%v", count, err)
+			}
+		})
+	}
+}
+
 func TestPhotosStorageExcludesLockerTrash(t *testing.T) {
 	c, db, attempts := setupStorageEmailTest(t, 950)
 	storageEmailSQL(t, db, `
@@ -454,6 +509,13 @@ func TestPhotosStorageExcludesLockerTrash(t *testing.T) {
 	c.SendPhotosStorageWarningMails()
 	if len(*attempts) != 1 {
 		t.Fatalf("90%% Photos usage attempts=%v", *attempts)
+	}
+}
+
+func TestPhotosStorageUsagePercentDoesNotOverflow(t *testing.T) {
+	const max = int64(1<<63 - 1)
+	if got := photosStorageUsagePercent(max, max); got != "100.0" {
+		t.Fatalf("usage percent=%s want=100.0", got)
 	}
 }
 

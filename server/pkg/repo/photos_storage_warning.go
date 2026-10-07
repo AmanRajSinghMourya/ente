@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	PhotosStorageWarningTemplateID  = "photos_storage_90_percent"
-	PhotosStorageReminderTemplateID = "photos_storage_reminder"
+	PhotosStorageWarningTemplateID         = "photos_storage_90_percent"
+	PhotosStorageReminderTemplateID        = "photos_storage_reminder"
+	PhotosStorageReminderDelayMicroseconds = 48 * time.MicroSecondsInOneHour
 )
 
 type PhotosStorageState struct {
@@ -37,9 +38,10 @@ func (repo *UsageRepository) GetPhotosStorageWarningCandidates(ctx context.Conte
     AND us.storage_consumed >= s.storage - s.storage / 10
     AND NOT EXISTS (
       SELECT 1 FROM notification_history n
-      WHERE n.user_id = u.user_id AND n.template_id = $3
+      WHERE n.user_id = u.user_id
+        AND (n.template_id = $3 OR (n.template_id = $4 AND n.sent_time > $5))
     )
-  ORDER BY u.user_id`, launchTime, ente.FreePlanProductID, PhotosStorageReminderTemplateID)
+  ORDER BY u.user_id`, launchTime, ente.FreePlanProductID, PhotosStorageReminderTemplateID, PhotosStorageWarningTemplateID, time.Microseconds()-PhotosStorageReminderDelayMicroseconds)
 	if err != nil {
 		return nil, err
 	}
