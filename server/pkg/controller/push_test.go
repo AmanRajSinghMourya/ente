@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -227,18 +228,26 @@ func TestAlbumSharePushOnlyInternalRecipients(t *testing.T) {
 	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Empty(t, messages)
 	viper.Set("internal.silent", false)
+	earliestExpiry := time.Now().Add(24 * time.Hour).Unix()
 	c.NotifyAlbumShare(context.Background(), []int64{1, 2})
+	latestExpiry := time.Now().Add(24 * time.Hour).Unix()
 	require.Len(t, messages, 3)
 	var tokens []string
 	for _, message := range messages {
 		tokens = append(tokens, message["token"].(string))
-		require.Equal(t, map[string]any{"title": "Ente Photos", "body": "An album was shared with you"}, message["notification"])
+		require.NotContains(t, message, "notification")
+		require.Equal(t, map[string]any{"action": "sync"}, message["data"])
+		apns := message["apns"].(map[string]any)
+		headers := apns["headers"].(map[string]any)
+		expiry, err := strconv.ParseInt(headers["apns-expiration"].(string), 10, 64)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, expiry, earliestExpiry)
+		require.LessOrEqual(t, expiry, latestExpiry)
 		require.Equal(t, map[string]any{
-			"headers": map[string]any{"apns-push-type": "alert", "apns-priority": "10", "apns-expiration": "0"},
-			"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
+			"headers": map[string]any{"apns-push-type": "background", "apns-priority": "5", "apns-expiration": headers["apns-expiration"]},
+			"payload": map[string]any{"aps": map[string]any{"content-available": float64(1)}},
 		}, message["apns"])
-		require.Equal(t, map[string]any{"ttl": "0s"}, message["android"])
-		require.Nil(t, message["data"])
+		require.Equal(t, map[string]any{"ttl": "86400s"}, message["android"])
 	}
 	require.ElementsMatch(t, []string{"ios-device", "android-device", "ios-without-apns"}, tokens)
 	require.NoError(t, r.AddToken(1, ownerHash[:], ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device"}))

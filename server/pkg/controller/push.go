@@ -80,12 +80,12 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	}
 	for _, token := range tokens {
 		err := c.fcm.sendMessage(ctx, map[string]any{
-			"token":        token,
-			"notification": map[string]string{"title": "Ente Photos", "body": "An album was shared with you"},
-			"android":      map[string]string{"ttl": "0s"},
+			"token":   token,
+			"data":    map[string]string{"action": "sync"},
+			"android": map[string]string{"ttl": "86400s"},
 			"apns": map[string]any{
-				"headers": map[string]string{"apns-push-type": "alert", "apns-priority": "10", "apns-expiration": "0"},
-				"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
+				"headers": map[string]string{"apns-push-type": "background", "apns-priority": "5", "apns-expiration": strconv.FormatInt(gotime.Now().Add(24*gotime.Hour).Unix(), 10)},
+				"payload": map[string]any{"aps": map[string]any{"content-available": 1}},
 			},
 		})
 		if err != nil {
