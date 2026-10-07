@@ -247,8 +247,16 @@ func (c *EmailNotificationController) SendStorageLimitExceededMails() {
 		if lastNotificationTime > 0 {
 			continue
 		}
+		paid, err := c.hasPaidStorage(u.ID)
+		if err != nil {
+			logger.WithError(err).Error("Could not classify storage limit email recipient")
+			continue
+		}
+		if !paid {
+			continue
+		}
 		logger.Info("Alerting about storage limit exceeded")
-		err = email.SendTemplatedEmail([]string{u.Email}, "team@ente.com", "team@ente.com", StorageLimitExceededSubject, StorageLimitExceededTemplate, nil, nil)
+		err = sendStorageLimitExceededEmail([]string{u.Email}, "team@ente.com", "team@ente.com", StorageLimitExceededSubject, StorageLimitExceededTemplate, nil, nil)
 		if err != nil {
 			logger.Info("Error notifying", err)
 			continue
@@ -259,6 +267,23 @@ func (c *EmailNotificationController) SendStorageLimitExceededMails() {
 
 func (c *EmailNotificationController) setStorageLimitExceededMailerJobStatus(isSending bool) {
 	c.isSendingStorageLimitExceededMails = isSending
+}
+
+var sendStorageLimitExceededEmail = email.SendTemplatedEmail
+
+func (c *EmailNotificationController) hasPaidStorage(userID int64) (bool, error) {
+	subscription, err := c.BillingRepo.GetUserSubscription(userID)
+	if err != nil {
+		return false, err
+	}
+	if subscription.ProductID != ente.FreePlanProductID {
+		return true, nil
+	}
+	bonuses, err := c.StorageBonusRepo.GetActiveStorageBonuses(context.Background(), userID)
+	if err != nil {
+		return false, err
+	}
+	return bonuses.GetAddonStorage() > 0, nil
 }
 
 func (c *EmailNotificationController) NudgePaidSubscriberForFamily() {
