@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
 	"github.com/ente/museum/pkg/controller"
 	"github.com/ente/museum/pkg/repo"
@@ -22,6 +23,7 @@ func TestPushRegistrationBindsRequestSession(t *testing.T) {
 	testutil.ResetTables(t, db)
 	t.Cleanup(func() { testutil.ResetTables(t, db) })
 	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "user@example.com", CreationTime: 1})
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "authenticated-session", "", ""))
 	router := gin.New()
 	handler := PushHandler{PushController: &controller.PushController{PushRepo: &repo.PushTokenRepository{DB: db}}}
 	router.POST("/push/token", handler.AddToken)
@@ -62,6 +64,7 @@ func TestPushRegistrationPlatform(t *testing.T) {
 		{"omission without APNs", `"apnsToken":null`, "ios", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(tc.userID, ente.Photos, tc.name, "", ""))
 			body := fmt.Sprintf(`{"fcmToken":"device",%s}`, tc.fields)
 			request := httptest.NewRequest(http.MethodPost, "/push/token", strings.NewReader(body))
 			request.Header.Set("Content-Type", "application/json")

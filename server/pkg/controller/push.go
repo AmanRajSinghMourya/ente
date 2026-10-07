@@ -82,6 +82,7 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 		err := c.fcm.sendMessage(ctx, map[string]any{
 			"token":        token,
 			"notification": map[string]string{"title": "Ente Photos", "body": "An album was shared with you"},
+			"android":      map[string]string{"ttl": "0s"},
 			"apns": map[string]any{
 				"headers": map[string]string{"apns-push-type": "alert", "apns-priority": "10", "apns-expiration": "0"},
 				"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
@@ -126,8 +127,8 @@ func newFCMClient() (*fcmClient, error) {
 	}, nil
 }
 
-func (c *PushController) AddToken(userID int64, token ente.PushTokenRequest) error {
-	return stacktrace.Propagate(c.PushRepo.AddToken(userID, token), "")
+func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token ente.PushTokenRequest) error {
+	return stacktrace.Propagate(c.PushRepo.AddToken(userID, sessionTokenHash, token), "")
 }
 
 func (c *PushController) RemoveTokensForUser(userID int64) error {

@@ -14,6 +14,7 @@ import (
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
 	"github.com/ente/museum/pkg/repo"
+	"github.com/ente/museum/pkg/utils/auth"
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/spf13/viper"
@@ -197,10 +198,14 @@ func TestAlbumSharePushOnlyInternalRecipients(t *testing.T) {
 		testutil.InsertUser(t, db, u)
 	}
 	r := &repo.PushTokenRepository{DB: db}
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(2, ente.Photos, "recipient-session", "", ""))
+	sessionHash := auth.HashToken("recipient-session")
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "owner-session", "", ""))
+	ownerHash := auth.HashToken("owner-session")
 	ios, android := "ios", "android"
-	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device", Platform: &ios}))
-	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "android-device", Platform: &android}))
-	require.NoError(t, r.AddToken(2, ente.PushTokenRequest{FCMToken: "ios-without-apns", Platform: &ios}))
+	require.NoError(t, r.AddToken(2, sessionHash[:], ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device", Platform: &ios}))
+	require.NoError(t, r.AddToken(2, sessionHash[:], ente.PushTokenRequest{FCMToken: "android-device", Platform: &android}))
+	require.NoError(t, r.AddToken(2, sessionHash[:], ente.PushTokenRequest{FCMToken: "ios-without-apns", Platform: &ios}))
 	var messages []map[string]any
 	c := &PushController{PushRepo: r, fcm: &fcmClient{projectID: "test", httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		var body struct{ Message map[string]any }
@@ -232,11 +237,11 @@ func TestAlbumSharePushOnlyInternalRecipients(t *testing.T) {
 			"headers": map[string]any{"apns-push-type": "alert", "apns-priority": "10", "apns-expiration": "0"},
 			"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
 		}, message["apns"])
-		require.Nil(t, message["android"])
+		require.Equal(t, map[string]any{"ttl": "0s"}, message["android"])
 		require.Nil(t, message["data"])
 	}
 	require.ElementsMatch(t, []string{"ios-device", "android-device", "ios-without-apns"}, tokens)
-	require.NoError(t, r.AddToken(1, ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device"}))
+	require.NoError(t, r.AddToken(1, ownerHash[:], ente.PushTokenRequest{FCMToken: "ios-device", APNSToken: "apns-device"}))
 	messages = nil
 	c.NotifyAlbumShare(context.Background(), []int64{2})
 	require.Len(t, messages, 2)
@@ -255,7 +260,10 @@ func TestPushTokenFollowsCurrentAccount(t *testing.T) {
 	}
 	r := &repo.PushTokenRepository{DB: db}
 	for _, id := range []int64{1, 2} {
-		if err := r.AddToken(id, ente.PushTokenRequest{FCMToken: "test-device"}); err != nil {
+		rawToken := string(rune('a'+id)) + "-session"
+		require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(id, ente.Photos, rawToken, "", ""))
+		sessionHash := auth.HashToken(rawToken)
+		if err := r.AddToken(id, sessionHash[:], ente.PushTokenRequest{FCMToken: "test-device"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -279,8 +287,10 @@ func TestAlbumSharePushSurvivesSlowDelivery(t *testing.T) {
 	_, err := db.Exec(`INSERT INTO remote_store (user_id, key_name, key_value) VALUES (1, 'internalUser', 'true')`)
 	require.NoError(t, err)
 	r := &repo.PushTokenRepository{DB: db}
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "recipient-session", "", ""))
+	sessionHash := auth.HashToken("recipient-session")
 	for _, token := range []string{"first-device", "second-device"} {
-		require.NoError(t, r.AddToken(1, ente.PushTokenRequest{FCMToken: token, APNSToken: "apns"}))
+		require.NoError(t, r.AddToken(1, sessionHash[:], ente.PushTokenRequest{FCMToken: token, APNSToken: "apns"}))
 	}
 	delivered := 0
 	done := make(chan struct{})
