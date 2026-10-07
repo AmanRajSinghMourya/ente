@@ -98,7 +98,7 @@ func (c *EmailNotificationController) preparePhotosStorageEmail(ctx context.Cont
 		return state, "", nil
 	}
 	now := time.Microseconds()
-	blocked := history[repo.StorageWarningExpiredScheduledDeletionTemplateID] > 0 || history[repo.StorageWarningActiveOverageScheduledDeletionTemplateID] > 0
+	blocked := history[repo.StorageWarningExpiredScheduledDeletionTemplateID] > 0 || history[repo.StorageWarningActiveOverageScheduledDeletionTemplateID] > 0 || history[repo.StorageWarningLoginGraceTemplateID] > 0
 	if blocked && !repo.StorageWarningLoginGraceActive(history[repo.StorageWarningLoginGraceTemplateID], now) {
 		return state, "", nil
 	}

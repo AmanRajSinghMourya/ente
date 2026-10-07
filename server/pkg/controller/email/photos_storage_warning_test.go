@@ -269,6 +269,54 @@ func TestPhotosStorageRestrictedAccounts(t *testing.T) {
 	}
 }
 
+func TestPhotosStorageGraceWithoutTerminalRows(t *testing.T) {
+	for _, reminder := range []bool{false, true} {
+		for _, expired := range []bool{false, true} {
+			t.Run(fmt.Sprintf("reminder=%t/expired=%t", reminder, expired), func(t *testing.T) {
+				c, db, attempts := setupStorageEmailTest(t, 900)
+				event := repo.PhotosStorageWarningTemplateID
+				first := time.Microseconds() - 72*time.MicroSecondsInOneHour
+				if reminder {
+					event = repo.PhotosStorageReminderTemplateID
+					testutil.InsertNotificationHistory(t, db, testutil.NotificationHistoryFixture{UserID: 1, TemplateID: repo.PhotosStorageWarningTemplateID, SentTime: first})
+				}
+				testutil.InsertNotificationHistory(t, db, testutil.NotificationHistoryFixture{UserID: 1, TemplateID: repo.StorageWarningActiveOverageScheduledDeletionTemplateID, SentTime: time.Microseconds()})
+				if _, granted, err := c.NotificationHistoryRepo.GrantStorageWarningLoginGrace(1); err != nil || !granted {
+					t.Fatalf("grant grace: granted=%t err=%v", granted, err)
+				}
+				assertStorageWarningNotificationCount(t, db, 1, repo.StorageWarningActiveOverageScheduledDeletionTemplateID, 0)
+				if expired {
+					storageEmailSQL(t, db, `UPDATE notification_history SET sent_time=$1 WHERE user_id=1 AND template_id=$2`, time.Microseconds()-repo.StorageWarningLoginGraceDurationMicroseconds-1, repo.StorageWarningLoginGraceTemplateID)
+				}
+				c.SendPhotosStorageWarningMails()
+				want := 1
+				if expired {
+					want = 0
+				}
+				if len(*attempts) != want {
+					t.Fatalf("attempts=%v want=%d", *attempts, want)
+				}
+				assertStorageWarningNotificationCount(t, db, 1, event, want)
+				if err := c.NotificationHistoryRepo.ClearStorageWarningLoginGrace(1); err != nil {
+					t.Fatal(err)
+				}
+				c.SendPhotosStorageWarningMails()
+				c.SendPhotosStorageWarningMails()
+				if len(*attempts) != 1 {
+					t.Fatalf("resumed attempts=%v want=1", *attempts)
+				}
+				assertStorageWarningNotificationCount(t, db, 1, event, 1)
+				if reminder {
+					stored, err := c.NotificationHistoryRepo.GetLastNotificationTime(1, repo.PhotosStorageWarningTemplateID)
+					if err != nil || stored != first {
+						t.Fatalf("E1 timestamp=%d want=%d err=%v", stored, first, err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestPhotosStorageLaunchConfiguration(t *testing.T) {
 	for _, value := range []string{"", "invalid", "1767225600", "2026-01-01T00:00:00+05:30"} {
 		t.Run(value, func(t *testing.T) {
@@ -329,9 +377,33 @@ func TestStorageMailersSeparateAudiences(t *testing.T) {
 		{"paid addon", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'ADD_ON_SUPPORT',1000)`, 2001, 0, 1},
 		{"paid exactly full", `UPDATE subscriptions SET product_id='paid'`, 1000, 0, 0},
 		{"free with signup", `INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'SIGN_UP',3000)`, 2200, 1, 0},
+		{"family admin free", "", 1100, 0, 0},
+		{"family member free", "", 1100, 0, 0},
+		{"family admin paid", `UPDATE subscriptions SET product_id='paid'`, 1100, 0, 0},
+		{"family member paid", `UPDATE subscriptions SET product_id='paid'`, 1100, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, db, attempts := setupStorageEmailTest(t, tc.usage)
+			if strings.HasPrefix(tc.name, "family ") {
+				adminID := int64(1)
+				if strings.HasPrefix(tc.name, "family member ") {
+					adminID = 2
+					testutil.InsertUser(t, db, testutil.UserFixture{UserID: adminID, Email: "admin@ente.com", CreationTime: storageEmailCutoff})
+				}
+				family := &repo.FamilyRepository{DB: db}
+				if err := family.CreateFamily(t.Context(), adminID); err != nil {
+					t.Fatal(err)
+				}
+				if adminID != 1 {
+					token, err := family.AddMemberInvite(t.Context(), adminID, 1, "storage-email-family-test", nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := family.AcceptInvite(t.Context(), adminID, 1, token); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			if tc.setup != "" {
 				storageEmailSQL(t, db, tc.setup)
 			}

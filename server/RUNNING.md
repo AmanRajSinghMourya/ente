@@ -279,6 +279,11 @@ expired free subscriptions, and accounts restricted from login without active
 login grace do not qualify. Legacy full-storage warning history does not exclude
 post-launch accounts from E1 or E2.
 
+An expired login-grace marker also pauses E1/E2 when the terminal deletion row
+has been removed. No attempt is recorded. The existing storage-warning job
+restores the restriction or clears grace after recovery; clearing grace allows
+pending E1/E2 to resume without resetting their clock.
+
 Attempts are committed to `notification_history` before sending. Migration 149's
 partial unique index prevents repeats across instances and restarts. Send failures
 and crashes after the claim consume that event. Preserve these event IDs, attempt
