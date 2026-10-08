@@ -244,9 +244,3 @@ The keys and values supported by this configuration file are documented in [conf
 > [!TIP]
 >
 > If your mobile app can connect to your self-hosted instance but cannot view or upload images, see [ente.com/help/self-hosting/administration/object-storage](https://ente.com/help/self-hosting/administration/object-storage).
-
-The daily full-storage email now targets paid individual accounts. Free
-self-hosted accounts no longer receive it; paid self-hosted accounts remain
-eligible. The new Photos storage emails are cloud-only. See the
-[production deployment guide](scripts/deploy/README.md#photos-storage-emails)
-for their rollout and eligibility rules.

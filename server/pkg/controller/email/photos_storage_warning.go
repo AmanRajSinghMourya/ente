@@ -19,11 +19,7 @@ func (c *EmailNotificationController) SendPhotosStorageWarningMails() {
 	if c.UserRepo.IsLikelySelfHosted() {
 		return
 	}
-	launchTime := viper.GetString("photos-storage-emails.launch-time")
-	if launchTime == "" {
-		return
-	}
-	launch, err := stdtime.Parse(stdtime.RFC3339, launchTime)
+	launch, err := stdtime.Parse(stdtime.RFC3339, viper.GetString("photos-storage-emails.launch-time"))
 	if err == nil {
 		_, offset := launch.Zone()
 		if offset != 0 {
@@ -108,7 +104,7 @@ func (c *EmailNotificationController) preparePhotosStorageEmail(ctx context.Cont
 	}
 	event := repo.PhotosStorageWarningTemplateID
 	if first := history[repo.PhotosStorageWarningTemplateID]; first > 0 {
-		if now-first < repo.PhotosStorageReminderDelayMicroseconds {
+		if now-first < 48*time.MicroSecondsInOneHour {
 			return state, "", nil
 		}
 		event = repo.PhotosStorageReminderTemplateID
