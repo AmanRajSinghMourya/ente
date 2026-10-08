@@ -12,24 +12,23 @@ const (
 	PhotosStorageReminderTemplateID = "photos_storage_reminder"
 )
 
-func (repo *UserRepository) GetPhotosStorageWarningCandidates(ctx context.Context, launchTime int64) ([]int64, error) {
+func (repo *UserRepository) GetPhotosStorageWarningCandidates(ctx context.Context) ([]int64, error) {
 	rows, err := repo.DB.QueryContext(ctx, `
   SELECT u.user_id
   FROM users u
   JOIN subscriptions s ON s.user_id = u.user_id
   JOIN usage us ON us.user_id = u.user_id
-  WHERE u.creation_time >= $1
-    AND u.family_admin_id IS NULL
+  WHERE u.family_admin_id IS NULL
     AND u.encrypted_email IS NOT NULL
-    AND s.product_id = $2
+    AND s.product_id = $1
     AND s.storage > 0
     AND s.expiry_time > now_utc_micro_seconds()
     AND us.storage_consumed >= s.storage - s.storage / 10
     AND NOT EXISTS (
       SELECT 1 FROM notification_history n
-      WHERE n.user_id = u.user_id AND n.template_id = $3
+      WHERE n.user_id = u.user_id AND n.template_id IN ($2, $3)
     )
-  ORDER BY u.user_id`, launchTime, ente.FreePlanProductID, PhotosStorageReminderTemplateID)
+  ORDER BY u.user_id`, ente.FreePlanProductID, PhotosStorageReminderTemplateID, StorageLimitExceededTemplateID)
 	if err != nil {
 		return nil, err
 	}

@@ -30,9 +30,8 @@ const (
 	CustomerHelloTemplate   = "customer_hello.html"
 	CustomerHelloTemplateID = "customer_hello"
 
-	StorageLimitExceededMailLock   = "storage_limit_exceeded_mail_lock"
-	StorageLimitExceededTemplateID = "storage_limit_exceeded"
-	StorageLimitExceededTemplate   = "storage_limit_exceeded.html"
+	StorageLimitExceededMailLock = "storage_limit_exceeded_mail_lock"
+	StorageLimitExceededTemplate = "storage_limit_exceeded.html"
 
 	FilesCollectedTemplate   = "files_collected.html"
 	FilesCollectedTemplateID = "files_collected"
@@ -235,8 +234,9 @@ func (c *EmailNotificationController) SendStorageLimitExceededMails() {
 		log.Error("Error while fetching user list", err)
 		return
 	}
+	selfHosted := c.UserRepo.IsLikelySelfHosted()
 	for _, u := range users {
-		lastNotificationTime, err := c.NotificationHistoryRepo.GetLastNotificationTime(u.ID, StorageLimitExceededTemplateID)
+		lastNotificationTime, err := c.NotificationHistoryRepo.GetLastNotificationTime(u.ID, repo.StorageLimitExceededTemplateID)
 		logger := log.WithFields(log.Fields{
 			"user_id": u.ID,
 		})
@@ -247,13 +247,15 @@ func (c *EmailNotificationController) SendStorageLimitExceededMails() {
 		if lastNotificationTime > 0 {
 			continue
 		}
-		paid, err := c.hasPaidStorage(u.ID)
-		if err != nil {
-			logger.WithError(err).Error("Could not classify storage limit email recipient")
-			continue
-		}
-		if !paid {
-			continue
+		if !selfHosted {
+			paid, err := c.hasPaidStorage(u.ID)
+			if err != nil {
+				logger.WithError(err).Error("Could not classify storage limit email recipient")
+				continue
+			}
+			if !paid {
+				continue
+			}
 		}
 		logger.Info("Alerting about storage limit exceeded")
 		err = sendStorageLimitExceededEmail([]string{u.Email}, "team@ente.com", "team@ente.com", StorageLimitExceededSubject, StorageLimitExceededTemplate, nil, nil)
@@ -261,7 +263,7 @@ func (c *EmailNotificationController) SendStorageLimitExceededMails() {
 			logger.Info("Error notifying", err)
 			continue
 		}
-		c.NotificationHistoryRepo.SetLastNotificationTimeToNow(u.ID, StorageLimitExceededTemplateID)
+		c.NotificationHistoryRepo.SetLastNotificationTimeToNow(u.ID, repo.StorageLimitExceededTemplateID)
 	}
 }
 
