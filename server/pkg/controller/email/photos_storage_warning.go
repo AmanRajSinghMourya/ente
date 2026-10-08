@@ -3,9 +3,9 @@ package email
 import (
 	"context"
 	"fmt"
-	"math/big"
 	stdtime "time"
 
+	"github.com/ente/museum/ente"
 	"github.com/ente/museum/pkg/repo"
 	"github.com/ente/museum/pkg/utils/email"
 	"github.com/ente/museum/pkg/utils/time"
@@ -15,19 +15,22 @@ import (
 
 var sendPhotosStorageWarningEmail = email.SendTemplatedEmailV2
 
+type photosStorageState struct {
+	User             ente.User
+	Usage, Allowance int64
+}
+
 func (c *EmailNotificationController) SendPhotosStorageWarningMails() {
 	if c.UserRepo.IsLikelySelfHosted() {
 		return
 	}
-	launch, err := stdtime.Parse(stdtime.RFC3339, viper.GetString("photos-storage-emails.launch-time"))
-	if err == nil {
-		_, offset := launch.Zone()
-		if offset != 0 {
-			err = fmt.Errorf("launch-time must be UTC")
-		}
+	launchTime := viper.GetString("photos-storage-emails.launch-time")
+	if launchTime == "" {
+		return
 	}
+	launch, err := stdtime.Parse(stdtime.RFC3339, launchTime)
 	if err != nil {
-		log.WithError(err).Error("Skipping Photos storage emails: fixed RFC3339 UTC launch-time required")
+		log.WithError(err).Error("Skipping Photos storage emails: invalid launch-time")
 		return
 	}
 	const lockID = "photos_storage_warning_mail_lock"
@@ -36,21 +39,15 @@ func (c *EmailNotificationController) SendPhotosStorageWarningMails() {
 	}
 	defer c.LockController.ReleaseLock(lockID)
 	ctx := context.Background()
-	ids, err := c.UsageRepo.GetPhotosStorageWarningCandidates(ctx, launch.UnixMicro())
+	ids, err := c.UserRepo.GetPhotosStorageWarningCandidates(ctx, launch.UnixMicro())
 	if err != nil {
 		log.WithError(err).Error("Failed to fetch Photos storage email candidates")
 		return
 	}
-	processed, sent, failed := 0, 0, 0
-	defer func() {
-		log.WithFields(log.Fields{"candidates": len(ids), "processed": processed, "sent": sent, "failed": failed, "skipped": processed - sent - failed}).Info("Photos storage email run completed")
-	}()
 	for _, id := range ids {
-		processed++
 		state, event, err := c.preparePhotosStorageEmail(ctx, id, launch.UnixMicro())
 		logger := log.WithField("user_id", id)
 		if err != nil {
-			failed++
 			logger.WithError(err).Error("Failed to prepare Photos storage email")
 			continue
 		}
@@ -68,33 +65,23 @@ func (c *EmailNotificationController) SendPhotosStorageWarningMails() {
 		err = sendPhotosStorageWarningEmail([]string{state.User.Email}, "Ente", "team@ente.com", subject, "ente_base.html", name,
 			map[string]interface{}{"Full": full, "UsagePercent": photosStorageUsagePercent(state.Usage, state.Allowance)}, nil)
 		if err != nil {
-			failed++
 			logger.WithError(err).WithField("event", event).Error("Failed to send Photos storage email")
 			continue
 		}
-		sent++
 	}
 }
 
-func (c *EmailNotificationController) preparePhotosStorageEmail(ctx context.Context, userID, launchTime int64) (repo.PhotosStorageState, string, error) {
-	var state repo.PhotosStorageState
-	tx, err := c.NotificationHistoryRepo.BeginStorageNotification(ctx, userID)
-	if err != nil {
-		return state, "", err
-	}
-	defer tx.Rollback()
-	history, err := repo.PhotosStorageHistory(ctx, tx, userID)
+func (c *EmailNotificationController) preparePhotosStorageEmail(ctx context.Context, userID, launchTime int64) (photosStorageState, string, error) {
+	var state photosStorageState
+	history, err := c.NotificationHistoryRepo.GetLastNotificationTimes(userID, []string{
+		repo.PhotosStorageWarningTemplateID, repo.PhotosStorageReminderTemplateID,
+		repo.StorageWarningExpiredScheduledDeletionTemplateID, repo.StorageWarningActiveOverageScheduledDeletionTemplateID,
+		repo.StorageWarningLoginGraceTemplateID,
+	})
 	if err != nil {
 		return state, "", err
 	}
 	if history[repo.PhotosStorageReminderTemplateID] > 0 {
-		return state, "", nil
-	}
-	state, err = c.UserRepo.PhotosStorageState(ctx, tx, userID)
-	if err != nil {
-		return state, "", err
-	}
-	if !state.Eligible || state.User.CreationTime < launchTime {
 		return state, "", nil
 	}
 	now := time.Microseconds()
@@ -109,23 +96,48 @@ func (c *EmailNotificationController) preparePhotosStorageEmail(ctx context.Cont
 		}
 		event = repo.PhotosStorageReminderTemplateID
 	}
-	claimed, err := repo.ClaimStorageNotification(ctx, tx, userID, event)
+	state.User, err = c.UserRepo.Get(userID)
 	if err != nil {
 		return state, "", err
 	}
-	if err := tx.Commit(); err != nil {
+	if state.User.Email == "" || state.User.FamilyAdminID != nil || state.User.CreationTime < launchTime {
+		return state, "", nil
+	}
+	subscription, err := c.BillingRepo.GetUserSubscription(userID)
+	if err != nil {
 		return state, "", err
 	}
-	if !claimed {
+	if subscription.ProductID != ente.FreePlanProductID || subscription.ExpiryTime <= now {
 		return state, "", nil
+	}
+	bonuses, err := c.StorageBonusRepo.GetActiveStorageBonuses(ctx, userID)
+	if err != nil {
+		return state, "", err
+	}
+	if bonuses.GetAddonStorage() > 0 {
+		return state, "", nil
+	}
+	totalUsage, err := c.UsageRepo.GetUsage(userID)
+	if err != nil {
+		return state, "", err
+	}
+	lockerUsage, err := c.UsageRepo.GetLockerStorageUsage(ctx, []int64{userID})
+	if err != nil {
+		return state, "", err
+	}
+	state.Usage = totalUsage - lockerUsage.TotalUsage
+	state.Allowance = subscription.Storage + bonuses.GetUsableBonus(subscription.Storage)
+	if state.Allowance <= 0 || state.Usage < state.Allowance-state.Allowance/10 {
+		return state, "", nil
+	}
+	claimed, err := c.NotificationHistoryRepo.ClaimPhotosStorageNotification(ctx, userID, event)
+	if err != nil || !claimed {
+		return state, "", err
 	}
 	return state, event, nil
 }
 
 func photosStorageUsagePercent(usage, allowance int64) string {
-	var tenths, whole, fraction big.Int
-	tenths.Mul(big.NewInt(usage), big.NewInt(1000))
-	tenths.Quo(&tenths, big.NewInt(allowance))
-	whole.QuoRem(&tenths, big.NewInt(10), &fraction)
-	return whole.String() + "." + fraction.String()
+	tenths := usage * 1000 / allowance
+	return fmt.Sprintf("%d.%d", tenths/10, tenths%10)
 }

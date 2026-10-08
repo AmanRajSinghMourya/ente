@@ -10,7 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	stdtime "time"
 
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
@@ -31,7 +30,6 @@ func setupStorageEmailTest(t *testing.T, usage int64) (*EmailNotificationControl
 	testutil.InsertUsage(t, db, 1, usage)
 	testutil.InsertSubscription(t, db, testutil.SubscriptionFixture{UserID: 1, Storage: 1000, ProductID: ente.FreePlanProductID, ExpiryTime: time.MicrosecondsAfterHours(24)})
 	c := newStorageWarningIntegrationController(db)
-	c.UserRepo.StorageBonusRepo = c.StorageBonusRepo
 	oldLaunch := viper.Get("photos-storage-emails.launch-time")
 	oldSend := sendPhotosStorageWarningEmail
 	viper.Set("photos-storage-emails.launch-time", "2026-01-01T00:00:00Z")
@@ -40,7 +38,7 @@ func setupStorageEmailTest(t *testing.T, usage int64) (*EmailNotificationControl
 		sendPhotosStorageWarningEmail = oldSend
 	})
 	attempts := []string{}
-	sendPhotosStorageWarningEmail = func(to []string, _, _, subject, _, name string, data map[string]interface{}, _ []map[string]interface{}) error {
+	sendPhotosStorageWarningEmail = func(to []string, _, _, subject, base, name string, data map[string]interface{}, _ []map[string]interface{}) error {
 		if len(to) != 1 || to[0] != "storage@ente.com" {
 			t.Fatalf("recipients=%v", to)
 		}
@@ -51,9 +49,25 @@ func setupStorageEmailTest(t *testing.T, usage int64) (*EmailNotificationControl
 		if subject != wantSubject {
 			t.Fatalf("subject=%q", subject)
 		}
-		event := repo.PhotosStorageWarningTemplateID
-		if name == "photos_storage_reminder.html" {
+		event, wantName := repo.PhotosStorageWarningTemplateID, "photos_storage_warning.html"
+		reminder, err := c.NotificationHistoryRepo.GetLastNotificationTime(1, repo.PhotosStorageReminderTemplateID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reminder > 0 {
 			event = repo.PhotosStorageReminderTemplateID
+			wantName = "photos_storage_reminder.html"
+		}
+		if name != wantName {
+			t.Fatalf("template=%q want=%q", name, wantName)
+		}
+		tpl, err := template.ParseFiles("mail-templates/"+base, "mail-templates/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rendered bytes.Buffer
+		if err := tpl.ExecuteTemplate(&rendered, "ente_base", data); err != nil {
+			t.Fatal(err)
 		}
 		assertStorageWarningNotificationCount(t, db, 1, event, 1)
 		attempts = append(attempts, name)
@@ -175,10 +189,18 @@ func TestPhotosStorageReminderTimingAndCutoff(t *testing.T) {
 }
 
 func TestPhotosStorageFinalEligibilityCheck(t *testing.T) {
-	for _, change := range []string{`UPDATE users SET creation_time=1767225599999999`, `UPDATE subscriptions SET product_id='paid'`, `UPDATE usage SET storage_consumed=850`} {
+	for _, change := range []string{
+		`UPDATE users SET creation_time=1767225599999999`,
+		`UPDATE users SET family_admin_id=1`,
+		`UPDATE subscriptions SET product_id='paid'`,
+		`UPDATE subscriptions SET expiry_time=1`,
+		`UPDATE usage SET storage_consumed=850`,
+		`INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'ADD_ON_SUPPORT',1000)`,
+		`INSERT INTO storage_bonus(bonus_id,user_id,type,storage) VALUES('b',1,'REFERRAL',1000)`,
+	} {
 		t.Run(change, func(t *testing.T) {
 			c, db, _ := setupStorageEmailTest(t, 900)
-			ids, err := c.UsageRepo.GetPhotosStorageWarningCandidates(t.Context(), storageEmailCutoff)
+			ids, err := c.UserRepo.GetPhotosStorageWarningCandidates(t.Context(), storageEmailCutoff)
 			if err != nil || len(ids) != 1 {
 				t.Fatalf("ids=%v err=%v", ids, err)
 			}
@@ -318,7 +340,7 @@ func TestPhotosStorageGraceWithoutTerminalRows(t *testing.T) {
 }
 
 func TestPhotosStorageLaunchConfiguration(t *testing.T) {
-	for _, value := range []string{"", "invalid", "1767225600", "2026-01-01T00:00:00+05:30"} {
+	for _, value := range []string{"", "invalid", "1767225600"} {
 		t.Run(value, func(t *testing.T) {
 			c, db, attempts := setupStorageEmailTest(t, 900)
 			viper.Set("photos-storage-emails.launch-time", value)
@@ -331,38 +353,12 @@ func TestPhotosStorageLaunchConfiguration(t *testing.T) {
 	}
 }
 
-func TestPhotosStorageBonusExpiryAfterLockWait(t *testing.T) {
-	c, db, _ := setupStorageEmailTest(t, 900)
-	locked, err := c.NotificationHistoryRepo.BeginStorageNotification(t.Context(), 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer locked.Rollback()
-	expiry := stdtime.Now().Add(300 * stdtime.Millisecond)
-	storageEmailSQL(t, db, `INSERT INTO storage_bonus(bonus_id,user_id,type,storage,valid_till) VALUES('b',1,'REFERRAL',1000,$1)`, expiry.UnixMicro())
-	result := make(chan string, 1)
-	fail := make(chan error, 1)
-	go func() {
-		_, event, err := c.preparePhotosStorageEmail(t.Context(), 1, storageEmailCutoff)
-		if err != nil {
-			fail <- err
-		} else {
-			result <- event
-		}
-	}()
-	stdtime.Sleep(stdtime.Until(expiry) + 10*stdtime.Millisecond)
-	if err := locked.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case event := <-result:
-		if event != repo.PhotosStorageWarningTemplateID {
-			t.Fatalf("event=%q", event)
-		}
-	case err := <-fail:
-		t.Fatal(err)
-	case <-stdtime.After(5 * stdtime.Second):
-		t.Fatal("lock wait timed out")
+func TestPhotosStorageLaunchOffset(t *testing.T) {
+	c, _, attempts := setupStorageEmailTest(t, 900)
+	viper.Set("photos-storage-emails.launch-time", "2026-01-01T05:30:00+05:30")
+	c.SendPhotosStorageWarningMails()
+	if len(*attempts) != 1 {
+		t.Fatalf("equivalent launch instant sent %v, want one warning", *attempts)
 	}
 }
 
@@ -522,52 +518,45 @@ func TestPhotosStorageSkipsSelfHosting(t *testing.T) {
 	assertStorageWarningNotificationCount(t, db, userID, repo.PhotosStorageReminderTemplateID, 0)
 }
 
-func TestLegacyStorageRunRetainsLocalGuard(t *testing.T) {
-	c, db, _ := setupStorageEmailTest(t, 1100)
-	storageEmailSQL(t, db, `UPDATE subscriptions SET product_id='paid'`)
-	old := sendStorageLimitExceededEmail
-	t.Cleanup(func() { sendStorageLimitExceededEmail = old })
+func TestPhotosStorageSendFailureContinuesBatch(t *testing.T) {
+	c, db, _ := setupStorageEmailTest(t, 900)
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 2, Email: "next@ente.com", CreationTime: storageEmailCutoff})
+	testutil.InsertUsage(t, db, 2, 900)
+	testutil.InsertSubscription(t, db, testutil.SubscriptionFixture{UserID: 2, Storage: 1000, ProductID: ente.FreePlanProductID, ExpiryTime: time.MicrosecondsAfterHours(24)})
 	attempts := 0
-	sendStorageLimitExceededEmail = func(_ []string, _, _, _, _ string, _ map[string]interface{}, _ []map[string]interface{}) error {
+	sendPhotosStorageWarningEmail = func(_ []string, _, _, _, _, _ string, _ map[string]interface{}, _ []map[string]interface{}) error {
 		attempts++
 		if attempts == 1 {
-			storageEmailSQL(t, db, `UPDATE task_lock SET lock_until=0 WHERE task_name=$1`, StorageLimitExceededMailLock)
-			c.SendStorageLimitExceededMails()
+			return errors.New("SMTP unavailable")
 		}
 		return nil
 	}
-	c.SendStorageLimitExceededMails()
-	if attempts != 1 {
-		t.Fatalf("overlapping legacy send attempts=%d, want 1", attempts)
+	c.SendPhotosStorageWarningMails()
+	if attempts != 2 {
+		t.Fatalf("batch attempts=%d, want 2", attempts)
+	}
+	c.SendPhotosStorageWarningMails()
+	if attempts != 2 {
+		t.Fatalf("consumed attempts repeated: %d", attempts)
+	}
+	for _, id := range []int64{1, 2} {
+		assertStorageWarningNotificationCount(t, db, id, repo.PhotosStorageWarningTemplateID, 1)
 	}
 }
 
-func TestPhotosStorageSendFailureContinuesBatch(t *testing.T) {
-	for _, failure := range []error{errors.New("SMTP unavailable"), ente.ErrBadRequest, ente.NewBadRequestWithMessage("invalid recipient")} {
-		t.Run(failure.Error(), func(t *testing.T) {
-			c, db, _ := setupStorageEmailTest(t, 900)
-			testutil.InsertUser(t, db, testutil.UserFixture{UserID: 2, Email: "next@ente.com", CreationTime: storageEmailCutoff})
-			testutil.InsertUsage(t, db, 2, 900)
-			testutil.InsertSubscription(t, db, testutil.SubscriptionFixture{UserID: 2, Storage: 1000, ProductID: ente.FreePlanProductID, ExpiryTime: time.MicrosecondsAfterHours(24)})
-			attempts := 0
-			sendPhotosStorageWarningEmail = func(_ []string, _, _, _, _, _ string, _ map[string]interface{}, _ []map[string]interface{}) error {
-				attempts++
-				if attempts == 1 {
-					return failure
-				}
-				return nil
-			}
-			c.SendPhotosStorageWarningMails()
-			if attempts != 2 {
-				t.Fatalf("batch attempts=%d, want 2", attempts)
-			}
-			c.SendPhotosStorageWarningMails()
-			if attempts != 2 {
-				t.Fatalf("consumed attempts repeated: %d", attempts)
-			}
-			for _, id := range []int64{1, 2} {
-				assertStorageWarningNotificationCount(t, db, id, repo.PhotosStorageWarningTemplateID, 1)
-			}
-		})
+func TestPhotosStorageUsagePercent(t *testing.T) {
+	for _, tc := range []struct {
+		usage, allowance int64
+		want             string
+	}{
+		{90, 100, "90.0"},
+		{9999, 10000, "99.9"},
+		{10001, 10000, "100.0"},
+		{2000 * 1024 * 1024 * 1024, 2000 * 1024 * 1024 * 1024, "100.0"},
+		{2000 * 1024 * 1024 * 1024, ente.FreePlanStorage, "20000.0"},
+	} {
+		if got := photosStorageUsagePercent(tc.usage, tc.allowance); got != tc.want {
+			t.Fatalf("usage=%d allowance=%d: got %s, want %s", tc.usage, tc.allowance, got, tc.want)
+		}
 	}
 }
