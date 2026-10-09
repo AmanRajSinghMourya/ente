@@ -11,6 +11,7 @@ import 'package:photos/core/event_bus.dart';
 import 'package:photos/events/signed_in_event.dart';
 import 'package:photos/service_locator.dart';
 import 'package:photos/services/sync/sync_service.dart';
+import 'package:photos/utils/bg_task_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef BackgroundPushHandler = Future<void> Function(Object message);
@@ -36,7 +37,7 @@ class PushService {
     _prefs = await SharedPreferences.getInstance();
     await Firebase.initializeApp();
     if (Platform.isAndroid) {
-      FirebaseMessaging.onBackgroundMessage(_handleAndroidBackgroundPush);
+      FirebaseMessaging.onBackgroundMessage(handleAndroidBackgroundPush);
     } else if (onBackgroundPush != null) {
       FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
     }
@@ -138,7 +139,11 @@ class PushService {
 }
 
 @pragma('vm:entry-point')
-Future<void> _handleAndroidBackgroundPush(RemoteMessage message) async {
+Future<void> handleAndroidBackgroundPush(RemoteMessage message) async {
+  if (!PushService.shouldSync(message)) return;
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp().timeout(const Duration(seconds: 10));
+  await BgTaskUtils.scheduleAndroidBackgroundRefresh().timeout(
+    const Duration(seconds: 10),
+  );
 }
