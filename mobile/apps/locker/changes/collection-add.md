@@ -1,0 +1,1 @@
+- Added collection-specific document, note, scan, thing and secret creation for internal users.

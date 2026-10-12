@@ -2,7 +2,6 @@ import 'package:ente_components/ente_components.dart';
 import 'package:ente_strings/ente_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:locker/models/info/info_item.dart';
-import 'package:locker/ui/components/collection_selection_widget.dart';
 import 'package:locker/ui/pages/base_info_page.dart';
 
 class PersonalNotePage extends BaseInfoPage<PersonalNoteData> {
@@ -11,6 +10,7 @@ class PersonalNotePage extends BaseInfoPage<PersonalNoteData> {
     super.mode = InfoPageMode.edit,
     super.existingFile,
     super.onCancelWithoutSaving,
+    super.fixedCollection,
   });
 
   @override
@@ -159,15 +159,7 @@ class _PersonalNotePageState
             maxLines: 12,
           ),
           SizedBox(height: collectionSpacing),
-          CollectionSelectionWidget(
-            collections: availableCollections,
-            selectedCollectionIds: selectedCollectionIds,
-            onToggleCollection: toggleCollectionSelection,
-            onCollectionsUpdated: updateAvailableCollections,
-            title: showCollectionSelectionTitle
-                ? context.strings.collections
-                : '',
-          ),
+          buildCollectionSelection(),
         ],
       ),
     );

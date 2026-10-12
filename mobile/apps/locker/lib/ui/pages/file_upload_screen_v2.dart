@@ -9,6 +9,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:locker/services/collections/models/collection.dart';
 import 'package:locker/services/configuration.dart';
 import 'package:locker/ui/components/collection_selection_widget_v2.dart';
+import 'package:locker/ui/components/fixed_collection_widget.dart';
 import 'package:locker/ui/components/text_input_sheet.dart';
 import 'package:locker/ui/pages/file_upload_screen.dart';
 import 'package:locker/utils/bottom_sheet_illustration.dart';
@@ -23,12 +24,14 @@ class FileUploadScreenV2 extends StatefulWidget {
   final List<File> files;
   final List<Collection> collections;
   final Collection? selectedCollection;
+  final Collection? fixedCollection;
 
   const FileUploadScreenV2({
     super.key,
     required this.files,
-    required this.collections,
+    this.collections = const [],
     this.selectedCollection,
+    this.fixedCollection,
   });
 
   @override
@@ -44,6 +47,7 @@ class _FileUploadScreenV2State extends State<FileUploadScreenV2> {
   @override
   void initState() {
     super.initState();
+    if (widget.fixedCollection != null) return;
     final selected = widget.selectedCollection;
     if (selected != null &&
         (selected.type != CollectionType.uncategorized ||
@@ -104,24 +108,30 @@ class _FileUploadScreenV2State extends State<FileUploadScreenV2> {
                     padding: const EdgeInsets.all(Spacing.lg),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final collections = IgnorePointer(
-                          ignoring: !hasFiles,
-                          child: AnimatedOpacity(
-                            duration: Motion.standard,
-                            opacity: hasFiles ? 1 : 0.5,
-                            child: CollectionSelectionWidgetV2(
-                              collections: _collections,
-                              selectedCollectionIds: _selectedIds,
-                              onToggleCollection: (id) => setState(() {
-                                if (!_selectedIds.remove(id)) {
-                                  _selectedIds.add(id);
-                                }
-                              }),
-                              onCollectionsUpdated: (collections) =>
-                                  setState(() => _collections = collections),
-                            ),
-                          ),
-                        );
+                        final collections = widget.fixedCollection != null
+                            ? FixedCollectionWidget(
+                                collection: widget.fixedCollection!,
+                              )
+                            : IgnorePointer(
+                                ignoring: !hasFiles,
+                                child: AnimatedOpacity(
+                                  duration: Motion.standard,
+                                  opacity: hasFiles ? 1 : 0.5,
+                                  child: CollectionSelectionWidgetV2(
+                                    collections: _collections,
+                                    selectedCollectionIds: _selectedIds,
+                                    onToggleCollection: (id) => setState(() {
+                                      if (!_selectedIds.remove(id)) {
+                                        _selectedIds.add(id);
+                                      }
+                                    }),
+                                    onCollectionsUpdated: (collections) =>
+                                        setState(
+                                          () => _collections = collections,
+                                        ),
+                                  ),
+                                ),
+                              );
                         final files = AnimatedSwitcher(
                           duration: Motion.standard,
                           child: hasFiles
@@ -183,20 +193,26 @@ class _FileUploadScreenV2State extends State<FileUploadScreenV2> {
                                   ),
                                   const SizedBox(height: Spacing.xl),
                                   _SectionLabel(
-                                    title: l10n.addToCollections,
-                                    meta: selectedCount == 0
+                                    title: widget.fixedCollection == null
+                                        ? l10n.addToCollections
+                                        : l10n.collectionLabel,
+                                    meta:
+                                        widget.fixedCollection != null ||
+                                            selectedCount == 0
                                         ? null
                                         : l10n.selectedCount(
                                             count: selectedCount,
                                           ),
                                   ),
-                                  const SizedBox(height: Spacing.xs),
-                                  Text(
-                                    l10n.uncategorizedUploadHint,
-                                    style: TextStyles.mini.copyWith(
-                                      color: colors.textLight,
+                                  if (widget.fixedCollection == null) ...[
+                                    const SizedBox(height: Spacing.xs),
+                                    Text(
+                                      l10n.uncategorizedUploadHint,
+                                      style: TextStyles.mini.copyWith(
+                                        color: colors.textLight,
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                   const SizedBox(height: Spacing.sm),
                                   Flexible(
                                     child: ConstrainedBox(
@@ -236,9 +252,9 @@ class _FileUploadScreenV2State extends State<FileUploadScreenV2> {
         files: List.of(_files),
         fileNames: {for (final file in _files) file.path: _nameOf(file)},
         note: '',
-        selectedCollections: _collections
-            .where((c) => _selectedIds.contains(c.id))
-            .toList(),
+        selectedCollections: widget.fixedCollection != null
+            ? [widget.fixedCollection!]
+            : _collections.where((c) => _selectedIds.contains(c.id)).toList(),
       ),
     );
   }

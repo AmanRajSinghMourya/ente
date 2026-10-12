@@ -6,6 +6,7 @@ import 'package:ente_strings/ente_strings.dart';
 import 'package:ente_ui/utils/toast_util.dart';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:locker/services/collections/models/collection.dart';
 import 'package:locker/services/feature_flag_service.dart';
 import 'package:locker/ui/pages/account_credentials_page.dart';
 import 'package:locker/ui/pages/personal_note_page.dart';
@@ -74,6 +75,7 @@ void handleSaveOption(
   required Future<bool> Function() onUploadDocument,
   required Future<bool> Function(List<File> files) onUploadFiles,
   VoidCallback? onCancelWithoutSaving,
+  Collection? fixedCollection,
 }) {
   switch (type) {
     case SaveOptionType.scanDocument:
@@ -86,8 +88,18 @@ void handleSaveOption(
         Navigator.of(context)
             .push<bool>(
               MaterialPageRoute(
-                builder: (context) =>
-                    ScannerCapturePage(onUploadFiles: onUploadFiles),
+                builder: (scannerContext) => ScannerCapturePage(
+                  onUploadFiles: (files) async {
+                    if (fixedCollection != null && !context.mounted) {
+                      showShortToast(
+                        scannerContext,
+                        scannerContext.strings.somethingWentWrong,
+                      );
+                      return false;
+                    }
+                    return onUploadFiles(files);
+                  },
+                ),
               ),
             )
             .then((didSave) {
@@ -109,16 +121,20 @@ void handleSaveOption(
     case SaveOptionType.note:
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) =>
-              PersonalNotePage(onCancelWithoutSaving: onCancelWithoutSaving),
+          builder: (context) => PersonalNotePage(
+            onCancelWithoutSaving: onCancelWithoutSaving,
+            fixedCollection: fixedCollection,
+          ),
         ),
       );
       break;
     case SaveOptionType.physicalRecord:
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) =>
-              PhysicalRecordsPage(onCancelWithoutSaving: onCancelWithoutSaving),
+          builder: (context) => PhysicalRecordsPage(
+            onCancelWithoutSaving: onCancelWithoutSaving,
+            fixedCollection: fixedCollection,
+          ),
         ),
       );
       break;
@@ -127,6 +143,7 @@ void handleSaveOption(
         MaterialPageRoute(
           builder: (context) => AccountCredentialsPage(
             onCancelWithoutSaving: onCancelWithoutSaving,
+            fixedCollection: fixedCollection,
           ),
         ),
       );
@@ -139,6 +156,7 @@ Future<void> showSaveBottomSheet(
   required Future<bool> Function() onUploadDocument,
   required Future<bool> Function(List<File> files) onUploadFiles,
   bool includeScanner = true,
+  Collection? fixedCollection,
 }) {
   return showBottomSheetComponent<void>(
     context: context,
@@ -147,6 +165,7 @@ Future<void> showSaveBottomSheet(
       onUploadDocument: onUploadDocument,
       onUploadFiles: onUploadFiles,
       includeScanner: includeScanner,
+      fixedCollection: fixedCollection,
     ),
   );
 }
@@ -158,12 +177,14 @@ class SaveBottomSheet extends StatelessWidget {
     required this.onUploadDocument,
     required this.onUploadFiles,
     this.includeScanner = true,
+    this.fixedCollection,
   });
 
   final BuildContext rootContext;
   final Future<bool> Function() onUploadDocument;
   final Future<bool> Function(List<File> files) onUploadFiles;
   final bool includeScanner;
+  final Collection? fixedCollection;
 
   @override
   Widget build(BuildContext context) {
@@ -227,17 +248,18 @@ class SaveBottomSheet extends StatelessWidget {
   }
 
   void _handleSaveOption(BuildContext context, SaveOptionType type) {
-    final navigator = Navigator.of(context);
+    if (!context.mounted) return;
     void reopenSheet() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!navigator.mounted) {
+        if (!context.mounted) {
           return;
         }
         showSaveBottomSheet(
-          navigator.context,
+          context,
           onUploadDocument: onUploadDocument,
           onUploadFiles: onUploadFiles,
           includeScanner: includeScanner,
+          fixedCollection: fixedCollection,
         );
       });
     }
@@ -248,6 +270,7 @@ class SaveBottomSheet extends StatelessWidget {
       onUploadDocument: onUploadDocument,
       onUploadFiles: onUploadFiles,
       onCancelWithoutSaving: reopenSheet,
+      fixedCollection: fixedCollection,
     );
   }
 }

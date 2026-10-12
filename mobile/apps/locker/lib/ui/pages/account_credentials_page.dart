@@ -10,6 +10,7 @@ class AccountCredentialsPage extends BaseInfoPage<AccountCredentialData> {
     super.mode = InfoPageMode.edit,
     super.existingFile,
     super.onCancelWithoutSaving,
+    super.fixedCollection,
   });
 
   @override
