@@ -17,8 +17,6 @@ extension CollectionViewTypeActions on CollectionViewType {
       this == CollectionViewType.sharedCollectionViewer ||
       this == CollectionViewType.sharedCollectionCollaborator;
 
-  bool get showDownloadOption => true;
-
   bool get showEditOption => !isIncomingShare;
 
   bool get showDeleteOption => !isIncomingShare;

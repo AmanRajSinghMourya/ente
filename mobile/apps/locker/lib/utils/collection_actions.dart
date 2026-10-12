@@ -451,43 +451,6 @@ class CollectionActions {
     }
   }
 
-  Future<bool> doesEmailHaveAccount(
-    BuildContext context,
-    String email, {
-    bool showProgress = false,
-  }) async {
-    ProgressDialog? dialog;
-    String? publicKey;
-    if (showProgress) {
-      dialog = createProgressDialog(
-        context,
-        context.strings.sharing,
-        isDismissible: true,
-      );
-      await dialog.show();
-    }
-    try {
-      publicKey = await UserService.instance.getPublicKey(email);
-    } catch (e) {
-      await dialog?.hide();
-      _logger.severe("Failed to get public key", e);
-      if (context.mounted) {
-        await showLockerErrorSheet(context, e);
-      }
-      return false;
-    }
-    if (publicKey == null || publicKey == '') {
-      // todo: neeraj replace this as per the design where a new screen
-      // is used for error. Do this change along with handling of network errors
-      if (context.mounted) {
-        await showInviteSheet(context, email: email);
-      }
-      return false;
-    } else {
-      return true;
-    }
-  }
-
   Future<bool> addEmailToCollection(
     BuildContext? context,
     Collection collection,

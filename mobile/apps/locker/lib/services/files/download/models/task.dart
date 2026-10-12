@@ -29,11 +29,6 @@ class DownloadTask {
   double get progress => totalBytes > 0 ? bytesDownloaded / totalBytes : 0.0;
   bool get isCompleted => status == DownloadStatus.completed;
   bool get isActive => status == DownloadStatus.downloading;
-  bool get isFinished => [
-    DownloadStatus.completed,
-    DownloadStatus.error,
-    DownloadStatus.cancelled,
-  ].contains(status);
 
   Map<String, dynamic> toMap() => {
     'id': id,

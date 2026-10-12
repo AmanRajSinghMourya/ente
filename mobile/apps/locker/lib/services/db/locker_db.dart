@@ -273,22 +273,6 @@ class LockerDB extends EnteBaseDatabase {
     return _collectionSyncTimesCache[collectionId] ?? 0;
   }
 
-  Future<int> getCollectionSyncTimeAsync(int collectionId) async {
-    final result = await _db.query(
-      _syncTimesTable,
-      where: 'key = ?',
-      whereArgs: ['collection_sync_time_$collectionId'],
-    );
-
-    int syncTime = 0;
-    if (result.isNotEmpty) {
-      syncTime = result.first['value'] as int;
-    }
-
-    _collectionSyncTimesCache[collectionId] = syncTime;
-    return syncTime;
-  }
-
   Future<void> setCollectionSyncTime(int collectionId, int lastSyncTime) async {
     await _db.insert(_syncTimesTable, {
       'key': 'collection_sync_time_$collectionId',

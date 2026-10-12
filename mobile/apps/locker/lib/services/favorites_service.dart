@@ -61,10 +61,6 @@ class FavoritesService {
     }
   }
 
-  bool hasFavorites() {
-    return _cachedFavUploadedIDs.isNotEmpty;
-  }
-
   void clearCache() {
     _cachedFavoritesCollectionID = null;
     _cachedFavUploadedIDs.clear();
@@ -252,11 +248,6 @@ class FavoritesService {
     }
 
     return _collectionService.getCollectionByID(_cachedFavoritesCollectionID!);
-  }
-
-  Future<int?> getFavoriteCollectionID() async {
-    final collection = await getFavoritesCollection();
-    return collection?.id;
   }
 
   Future<int> _getOrCreateFavoriteCollectionID() async {

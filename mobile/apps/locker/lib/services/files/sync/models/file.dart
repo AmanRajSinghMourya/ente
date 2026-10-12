@@ -44,8 +44,6 @@ class EnteFile {
 
   set pubMagicMetadata(PubMagicMetadata? val) => _pubMmd = val;
 
-  static const kCurrentMetadataVersion = 2;
-
   static final _logger = Logger('File');
 
   static EnteFile fromFile(File file, {String? fileName}) {
@@ -91,10 +89,6 @@ class EnteFile {
     }
     if (title == null && kDebugMode) _logger.severe('File title is null');
     return title ?? '';
-  }
-
-  bool get isUploaded {
-    return uploadedFileID != null;
   }
 
   void applyMetadata(Map<String, dynamic> metadata) {

@@ -69,22 +69,7 @@ class Collection {
     this.isDeleted = false,
   });
 
-  bool isArchived() {
-    return mMdVersion > 0 && magicMetadata.visibility == archiveVisibility;
-  }
-
-  bool hasShareeArchived() {
-    return sharedMmdVersion > 0 &&
-        sharedMagicMetadata.visibility == archiveVisibility;
-  }
-
-  bool get hasLink => publicURLs.isNotEmpty;
-
-  bool get hasCover => (pubMagicMetadata.coverID ?? 0) > 0;
-
   bool get hasSharees => sharees.isNotEmpty;
-
-  bool get isPinned => (magicMetadata.order ?? 0) != 0;
 
   bool isHidden() {
     if (isDefaultHidden()) {
@@ -108,27 +93,6 @@ class Collection {
 
   bool isOwner(int userID) {
     return owner.id == userID;
-  }
-
-  bool isDownloadEnabledForPublicLink() {
-    if (publicURLs.isEmpty) {
-      return false;
-    }
-    return publicURLs.first.enableDownload;
-  }
-
-  bool isCollectEnabledForPublicLink() {
-    if (publicURLs.isEmpty) {
-      return false;
-    }
-    return publicURLs.first.enableCollect;
-  }
-
-  bool get isJoinEnabled {
-    if (publicURLs.isEmpty) {
-      return false;
-    }
-    return publicURLs.first.enableJoin;
   }
 
   CollectionParticipantRole getRole(int userID) {

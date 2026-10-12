@@ -49,38 +49,4 @@ class CollectionSortUtil {
     final nameB = b.name ?? b.name ?? '';
     return nameA.toLowerCase().compareTo(nameB.toLowerCase());
   }
-
-  static int compareCollectionsWithFavoritesPriority(
-    Collection a,
-    Collection b,
-    bool ascending,
-  ) {
-    if (a.type == CollectionType.favorites &&
-        b.type != CollectionType.favorites) {
-      return -1;
-    }
-    if (b.type == CollectionType.favorites &&
-        a.type != CollectionType.favorites) {
-      return 1;
-    }
-    return ascending ? compareCollections(a, b) : compareCollections(b, a);
-  }
-
-  static int compareCollectionsByDateWithFavoritesPriority(
-    Collection a,
-    Collection b,
-    bool ascending,
-  ) {
-    if (a.type == CollectionType.favorites &&
-        b.type != CollectionType.favorites) {
-      return -1;
-    }
-    if (b.type == CollectionType.favorites &&
-        a.type != CollectionType.favorites) {
-      return 1;
-    }
-    final dateA = DateTime.fromMicrosecondsSinceEpoch(a.updationTime);
-    final dateB = DateTime.fromMicrosecondsSinceEpoch(b.updationTime);
-    return ascending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
-  }
 }

@@ -9,9 +9,6 @@ class LockerBottomSheetIllustration extends StatelessWidget {
   static const warningBlue = LockerBottomSheetIllustration._(
     "assets/warning-blue.png",
   );
-  static const warningRed = LockerBottomSheetIllustration._(
-    "assets/warning-red.png",
-  );
   static const fileDelete = LockerBottomSheetIllustration._(
     "assets/file_delete_icon.png",
   );

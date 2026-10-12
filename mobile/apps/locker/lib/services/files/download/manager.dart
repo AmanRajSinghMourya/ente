@@ -22,11 +22,6 @@ class DownloadManager {
 
   DownloadManager(this._dio);
 
-  Stream<DownloadTask> watchDownload(int fileId) {
-    _streams[fileId] ??= StreamController<DownloadTask>.broadcast();
-    return _streams[fileId]!.stream;
-  }
-
   bool enableResumableDownload(int? size) {
     if (size == null) return false;
     //todo: Use FileUrlType.direct instead of FileUrlType.directDownload
@@ -79,24 +74,6 @@ class DownloadManager {
     return completer.future;
   }
 
-  Future<void> pause(int fileId) async {
-    final token = _cancelTokens[fileId];
-    if (token != null && !token.isCancelled) {
-      token.cancel('paused');
-    }
-
-    final task = _tasks[fileId];
-    if (task != null && task.isActive) {
-      _updateTask(task.copyWith(status: DownloadStatus.paused));
-    }
-
-    final stream = _streams[fileId];
-    if (stream != null && !stream.hasListener) {
-      await stream.close();
-      _streams.remove(fileId);
-    }
-  }
-
   Future<void> cancel(int fileId) async {
     final token = _cancelTokens[fileId];
     if (token != null && !token.isCancelled) {
@@ -111,10 +88,6 @@ class DownloadManager {
     }
     _cleanup(fileId);
   }
-
-  Future<DownloadTask?> getDownload(int fileId) async => _tasks[fileId];
-
-  Future<List<DownloadTask>> getAllDownloads() async => _tasks.values.toList();
 
   Future<void> _startDownload(
     DownloadTask task,

@@ -1,12 +1,9 @@
 import 'dart:async';
-import "dart:math";
 import 'dart:typed_data';
 
-import "package:ente_accounts/services/user_service.dart";
 import 'package:ente_events/event_bus.dart';
 import 'package:ente_events/models/signed_in_event.dart';
 import "package:ente_events/models/trigger_logout_event.dart";
-import "package:ente_sharing/models/user.dart";
 import 'package:ente_strings/ente_strings.dart';
 import "package:ente_ui/utils/toast_util.dart";
 import "package:fast_base58/fast_base58.dart";
@@ -33,19 +30,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 class CollectionService {
   static final CollectionService instance =
       CollectionService._privateConstructor();
-
-  static const Set<String> _suggestedCollectionNames = {
-    'Personal',
-    'Work',
-    'Travel',
-    'Family',
-    'Projects',
-    'School',
-    'Music',
-    'Books',
-    'Events',
-    'Holidays',
-  };
 
   final _logger = Logger("CollectionService");
 
@@ -256,18 +240,6 @@ class CollectionService {
 
   Future<int> getFileCount(Collection collection) async =>
       _db.getFileCount(collection);
-
-  Future<int> getFileSize(EnteFile file) async {
-    int fileSize;
-    if (file.fileSize != null) {
-      fileSize = file.fileSize!;
-    } else {
-      // TODO: Need to write the code to getFile from server
-      // fileSize = await getFile(file).then((f) => f!.length());
-      fileSize = 0;
-    }
-    return fileSize;
-  }
 
   Future<List<EnteFile>> getAllFiles() async {
     try {
@@ -741,35 +713,6 @@ class CollectionService {
     return createCollection("Documents", type: CollectionType.folder);
   }
 
-  Future<String> getRandomUnusedCollectionName() async {
-    try {
-      final existingCollections = await getCollections();
-      final existingNames = existingCollections
-          .map((collection) => collection.name?.toLowerCase())
-          .where((name) => name != null)
-          .toSet();
-
-      final availableNames = _suggestedCollectionNames
-          .where((name) => !existingNames.contains(name.toLowerCase()))
-          .toList();
-
-      if (availableNames.isEmpty) {
-        _logger.info(
-          "All suggested collection names are used, returning 'Documents'",
-        );
-        return "Documents";
-      }
-
-      final random = Random();
-      final randomName = availableNames[random.nextInt(availableNames.length)];
-      _logger.info("Selected random unused collection name");
-      return randomName;
-    } catch (e) {
-      _logger.severe("Failed to get random unused collection name: $e");
-      return "Documents";
-    }
-  }
-
   Future<Collection> getCollection(int collectionID) async {
     if (_collectionIDToCollections.containsKey(collectionID)) {
       return _collectionIDToCollections[collectionID]!;
@@ -813,46 +756,6 @@ class CollectionService {
         .toList();
   }
 
-  List<UserSuggestion> getRelevantContacts() {
-    final int ownerID = Configuration.instance.getUserID()!;
-    final String ownerEmail = Configuration.instance.getEmail()!;
-    final suggestions = <UserSuggestion>[];
-    final existingEmails = <String>{ownerEmail};
-
-    void add(String email, {int? userID}) {
-      if (email.isNotEmpty && existingEmails.add(email)) {
-        suggestions.add(UserSuggestion(email, userID: userID));
-      }
-    }
-
-    for (final c in getActiveCollections()) {
-      if (c.owner.id == ownerID) {
-        for (final User u in c.sharees) {
-          add(u.email, userID: u.id);
-        }
-      } else if (c.owner.email.isNotEmpty) {
-        add(c.owner.email, userID: c.owner.id);
-        final participates = c.sharees.any(
-          (u) => u.email == ownerEmail && (u.isCollaborator || u.isViewer),
-        );
-        if (participates) {
-          for (final User u in c.sharees) {
-            if (u.isCollaborator) {
-              add(u.email, userID: u.id);
-            }
-          }
-        }
-      }
-    }
-
-    final familyMembers =
-        UserService.instance.getCachedUserDetails()?.familyData?.members ?? [];
-    for (final member in familyMembers) {
-      add(member.email, userID: member.userID);
-    }
-    return suggestions;
-  }
-
   String getPublicUrl(Collection c) {
     final PublicURL url = c.publicURLs.firstOrNull!;
     final Uri publicUrl = Uri.parse(url.url);
@@ -870,10 +773,6 @@ class CollectionService {
 
   void updateCollectionCache(Collection collection) {
     _collectionIDToCollections[collection.id] = collection;
-  }
-
-  void removeFromCache(int collectionId) {
-    _collectionIDToCollections.remove(collectionId);
   }
 
   Collection? getFromCache(int collectionId) {
