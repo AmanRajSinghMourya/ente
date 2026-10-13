@@ -10,6 +10,7 @@ class PhysicalRecordsPage extends BaseInfoPage<PhysicalRecordData> {
     super.mode = InfoPageMode.edit,
     super.existingFile,
     super.onCancelWithoutSaving,
+    super.fixedCollection,
   });
 
   @override

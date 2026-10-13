@@ -14,6 +14,7 @@ class EmptyStateWidget extends StatelessWidget {
     this.horizontalPadding = 24,
     this.verticalPadding = 42,
     this.spacing = 20,
+    this.action,
   });
 
   final String assetPath;
@@ -25,6 +26,7 @@ class EmptyStateWidget extends StatelessWidget {
   final double horizontalPadding;
   final double verticalPadding;
   final double spacing;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +64,10 @@ class EmptyStateWidget extends StatelessWidget {
                 style: TextStyles.body.copyWith(color: colors.textLight),
                 textAlign: TextAlign.center,
               ),
+            if (action != null) ...[
+              const SizedBox(height: Spacing.xl),
+              action!,
+            ],
           ],
         ),
       ),

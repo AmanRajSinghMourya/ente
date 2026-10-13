@@ -12,6 +12,7 @@ import 'package:locker/services/collections/collections_service.dart';
 import 'package:locker/services/collections/models/collection.dart';
 import "package:locker/services/collections/models/collection_view_type.dart";
 import "package:locker/services/configuration.dart";
+import 'package:locker/services/feature_flag_service.dart';
 import 'package:locker/services/files/sync/models/file.dart';
 import "package:locker/ui/components/collection_popup_menu_widget.dart";
 import "package:locker/ui/components/empty_state_widget.dart";
@@ -19,6 +20,7 @@ import 'package:locker/ui/components/item_list_view.dart';
 import 'package:locker/ui/components/search_result_view.dart';
 import 'package:locker/ui/mixins/search_mixin.dart';
 import 'package:locker/ui/pages/home_page.dart';
+import 'package:locker/ui/pages/save_page.dart';
 import 'package:locker/ui/pages/uploader_page.dart';
 import "package:locker/ui/sharing/share_collection_bottom_sheet.dart";
 import "package:locker/ui/viewer/actions/file_selection_overlay_bar.dart";
@@ -48,6 +50,9 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
   late Collection _collection;
   List<EnteFile> _files = [];
   List<EnteFile> _filteredFiles = [];
+  bool _isLoading = true;
+  bool _hasLoadError = false;
+  int _loadGeneration = 0;
   late CollectionViewType collectionViewType;
   bool isQuickLink = false;
   bool isFavorite = false;
@@ -62,9 +67,8 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
       "File upload completed from CollectionPage (${widget.collection.id}), refreshing collection data",
     );
     CollectionService.instance.getCollections().then((collections) {
-      setState(() {
-        _initializeData(collections.where((c) => c.id == _collection.id).first);
-      });
+      if (!mounted) return;
+      _initializeData(collections.where((c) => c.id == _collection.id).first);
     });
   }
 
@@ -111,6 +115,10 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
   bool get _isSelectionEnabled =>
       collectionViewType != CollectionViewType.quickLink;
 
+  bool get _canAddToCollection =>
+      FeatureFlagService.instance.internalUser &&
+      collectionViewType == CollectionViewType.ownedCollection;
+
   @override
   void initState() {
     super.initState();
@@ -137,27 +145,60 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
             'Collection ${widget.collection.id} no longer exists, navigating back',
           );
           if (mounted) {
-            Navigator.of(context).pop();
+            final route = ModalRoute.of(context)!;
+            if (route.isCurrent) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).removeRoute(route);
+            }
           }
         }
       } catch (e) {
         _logger.severe('Error updating collection', e);
       }
     });
+  }
 
+  Future<void> _initializeData(Collection collection) async {
+    final generation = ++_loadGeneration;
+    _collection = collection;
     collectionViewType = getCollectionViewType(
-      _collection,
+      collection,
       Configuration.instance.getUserID()!,
     );
     isFavorite = collectionViewType == CollectionViewType.favorite;
     isQuickLink = collectionViewType == CollectionViewType.quickLink;
+    try {
+      final files = await CollectionService.instance.getFilesInCollection(
+        collection,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _files = files;
+        _filteredFiles = files;
+        _hasLoadError = false;
+        _isLoading = false;
+      });
+    } catch (e, s) {
+      _logger.severe('Error loading collection files', e, s);
+      if (!mounted || generation != _loadGeneration) return;
+      if (!_isLoading && !_hasLoadError) return;
+      setState(() {
+        _hasLoadError = true;
+        _isLoading = false;
+      });
+    }
   }
 
-  Future<void> _initializeData(Collection collection) async {
-    _collection = collection;
-    _files = await CollectionService.instance.getFilesInCollection(_collection);
-    _filteredFiles = _files;
-    setState(() {});
+  void _openSaveSheet() {
+    final fixedCollection = _collection;
+    showSaveBottomSheet(
+      context,
+      fixedCollection: fixedCollection,
+      onUploadDocument: () => addFile(fixedCollection: fixedCollection),
+      onUploadFiles: (files) =>
+          uploadFiles(files, fixedCollection: fixedCollection),
+    );
   }
 
   Future<void> _shareCollection() async {
@@ -192,6 +233,25 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
       onKeyEvent: handleKeyEvent,
       child: Scaffold(
         backgroundColor: colors.backgroundBase,
+        floatingActionButton:
+            !_canAddToCollection || isSearchActive || _isLoading || _hasLoadError
+            ? null
+            : ListenableBuilder(
+                listenable: _selectedFiles,
+                builder: (context, _) => _selectedFiles.hasSelections
+                    ? const SizedBox.shrink()
+                    : Semantics(
+                        button: true,
+                        label: context.strings.addDocuments,
+                        child: FABComponent(
+                          icon: HugeIcon(
+                            icon: HugeIcons.strokeRoundedPlusSign,
+                            color: colors.specialWhite,
+                          ),
+                          onTap: _openSaveSheet,
+                        ),
+                      ),
+              ),
         body: Stack(
           alignment: Alignment.bottomCenter,
           children: [
@@ -261,6 +321,36 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
       ];
     }
 
+    if (_isLoading && FeatureFlagService.instance.internalUser) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: LoadingComponent()),
+        ),
+      ];
+    }
+
+    if (_hasLoadError && FeatureFlagService.instance.internalUser) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(context.strings.somethingWentWrong),
+                const SizedBox(height: 16),
+                ButtonComponent(
+                  label: context.strings.retry,
+                  onTap: () => _initializeData(_collection),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ];
+    }
+
     if (_displayedFiles.isEmpty) {
       return [
         SliverFillRemaining(
@@ -273,6 +363,16 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
                 title: context.strings.nothingToSeeHere,
                 subtitle: context.strings.collectionEmptyStateSubtitle,
                 showBorder: false,
+                action: _canAddToCollection
+                    ? ButtonComponent(
+                        label: context.strings.addDocuments,
+                        leading: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedPlusSign,
+                        ),
+                        shouldSurfaceExecutionStates: false,
+                        onTap: _openSaveSheet,
+                      )
+                    : null,
               ),
             ),
           ),

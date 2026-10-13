@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:locker/services/collections/models/collection.dart';
 import 'package:locker/ui/components/collection_selection_widget_v2.dart';
+import 'package:locker/ui/pages/file_upload_screen.dart';
 import 'package:locker/ui/pages/file_upload_screen_v2.dart';
 
 void main() {
@@ -16,6 +17,62 @@ void main() {
     File('/upload/Passport_scan.pdf'),
     File('/upload/IMG_4821.png'),
   ];
+
+  final fixedCollection = Collection(
+    42,
+    User(id: 1, email: 'owner@example.com'),
+    '',
+    null,
+    'Documents',
+    null,
+    null,
+    CollectionType.folder,
+    CollectionAttributes(),
+    const [],
+    const [],
+    0,
+  );
+
+  testWidgets('fixed upload has no picker and saves only to its destination', (
+    tester,
+  ) async {
+    FileUploadScreenResult? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: StringsLocalizations.localizationsDelegates,
+        supportedLocales: const [Locale('en')],
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              result = await Navigator.of(context).push<FileUploadScreenResult>(
+                MaterialPageRoute(
+                  builder: (_) => FileUploadScreenV2(
+                    files: files,
+                    fixedCollection: fixedCollection,
+                  ),
+                ),
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Documents'), findsOneWidget);
+    expect(find.byType(CollectionSelectionWidgetV2), findsNothing);
+    expect(find.text('New collection'), findsNothing);
+    expect(find.text('Add to collections'), findsNothing);
+    await tester.tap(find.text('Documents'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(result!.selectedCollections.map((c) => c.id), [42]);
+    expect(result!.files.map((f) => f.path), files.map((f) => f.path));
+  });
 
   Future<void> showScreen(WidgetTester tester) async {
     await tester.pumpWidget(

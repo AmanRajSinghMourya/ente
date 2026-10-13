@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:locker/core/errors.dart';
+import 'package:locker/events/collections_updated_event.dart';
 import 'package:locker/events/user_details_refresh_event.dart';
 import 'package:locker/models/info/info_item.dart';
 import 'package:locker/services/collections/collections_service.dart';
@@ -20,6 +21,7 @@ import 'package:locker/services/files/sync/models/file.dart';
 import 'package:locker/services/info_file_service.dart';
 import 'package:locker/services/trash/models/trash_file.dart';
 import 'package:locker/ui/components/collection_selection_widget.dart';
+import 'package:locker/ui/components/fixed_collection_widget.dart';
 import 'package:locker/ui/pages/home_page.dart';
 import "package:locker/utils/bottom_sheet_illustration.dart";
 import "package:locker/utils/error_sheet.dart";
@@ -31,12 +33,14 @@ abstract class BaseInfoPage<T extends InfoData> extends StatefulWidget {
   final InfoPageMode mode;
   final EnteFile? existingFile; // The file to edit, or null for new files
   final VoidCallback? onCancelWithoutSaving;
+  final Collection? fixedCollection;
 
   const BaseInfoPage({
     super.key,
     this.mode = InfoPageMode.edit,
     this.existingFile,
     this.onCancelWithoutSaving,
+    this.fixedCollection,
   });
 }
 
@@ -147,19 +151,25 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
   }
 
   @protected
-  List<Collection> get availableCollections => _availableCollections;
-
-  @protected
-  Set<int> get selectedCollectionIds => _selectedCollectionIds;
-
-  @protected
-  void toggleCollectionSelection(int collectionId) {
-    _onToggleCollection(collectionId);
-  }
-
-  @protected
-  void updateAvailableCollections(List<Collection> collections) {
-    _onCollectionsUpdated(collections);
+  Widget buildCollectionSelection() {
+    final fixedCollection = widget.fixedCollection;
+    if (fixedCollection != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(context.strings.collectionLabel, style: TextStyles.bodyBold),
+          const SizedBox(height: Spacing.sm),
+          FixedCollectionWidget(collection: fixedCollection),
+        ],
+      );
+    }
+    return CollectionSelectionWidget(
+      collections: _availableCollections,
+      selectedCollectionIds: _selectedCollectionIds,
+      onToggleCollection: _onToggleCollection,
+      onCollectionsUpdated: _onCollectionsUpdated,
+      title: showCollectionSelectionTitle ? context.strings.collections : '',
+    );
   }
 
   @protected
@@ -170,15 +180,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
         children: [
           ...buildFormFields(),
           SizedBox(height: collectionSpacing),
-          CollectionSelectionWidget(
-            collections: _availableCollections,
-            selectedCollectionIds: _selectedCollectionIds,
-            onToggleCollection: _onToggleCollection,
-            onCollectionsUpdated: _onCollectionsUpdated,
-            title: showCollectionSelectionTitle
-                ? context.strings.collections
-                : '',
-          ),
+          buildCollectionSelection(),
         ],
       ),
     );
@@ -203,6 +205,10 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
   void loadExistingData() {}
 
   Future<void> _loadCollections() async {
+    if (widget.fixedCollection != null) {
+      _hasLoadedCollectionSelection = true;
+      return;
+    }
     try {
       final isEditingExistingFile = widget.existingFile != null;
       final filteredCollections = await CollectionService.instance
@@ -415,9 +421,11 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
   }
 
   Future<void> _createNewFile(InfoItem infoItem) async {
-    final selectedCollections = _availableCollections
-        .where((c) => _selectedCollectionIds.contains(c.id))
-        .toList();
+    final selectedCollections = widget.fixedCollection != null
+        ? [widget.fixedCollection!]
+        : _availableCollections
+              .where((c) => _selectedCollectionIds.contains(c.id))
+              .toList();
 
     if (selectedCollections.isEmpty) {
       final uncategorizedCollection = await CollectionService.instance
@@ -449,6 +457,13 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
         : context.strings.recordSavedToMultipleCollections(
             count: collectionCount,
           );
+
+    if (widget.fixedCollection != null) {
+      Bus.instance.fire(CollectionsUpdatedEvent('record_created'));
+      showToast(context, message);
+      Navigator.of(context).pop(true);
+      return;
+    }
 
     await Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const HomePage()),

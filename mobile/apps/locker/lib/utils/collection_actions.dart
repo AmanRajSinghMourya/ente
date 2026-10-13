@@ -232,6 +232,7 @@ class CollectionActions {
     VoidCallback? onSuccess,
   }) async {
     final l10n = context.strings;
+    final navigator = Navigator.of(context);
     if (!collection.type.canDelete) {
       showToast(context, l10n.collectionCannotBeDeleted);
       return;
@@ -253,8 +254,8 @@ class CollectionActions {
 
         await progressDialog?.hide();
 
-        if (context.mounted) {
-          showToast(context, l10n.collectionDeletedSuccessfully);
+        if (navigator.mounted) {
+          showToast(navigator.context, l10n.collectionDeletedSuccessfully);
         }
 
         onSuccess?.call();
@@ -298,8 +299,8 @@ class CollectionActions {
 
       await progressDialog?.hide();
 
-      if (context.mounted) {
-        showToast(context, l10n.collectionDeletedSuccessfully);
+      if (navigator.mounted) {
+        showToast(navigator.context, l10n.collectionDeletedSuccessfully);
       }
 
       onSuccess?.call();

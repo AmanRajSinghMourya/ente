@@ -34,7 +34,7 @@ abstract class UploaderPageState<T extends UploaderPage> extends State<T> {
 
   void onFileUploadComplete();
 
-  Future<bool> addFile() async {
+  Future<bool> addFile({Collection? fixedCollection}) async {
     final FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.any,
       allowMultiple: true,
@@ -51,7 +51,10 @@ abstract class UploaderPageState<T extends UploaderPage> extends State<T> {
           .toList();
 
       if (selectedFiles.isNotEmpty) {
-        final outcome = await _uploadFiles(selectedFiles);
+        final outcome = await _uploadFiles(
+          selectedFiles,
+          fixedCollection: fixedCollection,
+        );
         return outcome != _UploadFilesOutcome.cancelled;
       }
     }
@@ -59,10 +62,19 @@ abstract class UploaderPageState<T extends UploaderPage> extends State<T> {
     return false;
   }
 
-  Future<bool> uploadFiles(List<File> files) async =>
-      await _uploadFiles(files) == _UploadFilesOutcome.succeeded;
+  Future<bool> uploadFiles(
+    List<File> files, {
+    Collection? fixedCollection,
+  }) async {
+    if (!mounted) return false;
+    return await _uploadFiles(files, fixedCollection: fixedCollection) ==
+        _UploadFilesOutcome.succeeded;
+  }
 
-  Future<_UploadFilesOutcome> _uploadFiles(List<File> files) async {
+  Future<_UploadFilesOutcome> _uploadFiles(
+    List<File> files, {
+    Collection? fixedCollection,
+  }) async {
     var outcome = _UploadFilesOutcome.cancelled;
     var hasUploadError = false;
     var completedPrimaryUploads = 0;
@@ -74,18 +86,25 @@ abstract class UploaderPageState<T extends UploaderPage> extends State<T> {
     try {
       final futures = <Future<void>>[];
 
-      final regularCollections = await CollectionService.instance
-          .getCollectionsForUI();
+      final regularCollections = fixedCollection == null
+          ? await CollectionService.instance.getCollectionsForUI()
+          : const <Collection>[];
 
       if (!mounted) {
         return _UploadFilesOutcome.cancelled;
       }
 
-      final useNewUploader = FeatureFlagService.instance.internalUser;
+      final useNewUploader =
+          fixedCollection != null || FeatureFlagService.instance.internalUser;
       final uploadResult = await Navigator.of(context)
           .push<FileUploadScreenResult>(
             MaterialPageRoute(
-              builder: (context) => useNewUploader
+              builder: (context) => fixedCollection != null
+                  ? FileUploadScreenV2(
+                      files: files,
+                      fixedCollection: fixedCollection,
+                    )
+                  : useNewUploader
                   ? FileUploadScreenV2(
                       files: files,
                       collections: regularCollections,
