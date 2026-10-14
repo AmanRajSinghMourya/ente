@@ -1,6 +1,7 @@
 package storagebonus_test
 
 import (
+	"context"
 	"encoding/base64"
 	"image/png"
 	"io"
@@ -43,7 +44,9 @@ func TestReferralEmails(t *testing.T) {
 	bonuses := bonusRepo.NewRepository(db)
 	require.NoError(t, bonuses.InsertCode(t.Context(), 102, "REFER1"))
 	require.NoError(t, bonuses.InsertCode(t.Context(), 103, "REFER2"))
+	push := &referralPushRecorder{}
 	controller := &storagebonus.Controller{
+		PushCtrl: push,
 		UserRepo: users, StorageBonus: bonuses,
 		EmailNotificationController: &email.EmailNotificationController{UserRepo: users},
 		LockController:              &lock.LockController{TaskLockingRepo: &repo.TaskLockRepository{DB: db}, HostName: "referral-test"},
@@ -79,6 +82,8 @@ func TestReferralEmails(t *testing.T) {
 	default:
 	}
 
+	require.Empty(t, push.recipients)
+
 	// The referrer's existing email is sent only after the friend becomes paid.
 	testutil.InsertSubscription(t, db, testutil.SubscriptionFixture{
 		UserID: 101, Storage: 50 << 30, ProductID: "photos_yearly", PaymentProvider: ente.Stripe,
@@ -87,6 +92,7 @@ func TestReferralEmails(t *testing.T) {
 	controller.PaymentUpgradeOrDowngradeCron()
 	assertReferralMail(t, messages, "referrer@example.com", "You've earned 10 GB on Ente! 🎁", "One of the customers you referred has upgraded to a paid plan, and as a thank you, we have credited 10 GB to your account.", "header-image")
 	controller.PaymentUpgradeOrDowngradeCron()
+	require.Equal(t, []int64{102}, push.recipients)
 	select {
 	case message := <-messages:
 		t.Fatalf("unexpected repeat referral email: %s", message)
@@ -216,6 +222,12 @@ func referralSMTP(t *testing.T) (<-chan string, func()) {
 		}
 	}()
 	return messages, stop
+}
+
+type referralPushRecorder struct{ recipients []int64 }
+
+func (p *referralPushRecorder) NotifyReferral(_ context.Context, recipient int64) {
+	p.recipients = append(p.recipients, recipient)
 }
 
 func TestReferralFamilyOwnership(t *testing.T) {

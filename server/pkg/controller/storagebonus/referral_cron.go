@@ -40,6 +40,9 @@ func (c *Controller) PaymentUpgradeOrDowngradeCron() {
 			logger.WithError(upgradeErr).WithFields(ctxField).Error("failed to track upgrade and invitor bonusCandidate")
 		} else {
 			c.EmailNotificationController.OnSuccessfulReferral(trackingEntry.Invitor)
+			if c.PushCtrl != nil {
+				c.PushCtrl.NotifyReferral(ctx, trackingEntry.Invitor)
+			}
 		}
 	}
 

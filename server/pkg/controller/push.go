@@ -104,6 +104,14 @@ func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token e
 }
 
 func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int64) {
+	c.notifyAndroid(ctx, recipients, "sync")
+}
+
+func (c *PushController) NotifyReferral(ctx context.Context, userID int64) {
+	c.notifyAndroid(ctx, []int64{userID}, "referral")
+}
+
+func (c *PushController) notifyAndroid(ctx context.Context, recipients []int64, action string) {
 	if viper.GetBool("internal.silent") || c.fcm == nil || len(recipients) == 0 {
 		return
 	}
@@ -112,18 +120,18 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, recipients)
 	cancel()
 	if err != nil {
-		log.WithError(err).Warn("album share push token lookup failed")
+		log.WithError(err).Warn("Android push token lookup failed")
 		return
 	}
 	var unregisteredTokens []string
 	for _, token := range tokens {
 		err = c.fcm.sendMessage(ctx, map[string]any{
 			"token":   token.FCMToken,
-			"data":    map[string]string{"action": "sync"},
+			"data":    map[string]string{"action": action},
 			"android": map[string]string{"priority": "high", "ttl": "86400s"},
 		})
 		if err != nil {
-			log.WithError(err).Warn("album share push failed; album remains shared")
+			log.WithError(err).Warn("Android push failed")
 			if errors.Is(err, errUnregisteredToken) {
 				unregisteredTokens = append(unregisteredTokens, token.FCMToken)
 			}

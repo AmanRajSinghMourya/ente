@@ -1,0 +1,1 @@
+- Added notifications for earned referral bonuses.

@@ -10,6 +10,8 @@ import 'package:photos/core/constants.dart';
 import 'package:photos/core/event_bus.dart';
 import 'package:photos/events/signed_in_event.dart';
 import 'package:photos/service_locator.dart';
+import 'package:photos/services/language_service.dart';
+import 'package:photos/services/notification_service.dart';
 import 'package:photos/services/sync/sync_service.dart';
 import 'package:photos/utils/bg_task_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +24,7 @@ class PushService {
   static const kFCMTokenUpdationIntervalInMicroSeconds = 30 * microSecondsInDay;
   static const kPushAction = "action";
   static const kSync = "sync";
+  static const kReferral = "referral";
 
   static final PushService instance = PushService._privateConstructor();
   static final _logger = Logger("PushService");
@@ -48,7 +51,7 @@ class PushService {
       RemoteMessage message,
     ) {
       _logger.info("Got a message whilst in the foreground!");
-      _handleForegroundPushMessage(message);
+      unawaited(_handleForegroundPushMessage(message));
     });
     if (_signedInSubscription != null) {
       await _signedInSubscription!.cancel();
@@ -117,7 +120,7 @@ class PushService {
     }
   }
 
-  void _handleForegroundPushMessage(RemoteMessage message) {
+  Future<void> _handleForegroundPushMessage(RemoteMessage message) async {
     _logger.info("Message data: ${message.data}");
     if (message.notification != null) {
       _logger.info(
@@ -125,7 +128,24 @@ class PushService {
       );
     }
     if (shouldSync(message)) {
-      SyncService.instance.sync();
+      unawaited(SyncService.instance.sync());
+    } else if (Platform.isAndroid && message.data[kPushAction] == kReferral) {
+      await _showReferralNotification();
+    }
+  }
+
+  static Future<void> _showReferralNotification() async {
+    try {
+      final strings = await LanguageService.locals;
+      await NotificationService.instance.showNotification(
+        strings.referralBonusNotificationTitle,
+        strings.referralBonusNotificationBody(storageInGB: "10"),
+        channelID: "io.ente.photos.referrals",
+        channelName: strings.referrals,
+        payload: "ente://referral",
+      );
+    } catch (e, s) {
+      _logger.warning("Could not show referral notification", e, s);
     }
   }
 
@@ -140,6 +160,11 @@ class PushService {
 
 @pragma('vm:entry-point')
 Future<void> handleAndroidBackgroundPush(RemoteMessage message) async {
+  if (message.data[PushService.kPushAction] == PushService.kReferral) {
+    WidgetsFlutterBinding.ensureInitialized();
+    await PushService._showReferralNotification();
+    return;
+  }
   if (!PushService.shouldSync(message)) return;
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp().timeout(const Duration(seconds: 10));
