@@ -114,6 +114,7 @@ func (c *Controller) ApplyReferralCode(ctx *gin.Context, code string) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "failed to apply code")
 	}
+	go c.EmailNotificationController.OnReferralCodeApplied(user.Email)
 	return nil
 }
 
