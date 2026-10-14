@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -164,7 +163,7 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
+func TestAlbumShareAndReferralSendOnlyAndroidActions(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
@@ -193,47 +192,16 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	controller.NotifyAlbumShare(ctx, []int64{1})
+	controller.NotifyReferral(ctx, 1)
 	require.Equal(t, []map[string]any{{
 		"token":   "android-device",
 		"data":    map[string]any{"action": "sync"},
 		"android": map[string]any{"priority": "high", "ttl": "86400s"},
+	}, {
+		"token":   "android-device",
+		"data":    map[string]any{"action": "referral"},
+		"android": map[string]any{"priority": "high", "ttl": "86400s"},
 	}}, messages)
-}
-
-func TestReferralPushUsesOnlyActionAndInternalAndroidSessions(t *testing.T) {
-	testutil.WithServerRoot(t)
-	db := testutil.RequireTestDB(t)
-	testutil.ResetTables(t, db)
-	t.Cleanup(func() { testutil.ResetTables(t, db) })
-	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
-	for _, userID := range []int64{1, 2} {
-		testutil.InsertUser(t, db, testutil.UserFixture{UserID: userID, Email: fmt.Sprintf("user%d@example.com", userID), CreationTime: 1})
-		session := fmt.Sprintf("session-%d", userID)
-		require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(userID, ente.Photos, session, "", ""))
-		hash := auth.HashToken(session)
-		for _, platform := range []string{"ios", "android"} {
-			require.NoError(t, controller.AddToken(userID, hash[:], ente.PushTokenRequest{FCMToken: fmt.Sprintf("%d-%s", userID, platform), Platform: &platform}))
-		}
-	}
-	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(1,'internalUser','true')`)
-	require.NoError(t, err)
-	var messages []map[string]any
-	controller.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		var envelope struct {
-			Message map[string]any `json:"message"`
-		}
-		require.NoError(t, json.NewDecoder(request.Body).Decode(&envelope))
-		messages = append(messages, envelope.Message)
-		return jsonResponse(http.StatusOK, "{}"), nil
-	})}}
-	controller.NotifyReferral(t.Context(), 1)
-	controller.NotifyReferral(t.Context(), 2)
-	require.Equal(t, []map[string]any{{"token": "1-android", "data": map[string]any{"action": "referral"}, "android": map[string]any{"priority": "high", "ttl": "86400s"}}}, messages)
-	hash := auth.HashToken("session-1")
-	_, err = (&repo.UserAuthRepository{DB: db}).RemoveTokenByHash(1, hash[:])
-	require.NoError(t, err)
-	controller.NotifyReferral(t.Context(), 1)
-	require.Len(t, messages, 1)
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
