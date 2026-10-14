@@ -109,7 +109,7 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	}
 	ctx = context.WithoutCancel(ctx)
 	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
-	tokens, err := c.PushRepo.GetTokensForAlbumShare(lookupCtx, recipients)
+	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, recipients)
 	cancel()
 	if err != nil {
 		log.WithError(err).Warn("album share push token lookup failed")

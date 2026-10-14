@@ -58,7 +58,7 @@ func (repo *PushTokenRepository) GetTokensToBeNotified(lastNotificationTime int6
 	return tokens, nil
 }
 
-func (repo *PushTokenRepository) GetTokensForAlbumShare(ctx context.Context, userIDs []int64) ([]ente.PushToken, error) {
+func (repo *PushTokenRepository) GetInternalAndroidTokens(ctx context.Context, userIDs []int64) ([]ente.PushToken, error) {
 	rows, err := repo.DB.QueryContext(ctx, `SELECT p.fcm_token FROM push_tokens p
 		JOIN tokens t ON t.token_hash = p.session_token_hash AND t.user_id = p.user_id AND t.is_deleted = false AND t.app = $3
 		JOIN remote_store r ON r.user_id = p.user_id AND r.key_name = $2 AND r.key_value = 'true'
