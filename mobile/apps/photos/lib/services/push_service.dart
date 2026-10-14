@@ -10,6 +10,7 @@ import 'package:photos/core/constants.dart';
 import 'package:photos/core/event_bus.dart';
 import 'package:photos/events/signed_in_event.dart';
 import 'package:photos/service_locator.dart';
+import 'package:photos/services/notification_key_service.dart';
 import 'package:photos/services/sync/sync_service.dart';
 import 'package:photos/utils/bg_task_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -100,10 +101,17 @@ class PushService {
   }
 
   Future<void> _setPushTokenOnServer(String fcmToken, String? apnsToken) async {
+    Map<String, Object>? notificationKey;
+    try {
+      notificationKey = await NotificationKeyService.generateNotificationKey();
+    } catch (e, s) {
+      _logPushError("Could not prepare notification key", e, s);
+    }
     await pushGateway.registerToken(
       fcmToken: fcmToken,
       platform: Platform.operatingSystem,
       apnsToken: apnsToken,
+      notificationKey: notificationKey,
     );
   }
 
