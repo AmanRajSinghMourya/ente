@@ -69,6 +69,8 @@ class NotificationService {
     if (event['eventType'] == 'album_shared') {
       _logger.info('Received encrypted album-share push');
       await onSync();
+    } else if (event['eventType'] == 'referral') {
+      await showReferralNotification();
     }
   }
 

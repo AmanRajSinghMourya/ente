@@ -135,9 +135,24 @@ func (c *PushController) notifyAndroid(ctx context.Context, recipients []int64, 
 	}
 	var unregisteredTokens []string
 	for _, token := range tokens {
+		data := map[string]string{"action": action}
+		if action == "referral" {
+			if len(token.NotificationPublicKey) == 0 {
+				continue
+			}
+			ciphertext, err := crypto.GetEncryptedToken(
+				base64.URLEncoding.EncodeToString([]byte(`{"version":1,"eventType":"referral"}`)),
+				base64.StdEncoding.EncodeToString(token.NotificationPublicKey),
+			)
+			if err != nil {
+				log.WithError(err).Warn("could not encrypt referral push")
+				continue
+			}
+			data = map[string]string{"notificationVersion": "1", "notificationCiphertext": ciphertext}
+		}
 		err = c.fcm.sendMessage(ctx, map[string]any{
 			"token":   token.FCMToken,
-			"data":    map[string]string{"action": action},
+			"data":    data,
 			"android": map[string]string{"priority": "high", "ttl": "86400s"},
 		})
 		if err != nil {

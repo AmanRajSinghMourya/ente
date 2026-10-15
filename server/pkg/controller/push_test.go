@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,6 +20,7 @@ import (
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/nacl/box"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -163,7 +166,7 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestAlbumShareAndReferralSendOnlyAndroidActions(t *testing.T) {
+func TestReferralPushEncryptsEventForInternalAndroid(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
@@ -197,11 +200,32 @@ func TestAlbumShareAndReferralSendOnlyAndroidActions(t *testing.T) {
 		"token":   "android-device",
 		"data":    map[string]any{"action": "sync"},
 		"android": map[string]any{"priority": "high", "ttl": "86400s"},
-	}, {
-		"token":   "android-device",
-		"data":    map[string]any{"action": "referral"},
-		"android": map[string]any{"priority": "high", "ttl": "86400s"},
 	}}, messages)
+
+	publicKey, privateKey, err := box.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	for _, platform := range []string{"ios", "android"} {
+		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
+			FCMToken: platform + "-device", Platform: &platform,
+			NotificationKey: &ente.NotificationKey{Version: 1, PublicKey: publicKey[:]},
+		}))
+	}
+	controller.NotifyReferral(ctx, 1)
+	require.Len(t, messages, 2)
+	require.Equal(t, "android-device", messages[1]["token"])
+	data := messages[1]["data"].(map[string]any)
+	require.Len(t, data, 2)
+	require.Equal(t, "1", data["notificationVersion"])
+	ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
+	require.NoError(t, err)
+	plaintext, ok := box.OpenAnonymous(nil, ciphertext, publicKey, privateKey)
+	require.True(t, ok)
+	require.JSONEq(t, `{"version":1,"eventType":"referral"}`, string(plaintext))
+
+	_, err = db.Exec(`DELETE FROM remote_store WHERE user_id = 1 AND key_name = 'internalUser'`)
+	require.NoError(t, err)
+	controller.NotifyReferral(ctx, 1)
+	require.Len(t, messages, 2)
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {

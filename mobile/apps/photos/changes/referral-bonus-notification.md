@@ -1,1 +1,1 @@
-- Added notifications for earned referral bonuses.
+- Added encrypted Android notifications for earned referral bonuses.
