@@ -23,7 +23,6 @@ class NotificationKeyService {
   static Future<Map<String, dynamic>?> decrypt(
     Map<String, dynamic> data,
   ) async {
-    if (data['notificationVersion'] != '1') return null;
     final pair = await getNotificationKeyPair();
     if (pair == null) return null;
     CryptoUtil.init();
@@ -33,7 +32,7 @@ class NotificationKeyService {
       pair.sk,
     );
     final event = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
-    if (event['version'] != 1 || event['eventType'] is! String) return null;
+    if (event['eventType'] is! String) return null;
     return event;
   }
 
