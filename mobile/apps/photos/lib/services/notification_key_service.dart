@@ -9,7 +9,7 @@ class NotificationKeyService {
   static const _storage = FlutterSecureStorage();
   static const _storageKey = 'notification_recipient';
 
-  static Future<Map<String, Object>?> generateNotificationKey() async {
+  static Future<String?> generateNotificationKey() async {
     if (!Platform.isAndroid) return null;
     var pair = await getNotificationKeyPair();
     if (pair == null) {
@@ -17,7 +17,7 @@ class NotificationKeyService {
       pair = await CryptoUtil.generateKeyPair();
       await setNotificationKeyPair(pair);
     }
-    return {'version': 1, 'publicKey': base64Encode(pair.pk)};
+    return base64Encode(pair.pk);
   }
 
   static Future<Map<String, dynamic>?> decrypt(

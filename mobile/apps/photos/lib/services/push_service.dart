@@ -102,7 +102,7 @@ class PushService {
   }
 
   Future<void> _setPushTokenOnServer(String fcmToken, String? apnsToken) async {
-    Map<String, Object>? notificationKey;
+    String? notificationKey;
     try {
       notificationKey = await NotificationKeyService.generateNotificationKey();
     } catch (e, s) {
