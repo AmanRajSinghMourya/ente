@@ -103,10 +103,7 @@ func newFCMClient() (*fcmClient, error) {
 
 func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token ente.PushTokenRequest) error {
 	if token.NotificationKey != nil {
-		if token.NotificationKey.Version != 1 {
-			return ente.NewBadRequestWithMessage("unsupported notification version")
-		}
-		if err := crypto.ValidateSealedBoxPublicKey(base64.StdEncoding.EncodeToString(token.NotificationKey.PublicKey)); err != nil {
+		if err := crypto.ValidateSealedBoxPublicKey(base64.StdEncoding.EncodeToString(token.NotificationKey)); err != nil {
 			return ente.NewBadRequestWithMessage("invalid notification public key")
 		}
 	}
@@ -141,14 +138,14 @@ func (c *PushController) notifyAndroid(ctx context.Context, recipients []int64, 
 				continue
 			}
 			ciphertext, err := crypto.GetEncryptedToken(
-				base64.URLEncoding.EncodeToString([]byte(`{"version":1,"eventType":"referral"}`)),
+				base64.URLEncoding.EncodeToString([]byte(`{"eventType":"referral"}`)),
 				base64.StdEncoding.EncodeToString(token.NotificationPublicKey),
 			)
 			if err != nil {
 				log.WithError(err).Warn("could not encrypt referral push")
 				continue
 			}
-			data = map[string]string{"notificationVersion": "1", "notificationCiphertext": ciphertext}
+			data = map[string]string{"notificationCiphertext": ciphertext}
 		}
 		err = c.fcm.sendMessage(ctx, map[string]any{
 			"token":   token.FCMToken,

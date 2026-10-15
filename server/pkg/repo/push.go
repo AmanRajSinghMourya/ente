@@ -17,7 +17,7 @@ type PushTokenRepository struct {
 func (repo *PushTokenRepository) AddToken(userID int64, sessionTokenHash []byte, token ente.PushTokenRequest) error {
 	var publicKey any
 	if token.NotificationKey != nil {
-		publicKey = token.NotificationKey.PublicKey
+		publicKey = token.NotificationKey
 	}
 	result, err := repo.DB.Exec(`INSERT INTO push_tokens(user_id, fcm_token, apns_token, session_token_hash, platform, notification_public_key)
 			SELECT user_id, $2, $3, token_hash, $5, $6 FROM tokens

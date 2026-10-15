@@ -6,16 +6,11 @@ import (
 )
 
 type PushTokenRequest struct {
-	FCMToken             string           `json:"fcmToken" binding:"required"`
-	APNSToken            string           `json:"apnsToken"`
-	Platform             *string          `json:"platform" binding:"required,oneof=ios android"`
-	NotificationKey      *NotificationKey `json:"notificationKey"`
+	FCMToken             string  `json:"fcmToken" binding:"required"`
+	APNSToken            string  `json:"apnsToken"`
+	Platform             *string `json:"platform" binding:"required,oneof=ios android"`
+	NotificationKey      []byte  `json:"notificationKey"`
 	LastNotificationTime int64
-}
-
-type NotificationKey struct {
-	Version   int    `json:"version" binding:"required,eq=1"`
-	PublicKey []byte `json:"publicKey" binding:"required,len=32"`
 }
 
 type PushToken struct {

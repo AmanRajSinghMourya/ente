@@ -207,20 +207,19 @@ func TestReferralPushEncryptsEventForInternalAndroid(t *testing.T) {
 	for _, platform := range []string{"ios", "android"} {
 		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
 			FCMToken: platform + "-device", Platform: &platform,
-			NotificationKey: &ente.NotificationKey{Version: 1, PublicKey: publicKey[:]},
+			NotificationKey: publicKey[:],
 		}))
 	}
 	controller.NotifyReferral(ctx, 1)
 	require.Len(t, messages, 2)
 	require.Equal(t, "android-device", messages[1]["token"])
 	data := messages[1]["data"].(map[string]any)
-	require.Len(t, data, 2)
-	require.Equal(t, "1", data["notificationVersion"])
+	require.Len(t, data, 1)
 	ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
 	require.NoError(t, err)
 	plaintext, ok := box.OpenAnonymous(nil, ciphertext, publicKey, privateKey)
 	require.True(t, ok)
-	require.JSONEq(t, `{"version":1,"eventType":"referral"}`, string(plaintext))
+	require.JSONEq(t, `{"eventType":"referral"}`, string(plaintext))
 
 	_, err = db.Exec(`DELETE FROM remote_store WHERE user_id = 1 AND key_name = 'internalUser'`)
 	require.NoError(t, err)

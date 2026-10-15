@@ -45,7 +45,7 @@ class NotificationService {
     Map<String, dynamic> data, {
     required Future<void> Function() onSync,
   }) async {
-    if (!data.containsKey('notificationVersion')) {
+    if (!data.containsKey('notificationCiphertext')) {
       if (data['action'] == 'sync') await onSync();
       return;
     }
