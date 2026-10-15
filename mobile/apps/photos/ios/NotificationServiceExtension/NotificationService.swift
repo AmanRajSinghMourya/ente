@@ -4,7 +4,7 @@ import UserNotifications
 final class NotificationService: UNNotificationServiceExtension {
   override func didReceive(_ request: UNNotificationRequest,
     withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-    guard request.content.userInfo["notificationVersion"] != nil else {
+    guard request.content.userInfo["notificationCiphertext"] != nil else {
       contentHandler(request.content)
       return
     }
@@ -16,8 +16,7 @@ final class NotificationService: UNNotificationServiceExtension {
     content.subtitle = ""
     content.body = NSLocalizedString("notification.new_activity", value: "New activity", comment: "Generic notification fallback")
     let enabled = NotificationKeyStore.preferences.object(forKey: NotificationKeyStore.preferenceKey) as? Bool ?? false
-    let version = request.content.userInfo["notificationVersion"]
-    if enabled, version as? Int == 1 || version as? String == "1",
+    if enabled,
       let ciphertext = request.content.userInfo["notificationCiphertext"] as? String,
       let recipient = try? NotificationKeyStore.read(),
       let payload = NotificationPayload.decrypt(ciphertext, recipient: recipient) {
@@ -33,7 +32,6 @@ final class NotificationService: UNNotificationServiceExtension {
 }
 
 struct NotificationPayload: Decodable {
-  let version: Int
   let eventType: String
 
   static func decrypt(_ ciphertext: String, recipient: NotificationRecipient) -> Self? {
@@ -46,8 +44,7 @@ struct NotificationPayload: Decodable {
     var plaintext = [UInt8](repeating: 0, count: ciphertext.count - 48)
     guard crypto_box_seal_open(&plaintext, Array(ciphertext), UInt64(ciphertext.count),
       Array(publicKey), Array(privateKey)) == 0,
-      let payload = try? JSONDecoder().decode(Self.self, from: Data(plaintext)),
-      payload.version == 1
+      let payload = try? JSONDecoder().decode(Self.self, from: Data(plaintext))
     else { return nil }
     return payload
   }

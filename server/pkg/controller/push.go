@@ -103,10 +103,7 @@ func newFCMClient() (*fcmClient, error) {
 
 func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token ente.PushTokenRequest) error {
 	if token.NotificationKey != nil {
-		if token.NotificationKey.Version != 1 {
-			return ente.NewBadRequestWithMessage("unsupported notification version")
-		}
-		if err := crypto.ValidateSealedBoxPublicKey(base64.StdEncoding.EncodeToString(token.NotificationKey.PublicKey)); err != nil {
+		if err := crypto.ValidateSealedBoxPublicKey(base64.StdEncoding.EncodeToString(token.NotificationKey)); err != nil {
 			return ente.NewBadRequestWithMessage("invalid notification public key")
 		}
 	}

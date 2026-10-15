@@ -146,7 +146,7 @@ import workmanager_apple
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
     let content = notification.request.content
-    if content.userInfo["notificationVersion"] != nil {
+    if content.userInfo["notificationCiphertext"] != nil {
       completionHandler([])
       return
     }
