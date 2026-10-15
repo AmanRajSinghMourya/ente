@@ -939,11 +939,22 @@ const PostQuotePreview: React.FC<{
                 display: "flex",
                 flexDirection: "column",
                 font: "inherit",
+                isolation: "isolate",
                 overflow: "hidden",
                 p: 0,
                 position: "relative",
                 textAlign: "left",
                 width: "100%",
+                "&::after": {
+                    borderRadius: "inherit",
+                    boxShadow: "inset 0 0 0 1px #282828",
+                    content: '""',
+                    inset: 0,
+                    mixBlendMode: "lighten",
+                    pointerEvents: "none",
+                    position: "absolute",
+                    zIndex: 2,
+                },
                 "&:focus-visible": {
                     outline: `2px solid ${green}`,
                     outlineOffset: 2,
@@ -2120,6 +2131,7 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
             )}
             <Box
                 component="main"
+                className={isThreadOpen ? "space-message-thread" : undefined}
                 sx={{
                     background: spaceAppBackground,
                     color: textBase,
@@ -2143,14 +2155,19 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
             >
                 <SpaceSkipLink />
                 <Box
+                    className={
+                        isThreadOpen
+                            ? "space-message-thread-content"
+                            : undefined
+                    }
                     sx={{
                         bgcolor: "transparent",
                         boxSizing: "border-box",
                         display: isThreadOpen ? "grid" : undefined,
                         gridTemplateRows: isThreadOpen
                             ? isThreadReadOnly
-                                ? "68px minmax(0, 1fr)"
-                                : "68px minmax(0, 1fr) auto"
+                                ? "calc(68px + var(--space-ios-safe-area-top, 0px)) minmax(0, 1fr)"
+                                : "calc(68px + var(--space-ios-safe-area-top, 0px)) minmax(0, 1fr) auto"
                             : undefined,
                         height: isThreadOpen ? "100%" : undefined,
                         minHeight: isThreadOpen
@@ -2171,8 +2188,10 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                             gridTemplateColumns: isThreadOpen
                                 ? `${spaceTouchTargetSize}px minmax(0, 1fr) 76px`
                                 : `${spaceTouchTargetSize}px 1fr ${spaceTouchTargetSize}px`,
-                            height: 68,
-                            px: 2,
+                            height: "calc(68px + var(--space-ios-safe-area-top, 0px))",
+                            pt: "var(--space-ios-safe-area-top, 0px)",
+                            pl: "max(16px, var(--space-ios-safe-area-left, 0px))",
+                            pr: "max(16px, var(--space-ios-safe-area-right, 0px))",
                             width: "100%",
                         }}
                     >
@@ -2698,6 +2717,7 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                             </Popper>
                             {!isThreadReadOnly && (
                                 <Box
+                                    className="space-message-composer"
                                     sx={{
                                         bgcolor: "transparent",
                                         boxSizing: "border-box",
@@ -2902,6 +2922,14 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({
                                                 canSend ? "green-bg" : undefined
                                             }
                                             disabled={!canSend}
+                                            onPointerDown={(event) => {
+                                                if (
+                                                    isSpaceIOS() &&
+                                                    document.activeElement ==
+                                                        composerRef.current
+                                                )
+                                                    event.preventDefault();
+                                            }}
                                             onClick={sendMessage}
                                             sx={{
                                                 alignItems: "center",
