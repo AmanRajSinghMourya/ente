@@ -16,7 +16,8 @@ final class NotificationService: UNNotificationServiceExtension {
     content.subtitle = ""
     content.body = NSLocalizedString("notification.new_activity", value: "New activity", comment: "Generic notification fallback")
     let enabled = NotificationKeyStore.preferences.object(forKey: NotificationKeyStore.preferenceKey) as? Bool ?? false
-    if enabled, request.content.userInfo["notificationVersion"] as? Int == 1,
+    let version = request.content.userInfo["notificationVersion"]
+    if enabled, version as? Int == 1 || version as? String == "1",
       let ciphertext = request.content.userInfo["notificationCiphertext"] as? String,
       let recipient = try? NotificationKeyStore.read(),
       let payload = NotificationPayload.decrypt(ciphertext, recipient: recipient) {
