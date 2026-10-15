@@ -20,6 +20,23 @@ class NotificationKeyService {
     return {'version': 1, 'publicKey': base64Encode(pair.pk)};
   }
 
+  static Future<Map<String, dynamic>?> decrypt(
+    Map<String, dynamic> data,
+  ) async {
+    if (data['notificationVersion'] != '1') return null;
+    final pair = await getNotificationKeyPair();
+    if (pair == null) return null;
+    CryptoUtil.init();
+    final plaintext = CryptoUtil.openSealSync(
+      base64Decode(data['notificationCiphertext'] as String),
+      pair.pk,
+      pair.sk,
+    );
+    final event = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
+    if (event['version'] != 1 || event['eventType'] is! String) return null;
+    return event;
+  }
+
   static Future<KeyPair?> getNotificationKeyPair() async {
     final encoded = await _storage.read(key: _storageKey);
     if (encoded == null) return null;
