@@ -225,7 +225,7 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 		}
 	}
 	r := &PushTokenRepository{DB: db}
-	tokens, err := r.GetTokensForAlbumShare(context.Background(), userIDs)
+	tokens, err := r.GetInternalAndroidTokens(context.Background(), userIDs)
 	require.NoError(t, err)
 	var selected []string
 	for _, token := range tokens {
@@ -235,7 +235,7 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 	for _, apnsToken := range []any{"", nil} {
 		_, err := db.Exec(`UPDATE push_tokens SET apns_token=$1 WHERE fcm_token='eligible'`, apnsToken)
 		require.NoError(t, err)
-		tokens, err := r.GetTokensForAlbumShare(context.Background(), []int64{1})
+		tokens, err := r.GetInternalAndroidTokens(context.Background(), []int64{1})
 		require.NoError(t, err)
 		require.Len(t, tokens, 1)
 		require.Equal(t, "eligible", tokens[0].FCMToken)
@@ -246,7 +246,7 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 	require.Equal(t, "ios", tokens[0].FCMToken)
 	_, err = db.Exec(`UPDATE remote_store SET key_value='false' WHERE user_id=1`)
 	require.NoError(t, err)
-	tokens, err = r.GetTokensForAlbumShare(context.Background(), []int64{1})
+	tokens, err = r.GetInternalAndroidTokens(context.Background(), []int64{1})
 	require.NoError(t, err)
 	require.Empty(t, tokens)
 }
