@@ -17,6 +17,7 @@ import (
 
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/pkg/repo"
+	"github.com/ente/museum/pkg/repo/public"
 	"github.com/ente/museum/pkg/utils/config"
 	"github.com/ente/museum/pkg/utils/crypto"
 	"github.com/ente/museum/pkg/utils/time"
@@ -116,7 +117,7 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	}
 	ctx = context.WithoutCancel(ctx)
 	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
-	tokens, err := c.PushRepo.GetTokensForAlbumShare(lookupCtx, recipients)
+	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, recipients)
 	cancel()
 	if err != nil {
 		log.WithError(err).Warn("album share push token lookup failed")
@@ -137,6 +138,81 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 		}
 	}
 	c.pruneTokens(unregisteredTokens)
+}
+
+func (c *PushController) SendLinkExpiryReminders(linksRepo *public.CollectionLinkRepo, now gotime.Time) {
+	if viper.GetBool("internal.silent") || c.fcm == nil {
+		return
+	}
+	now = now.UTC()
+	tomorrow := gotime.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, gotime.UTC)
+	claimed, err := c.TaskLockRepo.AcquireLock("shared-link-expiry", tomorrow.UnixMicro(), "shared-link-expiry-job")
+	if err != nil {
+		log.WithError(err).Error("could not claim link expiry reminders")
+		return
+	}
+	if !claimed {
+		return
+	}
+	ctx := context.Background()
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
+	links, err := linksRepo.GetExpiringLinks(lookupCtx, tomorrow.UnixMicro(), tomorrow.AddDate(0, 0, 1).UnixMicro())
+	cancel()
+	if err != nil {
+		log.WithError(err).Error("could not find expiring links")
+		return
+	}
+	for _, link := range links {
+		c.notifyLinkExpiry(ctx, link, now)
+	}
+}
+
+func (c *PushController) notifyLinkExpiry(ctx context.Context, link public.ExpiringCollectionLink, now gotime.Time) {
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
+	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, []int64{link.OwnerID})
+	cancel()
+	if err != nil {
+		log.WithError(err).Warn("expiry push token lookup failed")
+		return
+	}
+	payload, err := json.Marshal(struct {
+		EventType string `json:"eventType"`
+		public.ExpiringCollectionLink
+	}{EventType: "shared_link_expiring", ExpiringCollectionLink: link})
+	if err != nil {
+		log.WithError(err).Error("could not encode expiry event")
+		return
+	}
+	ttl := min(int64(gotime.UnixMicro(link.ExpiresAt).Sub(now)/gotime.Second), 86400)
+	var unregisteredTokens []string
+	for _, token := range tokens {
+		if len(token.NotificationPublicKey) == 0 {
+			continue
+		}
+		ciphertext, err := encryptNotificationPayload(payload, token.NotificationPublicKey)
+		if err != nil {
+			log.WithError(err).Warn("could not encrypt expiry push")
+			continue
+		}
+		if err := c.fcm.sendMessage(ctx, map[string]any{
+			"token":   token.FCMToken,
+			"data":    map[string]string{"notificationCiphertext": ciphertext},
+			"android": map[string]string{"priority": "high", "ttl": fmt.Sprintf("%ds", ttl)},
+		}); err != nil {
+			log.WithError(err).Warn("expiry push failed")
+			if errors.Is(err, errUnregisteredToken) {
+				unregisteredTokens = append(unregisteredTokens, token.FCMToken)
+			}
+		}
+	}
+	c.pruneTokens(unregisteredTokens)
+}
+
+func encryptNotificationPayload(payload, publicKey []byte) (string, error) {
+	return crypto.GetEncryptedToken(
+		base64.URLEncoding.EncodeToString(payload),
+		base64.StdEncoding.EncodeToString(publicKey),
+	)
 }
 
 func (c *PushController) RemoveTokensForUser(userID int64) error {

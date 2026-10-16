@@ -8,6 +8,7 @@ import "package:flutter_timezone/flutter_timezone.dart";
 import "package:logging/logging.dart";
 import "package:package_info_plus/package_info_plus.dart";
 import "package:permission_handler/permission_handler.dart";
+import "package:photos/db/collections_db.dart";
 import "package:photos/services/language_service.dart";
 import "package:photos/services/notification_key_service.dart";
 import "package:photos/services/timezone_aliases.dart";
@@ -69,7 +70,41 @@ class NotificationService {
     if (event['eventType'] == 'album_shared') {
       _logger.info('Received encrypted album-share push');
       await onSync();
+    } else if (event['eventType'] == 'shared_link_expiring') {
+      final collectionID = event['collectionID'];
+      final expiresAt = event['expiresAt'];
+      if (collectionID is int && expiresAt is int) {
+        await showLinkExpiryNotification(collectionID, expiresAt);
+      }
     }
+  }
+
+  Future<void> showLinkExpiryNotification(
+    int collectionID,
+    int expiresAt,
+  ) async {
+    if (!shouldShowNotificationsForSharedPhotosAndAlbums() ||
+        expiresAt <= DateTime.now().microsecondsSinceEpoch ||
+        !await hasGrantedPermissions()) {
+      return;
+    }
+    String? albumName;
+    try {
+      albumName = await CollectionsDB.instance.getVisibleCollectionName(
+        collectionID,
+      );
+    } catch (e, s) {
+      _logger.warning('Could not read album for expiry notification', e, s);
+    }
+    final strings = await LanguageService.locals;
+    await showNotification(
+      strings.entePhotos,
+      albumName == null || albumName.isEmpty
+          ? strings.notificationSharedLinkExpiresSoon
+          : strings.notificationAlbumLinkExpiresSoon(albumName: albumName),
+      id: collectionID.hashCode,
+      payload: 'ente://link-settings?collectionID=$collectionID',
+    );
   }
 
   bool timezoneInitialized = false;

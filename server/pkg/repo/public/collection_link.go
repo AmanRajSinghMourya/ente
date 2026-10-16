@@ -20,6 +20,32 @@ type CollectionLinkRepo struct {
 	lockerHost string
 }
 
+type ExpiringCollectionLink struct {
+	CollectionID int64 `json:"collectionID"`
+	OwnerID      int64 `json:"-"`
+	ExpiresAt    int64 `json:"expiresAt"`
+}
+
+func (pcr *CollectionLinkRepo) GetExpiringLinks(ctx context.Context, start, end int64) ([]ExpiringCollectionLink, error) {
+	rows, err := pcr.DB.QueryContext(ctx, `SELECT p.collection_id, c.owner_id, p.valid_till
+		FROM public_collection_tokens p JOIN collections c ON c.collection_id = p.collection_id
+		WHERE p.is_disabled = false AND c.is_deleted = false AND c.app = $3
+		AND p.valid_till >= $1 AND p.valid_till < $2`, start, end, ente.Photos)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "expiry reminder lookup failed")
+	}
+	defer rows.Close()
+	var links []ExpiringCollectionLink
+	for rows.Next() {
+		var link ExpiringCollectionLink
+		if err := rows.Scan(&link.CollectionID, &link.OwnerID, &link.ExpiresAt); err != nil {
+			return nil, stacktrace.Propagate(err, "")
+		}
+		links = append(links, link)
+	}
+	return links, stacktrace.Propagate(rows.Err(), "")
+}
+
 func NewCollectionLinkRepository(db *sql.DB, albumHost string) *CollectionLinkRepo {
 	if albumHost == "" {
 		albumHost = "https://albums.ente.com"

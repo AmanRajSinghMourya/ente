@@ -1317,6 +1317,9 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 	const deletedTokenRetentionDays = 427 // 13-month deletion window (395 days) + 32-day safety buffer
 
 	c := cron.New()
+	schedule(c, "CRON_TZ=UTC 0 9 * * *", func() {
+		pushController.SendLinkExpiryReminders(collectionLinkRepo, time.Now())
+	})
 	schedule(c, "@every 1m", func() {
 		_ = userAuthRepo.RemoveExpiredOTTs()
 	})
