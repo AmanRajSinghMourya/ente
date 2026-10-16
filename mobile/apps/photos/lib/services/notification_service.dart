@@ -8,6 +8,9 @@ import "package:flutter_timezone/flutter_timezone.dart";
 import "package:logging/logging.dart";
 import "package:package_info_plus/package_info_plus.dart";
 import "package:permission_handler/permission_handler.dart";
+import "package:photos/core/configuration.dart";
+import "package:photos/db/collections_db.dart";
+import "package:photos/service_locator.dart";
 import "package:photos/services/language_service.dart";
 import "package:photos/services/notification_key_service.dart";
 import "package:photos/services/timezone_aliases.dart";
@@ -24,6 +27,8 @@ class NotificationService {
       "notifications_enabled_social";
   static const String _keyHasAttemptedNotificationPermission =
       "has_attempted_notification_permission";
+  static const String _keyPendingLinkExpiry =
+      'pending_link_expiry_notification';
 
   NotificationService._privateConstructor();
 
@@ -67,8 +72,49 @@ class NotificationService {
       return;
     }
     if (event['eventType'] == 'album_shared') {
-      _logger.info('Received encrypted album-share push');
       await onSync();
+    } else if (event['eventType'] == 'shared_link_expiring') {
+      await _preferences.setBool(_keyPendingLinkExpiry, true);
+      await onSync();
+    }
+  }
+
+  Future<bool> consumeLinkExpiryRequest() async {
+    if (_preferences.getBool(_keyPendingLinkExpiry) != true) return false;
+    await _preferences.remove(_keyPendingLinkExpiry);
+    return true;
+  }
+
+  Future<void> showLinkExpiryReminders() async {
+    if (!flagService.internalUser ||
+        !shouldShowNotificationsForSharedPhotosAndAlbums() ||
+        !await hasGrantedPermissions()) {
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    final windowEnd = now.add(const Duration(hours: 24)).microsecondsSinceEpoch;
+    final userID = Configuration.instance.getUserID();
+    final strings = await LanguageService.locals;
+    final collections = await CollectionsDB.instance.getAllCollections();
+    for (final collection in collections) {
+      if (collection.isDeleted ||
+          collection.owner.id != userID ||
+          !collection.publicURLs.any(
+            (link) =>
+                link.validTill > now.microsecondsSinceEpoch &&
+                link.validTill <= windowEnd,
+          )) {
+        continue;
+      }
+      final albumName = collection.isHidden() ? null : collection.name;
+      await showNotification(
+        strings.entePhotos,
+        albumName == null || albumName.isEmpty
+            ? strings.notificationSharedLinkExpiresSoon
+            : strings.notificationAlbumLinkExpiresSoon(albumName: albumName),
+        id: collection.id.hashCode,
+        payload: 'ente://link-settings?collectionID=${collection.id}',
+      );
     }
   }
 
