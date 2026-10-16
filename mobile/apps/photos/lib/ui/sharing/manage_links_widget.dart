@@ -27,13 +27,8 @@ import 'package:photos/utils/public_link_layout_util.dart';
 
 class ManageSharedLinkWidget extends StatefulWidget {
   final Collection collection;
-  final bool popCollectionOnRemove;
 
-  const ManageSharedLinkWidget({
-    super.key,
-    required this.collection,
-    this.popCollectionOnRemove = true,
-  });
+  const ManageSharedLinkWidget({super.key, required this.collection});
 
   @override
   State<ManageSharedLinkWidget> createState() => _ManageSharedLinkWidgetState();
@@ -259,8 +254,7 @@ class _ManageSharedLinkWidgetState extends State<ManageSharedLinkWidget> {
                 if (result && context.mounted) {
                   final navigator = Navigator.of(context);
                   navigator.pop();
-                  if (widget.popCollectionOnRemove &&
-                      collection.isQuickLinkCollection()) {
+                  if (collection.isQuickLinkCollection()) {
                     navigator.pop();
                   }
                 }

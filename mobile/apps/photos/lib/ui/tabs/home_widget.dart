@@ -1298,10 +1298,7 @@ class _HomeWidgetState extends State<HomeWidget> {
             return;
           }
           await AppNavigationService.instance.pushPage(
-            ManageSharedLinkWidget(
-              collection: collection,
-              popCollectionOnRemove: false,
-            ),
+            ManageSharedLinkWidget(collection: collection),
           );
         }
         return;
