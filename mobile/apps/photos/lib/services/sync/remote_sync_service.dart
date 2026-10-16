@@ -244,7 +244,18 @@ class RemoteSyncService {
     if (isFirstSync && !_isExistingSyncSilent) {
       Bus.instance.fire(SyncStatusUpdate(SyncStatus.applyingRemoteDiff));
     }
+    final checkLinkExpiry =
+        Platform.isAndroid &&
+        await NotificationService.instance.consumeLinkExpiryRequest();
     await _collectionsService.sync();
+    if (checkLinkExpiry) {
+      await NotificationService.instance.showLinkExpiryReminders().catchError((
+        Object e,
+        StackTrace s,
+      ) {
+        _logger.warning('Could not show link expiry reminders', e, s);
+      });
+    }
     // Older clients may need collection diffs replayed from feature cutoffs.
     if (isFirstSync) {
       await _markResetSyncTimeAsDone();

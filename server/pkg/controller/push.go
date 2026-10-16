@@ -156,34 +156,47 @@ func (c *PushController) SendLinkExpiryReminders(linksRepo *public.CollectionLin
 	}
 	ctx := context.Background()
 	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
-	links, err := linksRepo.GetExpiringLinks(lookupCtx, tomorrow.UnixMicro(), tomorrow.AddDate(0, 0, 1).UnixMicro())
+	links, err := linksRepo.GetExpiringLinks(lookupCtx, now.UnixMicro(), now.Add(24*gotime.Hour).UnixMicro())
 	cancel()
 	if err != nil {
 		log.WithError(err).Error("could not find expiring links")
 		return
 	}
-	for _, link := range links {
-		c.notifyLinkExpiry(ctx, link, now)
+	if len(links) == 0 {
+		return
 	}
-}
-
-func (c *PushController) notifyLinkExpiry(ctx context.Context, link public.ExpiringCollectionLink, now gotime.Time) {
-	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
-	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, []int64{link.OwnerID})
+	ownerIDs := make([]int64, 0, len(links))
+	earliestExpiryByOwner := make(map[int64]int64)
+	tokensByOwner := make(map[int64][]ente.PushToken)
+	for _, link := range links {
+		expiresAt, exists := earliestExpiryByOwner[link.OwnerID]
+		if !exists {
+			ownerIDs = append(ownerIDs, link.OwnerID)
+		}
+		if !exists || link.ExpiresAt < expiresAt {
+			earliestExpiryByOwner[link.OwnerID] = link.ExpiresAt
+		}
+	}
+	lookupCtx, cancel = context.WithTimeout(ctx, 5*gotime.Second)
+	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, ownerIDs)
 	cancel()
 	if err != nil {
 		log.WithError(err).Warn("expiry push token lookup failed")
 		return
 	}
-	payload, err := json.Marshal(struct {
-		EventType string `json:"eventType"`
-		public.ExpiringCollectionLink
-	}{EventType: "shared_link_expiring", ExpiringCollectionLink: link})
-	if err != nil {
-		log.WithError(err).Error("could not encode expiry event")
-		return
+	for _, token := range tokens {
+		tokensByOwner[token.UserID] = append(tokensByOwner[token.UserID], token)
 	}
-	ttl := min(int64(gotime.UnixMicro(link.ExpiresAt).Sub(now)/gotime.Second), 86400)
+	for ownerID, expiresAt := range earliestExpiryByOwner {
+		if tokens := tokensByOwner[ownerID]; len(tokens) > 0 {
+			c.notifyLinkExpiry(ctx, expiresAt, tokens, now)
+		}
+	}
+}
+
+func (c *PushController) notifyLinkExpiry(ctx context.Context, expiresAt int64, tokens []ente.PushToken, now gotime.Time) {
+	payload := []byte(`{"eventType":"shared_link_expiring"}`)
+	ttl := min(int64(gotime.UnixMicro(expiresAt).Sub(now)/gotime.Second), 86400)
 	var unregisteredTokens []string
 	for _, token := range tokens {
 		if len(token.NotificationPublicKey) == 0 {

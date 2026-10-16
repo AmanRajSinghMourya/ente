@@ -1376,7 +1376,6 @@ class CollectionsService {
       collection.magicMetadata = CollectionMagicMetadata.fromJson(jsonToUpdate);
       collection.mMdVersion = currentVersion + 1;
       _collectionIDToCollections[collection.id] = collection;
-      await _db.insert([collection]);
 
       sync().ignore();
     } on DioException catch (e) {

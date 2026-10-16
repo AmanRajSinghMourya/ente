@@ -232,6 +232,7 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 		selected = append(selected, token.FCMToken)
 	}
 	require.Equal(t, []string{"eligible"}, selected)
+	require.Equal(t, int64(1), tokens[0].UserID)
 	for _, apnsToken := range []any{"", nil} {
 		_, err := db.Exec(`UPDATE push_tokens SET apns_token=$1 WHERE fcm_token='eligible'`, apnsToken)
 		require.NoError(t, err)

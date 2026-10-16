@@ -30,7 +30,7 @@ func (pcr *CollectionLinkRepo) GetExpiringLinks(ctx context.Context, start, end 
 	rows, err := pcr.DB.QueryContext(ctx, `SELECT p.collection_id, c.owner_id, p.valid_till
 		FROM public_collection_tokens p JOIN collections c ON c.collection_id = p.collection_id
 		WHERE p.is_disabled = false AND c.is_deleted = false AND c.app = $3
-		AND p.valid_till >= $1 AND p.valid_till < $2`, start, end, ente.Photos)
+		AND p.valid_till > $1 AND p.valid_till <= $2`, start, end, ente.Photos)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "expiry reminder lookup failed")
 	}

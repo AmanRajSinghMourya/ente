@@ -4,8 +4,6 @@ import 'package:photos/db/common/base.dart';
 import "package:photos/gateways/collections/models/public_url.dart";
 import "package:photos/models/api/collection/user.dart";
 import 'package:photos/models/collection/collection.dart';
-import 'package:photos/models/metadata/collection_magic.dart';
-import 'package:photos/models/metadata/common_keys.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
 class CollectionsDB with SqlDbBase {
@@ -204,24 +202,6 @@ class CollectionsDB with SqlDbBase {
       collections.add(_convertToCollection(row));
     }
     return collections;
-  }
-
-  Future<String?> getVisibleCollectionName(int collectionID) async {
-    final db = await instance.database;
-    final row = await db.getOptional(
-      'SELECT $columnName, $columnMMdEncodedJson FROM $table WHERE $columnID = ? '
-      'AND ($columnIsDeleted = 0 OR $columnIsDeleted IS NULL)',
-      [collectionID],
-    );
-    if (row == null) return null;
-    final metadata = CollectionMagicMetadata.fromEncodedJson(
-      row[columnMMdEncodedJson] as String? ?? '{}',
-    );
-    if (metadata.visibility == hiddenVisibility ||
-        metadata.subType == subTypeDefaultHidden) {
-      return null;
-    }
-    return row[columnName] as String?;
   }
 
   Future<Map<int, int>> getActiveIDsAndRemoteUpdateTime() async {

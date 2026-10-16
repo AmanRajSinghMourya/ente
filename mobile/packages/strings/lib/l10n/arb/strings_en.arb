@@ -2873,7 +2873,7 @@
   "nothingToTidyUpHere": "Nothing to tidy up here",
   "notifications": "Notifications",
   "notificationNewActivity": "New activity",
-  "notificationSharedLinkExpiresSoon": "Your shared link expires soon",
+  "notificationSharedLinkExpiresSoon": "Your shared link is about to expire",
   "notificationAlbumLinkExpiresSoon": "Your shared link for {albumName} expires soon",
   "@notificationAlbumLinkExpiresSoon": {
     "placeholders": {
