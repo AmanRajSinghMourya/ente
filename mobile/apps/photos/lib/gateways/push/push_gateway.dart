@@ -17,7 +17,7 @@ class PushGateway {
         "fcmToken": fcmToken,
         "platform": platform,
         "apnsToken": apnsToken,
-        "notificationKey": ?notificationKey,
+        "notificationKey": notificationKey,
       },
     );
   }
