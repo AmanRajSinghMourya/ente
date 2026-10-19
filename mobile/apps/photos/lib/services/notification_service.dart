@@ -82,6 +82,7 @@ class NotificationService {
   }
 
   Future<int?> consumeLinkExpiryRequest() async {
+    await _preferences.reload();
     final windowEnd = _preferences.getInt(_keyPendingLinkExpiryWindowEnd);
     if (windowEnd != null) {
       await _preferences.remove(_keyPendingLinkExpiryWindowEnd);

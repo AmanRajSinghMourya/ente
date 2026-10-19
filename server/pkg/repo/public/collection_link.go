@@ -21,9 +21,9 @@ type CollectionLinkRepo struct {
 }
 
 type ExpiringCollectionLink struct {
-	CollectionID int64 `json:"collectionID"`
-	OwnerID      int64 `json:"-"`
-	ExpiresAt    int64 `json:"expiresAt"`
+	CollectionID int64
+	OwnerID      int64
+	ExpiresAt    int64
 }
 
 func (pcr *CollectionLinkRepo) GetExpiringLinks(ctx context.Context, start, end int64) ([]ExpiringCollectionLink, error) {
