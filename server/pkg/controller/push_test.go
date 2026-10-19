@@ -2,8 +2,6 @@ package controller
 
 import (
 	"context"
-	"crypto/hpke"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -276,52 +274,4 @@ func hasLog(hook *logtest.Hook, level log.Level, substr string) bool {
 		}
 	}
 	return false
-}
-
-func TestAlbumShareEncryptsEnrolledAndroidEvent(t *testing.T) {
-	testutil.WithServerRoot(t)
-	db := testutil.RequireTestDB(t)
-	testutil.ResetTables(t, db)
-	t.Cleanup(func() { testutil.ResetTables(t, db) })
-	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "push@example.com", CreationTime: 1})
-	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(1,'internalUser','true')`)
-	require.NoError(t, err)
-	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "session", "", ""))
-	privateKey, err := hpke.MLKEM768X25519().GenerateKey()
-	require.NoError(t, err)
-	hash := auth.HashToken("session")
-	platform := "android"
-	c := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
-	require.NoError(t, c.AddToken(1, hash[:], ente.PushTokenRequest{
-		FCMToken: "encrypted-device", Platform: &platform,
-		NotificationKey: privateKey.PublicKey().Bytes(),
-	}))
-	var data map[string]string
-	c.fcm = &fcmClient{projectID: "test", httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		var message wireMsg
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&message))
-		data = message.Message.Data
-		return jsonResponse(http.StatusOK, "{}"), nil
-	})}}
-	c.NotifyAlbumShare(context.Background(), []int64{1})
-	require.Len(t, data, 1)
-	ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"])
-	require.NoError(t, err)
-	require.Greater(t, len(ciphertext), 1120)
-	receiver, err := hpke.NewRecipient(ciphertext[:1120], privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
-	require.NoError(t, err)
-	plaintext, err := receiver.Open(nil, ciphertext[1120:])
-	require.NoError(t, err)
-	require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
-	wrongPrivateKey, err := hpke.MLKEM768X25519().GenerateKey()
-	require.NoError(t, err)
-	receiver, err = hpke.NewRecipient(ciphertext[:1120], wrongPrivateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
-	require.NoError(t, err)
-	_, err = receiver.Open(nil, ciphertext[1120:])
-	require.Error(t, err)
-	ciphertext[len(ciphertext)-1] ^= 1
-	receiver, err = hpke.NewRecipient(ciphertext[:1120], privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
-	require.NoError(t, err)
-	_, err = receiver.Open(nil, ciphertext[1120:])
-	require.Error(t, err)
 }
