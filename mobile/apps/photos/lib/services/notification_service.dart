@@ -27,8 +27,8 @@ class NotificationService {
       "notifications_enabled_social";
   static const String _keyHasAttemptedNotificationPermission =
       "has_attempted_notification_permission";
-  static const String _keyPendingLinkExpiry =
-      'pending_link_expiry_notification';
+  static const String _keyPendingLinkExpiryWindowEnd =
+      'pending_link_expiry_window_end';
 
   NotificationService._privateConstructor();
 
@@ -74,25 +74,28 @@ class NotificationService {
     if (event['eventType'] == 'album_shared') {
       await onSync();
     } else if (event['eventType'] == 'shared_link_expiring') {
-      await _preferences.setBool(_keyPendingLinkExpiry, true);
+      final windowEnd = event['windowEnd'];
+      if (windowEnd is! int) return;
+      await _preferences.setInt(_keyPendingLinkExpiryWindowEnd, windowEnd);
       await onSync();
     }
   }
 
-  Future<bool> consumeLinkExpiryRequest() async {
-    if (_preferences.getBool(_keyPendingLinkExpiry) != true) return false;
-    await _preferences.remove(_keyPendingLinkExpiry);
-    return true;
+  Future<int?> consumeLinkExpiryRequest() async {
+    final windowEnd = _preferences.getInt(_keyPendingLinkExpiryWindowEnd);
+    if (windowEnd != null) {
+      await _preferences.remove(_keyPendingLinkExpiryWindowEnd);
+    }
+    return windowEnd;
   }
 
-  Future<void> showLinkExpiryReminders() async {
+  Future<void> showLinkExpiryReminders(int windowEnd) async {
     if (!flagService.internalUser ||
         !shouldShowNotificationsForSharedPhotosAndAlbums() ||
         !await hasGrantedPermissions()) {
       return;
     }
     final now = DateTime.now().toUtc();
-    final windowEnd = now.add(const Duration(hours: 24)).microsecondsSinceEpoch;
     final userID = Configuration.instance.getUserID();
     final strings = await LanguageService.locals;
     final collections = await CollectionsDB.instance.getAllCollections();

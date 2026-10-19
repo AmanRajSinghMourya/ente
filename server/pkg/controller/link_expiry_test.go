@@ -83,6 +83,8 @@ func TestLinkExpiryReminders(t *testing.T) {
 	}
 	gotTokens := []string{}
 	requests := 0
+	delaySeconds := 0
+	ownerTTLSeconds := 7200
 	c.fcm = &fcmClient{projectID: "test", httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		var msg struct {
 			Message struct {
@@ -101,11 +103,14 @@ func TestLinkExpiryReminders(t *testing.T) {
 		require.True(t, ok)
 		var event map[string]any
 		require.NoError(t, json.Unmarshal(plaintext, &event))
-		require.Equal(t, map[string]any{"eventType": "shared_link_expiring"}, event)
+		require.Equal(t, map[string]any{
+			"eventType": "shared_link_expiring",
+			"windowEnd": float64(windowEnd.UnixMicro()),
+		}, event)
 		if msg.Message.Token == "second-android" {
-			require.Equal(t, "86400s", msg.Message.Android.TTL)
+			require.Equal(t, fmt.Sprintf("%ds", 86400-delaySeconds), msg.Message.Android.TTL)
 		} else {
-			require.Equal(t, "3600s", msg.Message.Android.TTL)
+			require.Equal(t, fmt.Sprintf("%ds", ownerTTLSeconds-delaySeconds), msg.Message.Android.TTL)
 		}
 		gotTokens = append(gotTokens, msg.Message.Token)
 		requests++
@@ -127,6 +132,17 @@ func TestLinkExpiryReminders(t *testing.T) {
 	c.HostName = "second-host"
 	c.SendLinkExpiryReminders(links, now)
 	require.Equal(t, 3, requests)
+	_, err = db.Exec(`UPDATE public_collection_tokens SET valid_till=$1 WHERE collection_id IN (SELECT collection_id FROM collections WHERE owner_id=2)`, windowEnd.Add(time.Microsecond).UnixMicro())
+	require.NoError(t, err)
+	_, err = db.Exec(`DELETE FROM task_lock WHERE task_name='shared-link-expiry'`)
+	require.NoError(t, err)
+	gotTokens = nil
+	delaySeconds = 900
+	c.SendLinkExpiryReminders(links, now.Add(15*time.Minute))
+	require.ElementsMatch(t, []string{"android", "another-android"}, gotTokens)
+	delaySeconds = 0
+	ownerTTLSeconds = 3600
+	windowEnd = windowEnd.AddDate(0, 0, 7)
 	_, err = db.Exec(`UPDATE public_collection_tokens SET valid_till=$1 WHERE collection_id=$2`, now.AddDate(0, 0, 7).Add(time.Hour).UnixMicro(), firstID)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE task_lock SET lock_until=0 WHERE task_name='shared-link-expiry'`)
@@ -137,5 +153,5 @@ func TestLinkExpiryReminders(t *testing.T) {
 	_, err = db.Exec(`DELETE FROM remote_store WHERE user_id=1; DELETE FROM task_lock WHERE task_name='shared-link-expiry'`)
 	require.NoError(t, err)
 	c.SendLinkExpiryReminders(links, now.AddDate(0, 0, 7))
-	require.Equal(t, 5, requests)
+	require.Equal(t, 7, requests)
 }
