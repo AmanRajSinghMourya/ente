@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"crypto/hpke"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -163,7 +165,7 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
+func TestReferralPushEncryptsEventForInternalAndroid(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
@@ -192,11 +194,38 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	controller.NotifyAlbumShare(ctx, []int64{1})
+	controller.NotifyReferral(ctx, 1)
 	require.Equal(t, []map[string]any{{
 		"token":   "android-device",
 		"data":    map[string]any{"action": "sync"},
 		"android": map[string]any{"priority": "high", "ttl": "86400s"},
 	}}, messages)
+
+	privateKey, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
+	for _, platform := range []string{"ios", "android"} {
+		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
+			FCMToken: platform + "-device", Platform: &platform,
+			NotificationKey: privateKey.PublicKey().Bytes(),
+		}))
+	}
+	controller.NotifyReferral(ctx, 1)
+	require.Len(t, messages, 2)
+	require.Equal(t, "android-device", messages[1]["token"])
+	data := messages[1]["data"].(map[string]any)
+	require.Len(t, data, 1)
+	ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
+	require.NoError(t, err)
+	recipient, err := hpke.NewRecipient(ciphertext[:1120], privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
+	require.NoError(t, err)
+	plaintext, err := recipient.Open(nil, ciphertext[1120:])
+	require.NoError(t, err)
+	require.JSONEq(t, `{"eventType":"referral"}`, string(plaintext))
+
+	_, err = db.Exec(`DELETE FROM remote_store WHERE user_id = 1 AND key_name = 'internalUser'`)
+	require.NoError(t, err)
+	controller.NotifyReferral(ctx, 1)
+	require.Len(t, messages, 2)
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
@@ -250,6 +279,12 @@ func TestAlbumShareHonorsSilentMode(t *testing.T) {
 	t.Cleanup(func() { viper.Set("internal.silent", previous) })
 	controller := &PushController{fcm: &fcmClient{}}
 	controller.NotifyAlbumShare(context.Background(), []int64{1})
+	controller.NotifyReferral(context.Background(), 1)
+}
+
+func TestReferralWithoutFCMCredentials(t *testing.T) {
+	controller := &PushController{}
+	controller.NotifyReferral(t.Context(), 1)
 }
 
 func captureLogs(t *testing.T) *logtest.Hook {
