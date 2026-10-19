@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"crypto/hpke"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,6 @@ import (
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/pkg/repo"
 	"github.com/ente/museum/pkg/utils/config"
-	"github.com/ente/museum/pkg/utils/crypto"
 	"github.com/ente/museum/pkg/utils/time"
 	"github.com/ente/stacktrace"
 	log "github.com/sirupsen/logrus"
@@ -103,7 +103,7 @@ func newFCMClient() (*fcmClient, error) {
 
 func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token ente.PushTokenRequest) error {
 	if token.NotificationKey != nil {
-		if err := crypto.ValidateSealedBoxPublicKey(base64.StdEncoding.EncodeToString(token.NotificationKey)); err != nil {
+		if _, err := hpke.MLKEM768X25519().NewPublicKey(token.NotificationKey); err != nil {
 			return ente.NewBadRequestWithMessage("invalid notification public key")
 		}
 	}
@@ -124,9 +124,20 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	}
 	var unregisteredTokens []string
 	for _, token := range tokens {
+		data := map[string]string{"action": "sync"}
+		if len(token.NotificationPublicKey) > 0 {
+			ciphertext, err := encryptPushNotification(
+				[]byte(`{"eventType":"album_shared"}`), token.NotificationPublicKey,
+			)
+			if err != nil {
+				log.WithError(err).Warn("could not encrypt album share push")
+				continue
+			}
+			data = map[string]string{"notificationCiphertext": ciphertext}
+		}
 		err = c.fcm.sendMessage(ctx, map[string]any{
 			"token":   token.FCMToken,
-			"data":    map[string]string{"action": "sync"},
+			"data":    data,
 			"android": map[string]string{"priority": "high", "ttl": "86400s"},
 		})
 		if err != nil {
@@ -137,6 +148,22 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 		}
 	}
 	c.pruneTokens(unregisteredTokens)
+}
+
+func encryptPushNotification(payload, publicKey []byte) (string, error) {
+	key, err := hpke.MLKEM768X25519().NewPublicKey(publicKey)
+	if err != nil {
+		return "", err
+	}
+	encapsulated, sender, err := hpke.NewSender(key, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
+	if err != nil {
+		return "", err
+	}
+	ciphertext, err := sender.Seal(nil, payload)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(append(encapsulated, ciphertext...)), nil
 }
 
 func (c *PushController) RemoveTokensForUser(userID int64) error {

@@ -292,6 +292,9 @@ class BgTaskUtils {
     await workmanager.Workmanager().registerOneOffTask(
       androidPushRefreshTask,
       androidPushRefreshTask,
+      initialDelay: const Duration(
+        microseconds: kEngineDeathTimeoutInMicroseconds,
+      ),
       constraints: workmanager.Constraints(
         networkType: workmanager.NetworkType.connected,
       ),

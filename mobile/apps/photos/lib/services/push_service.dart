@@ -1,5 +1,7 @@
 import "dart:async";
 import "dart:io";
+import 'dart:isolate';
+import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -24,6 +26,7 @@ class PushService {
   static const kFCMTokenUpdationIntervalInMicroSeconds = 30 * microSecondsInDay;
   static const kPushAction = "action";
   static const kSync = "sync";
+  static const _syncPortName = 'photos_push_sync';
 
   static final PushService instance = PushService._privateConstructor();
   static final _logger = Logger("PushService");
@@ -32,6 +35,7 @@ class PushService {
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   StreamSubscription<SignedInEvent>? _signedInSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
+  ReceivePort? _syncRequests;
 
   PushService._privateConstructor();
 
@@ -39,6 +43,14 @@ class PushService {
     _prefs = await SharedPreferences.getInstance();
     await Firebase.initializeApp();
     if (Platform.isAndroid) {
+      _syncRequests?.close();
+      _syncRequests = ReceivePort()
+        ..listen((_) => unawaited(SyncService.instance.sync()));
+      IsolateNameServer.removePortNameMapping(_syncPortName);
+      IsolateNameServer.registerPortWithName(
+        _syncRequests!.sendPort,
+        _syncPortName,
+      );
       FirebaseMessaging.onBackgroundMessage(handleAndroidBackgroundPush);
     } else if (onBackgroundPush != null) {
       FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
@@ -149,8 +161,11 @@ Future<void> handleAndroidBackgroundPush(RemoteMessage message) async {
   NotificationService.instance.init(await SharedPreferences.getInstance());
   await NotificationService.instance.handlePushNotification(
     message.data,
-    onSync: () => BgTaskUtils.scheduleAndroidBackgroundRefresh().timeout(
-      const Duration(seconds: 10),
-    ),
+    onSync: () {
+      IsolateNameServer.lookupPortByName(PushService._syncPortName)?.send(null);
+      return BgTaskUtils.scheduleAndroidBackgroundRefresh().timeout(
+        const Duration(seconds: 10),
+      );
+    },
   );
 }
