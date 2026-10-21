@@ -101,13 +101,6 @@ func (c *EmailNotificationController) OnSuccessfulReferral(userID int64) {
 	}
 }
 
-func (c *EmailNotificationController) OnReferralCodeApplied(userEmail string) {
-	err := sendReferralEmail(userEmail, "Ente", "Your 10 GB referral bonus is here!", "referral_code_applied.html")
-	if err != nil {
-		log.WithError(err).Error("Error sending referral code applied email")
-	}
-}
-
 func sendReferralEmail(userEmail, fromName, subject, template string) error {
 	images := []map[string]interface{}{{
 		"cid": "header-image", "mime_type": "image/png", "content": referralHeaderImage,
