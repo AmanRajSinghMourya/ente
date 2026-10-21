@@ -41,14 +41,18 @@ class _FileEditSheetState extends State<FileEditSheet> {
   List<Collection> _availableCollections = [];
   bool _hasLoadedCollectionSelection = false;
 
-  bool get _canSave {
-    final name = _titleController.text;
+  bool get _canSave =>
+      _hasLoadedCollectionSelection &&
+      _selectedCollectionIds.isNotEmpty &&
+      _titleController.text.isNotEmpty &&
+      _titleForSave.characters.length <= 200;
+
+  String get _titleForSave {
     final originalTitle = widget.file.displayName;
-    return _hasLoadedCollectionSelection &&
-        _selectedCollectionIds.isNotEmpty &&
-        name.isNotEmpty &&
-        (name == path.withoutExtension(originalTitle) ||
-            '$name${path.extension(originalTitle)}'.characters.length <= 200);
+    final name = _titleController.text;
+    return name == path.withoutExtension(originalTitle)
+        ? originalTitle
+        : '$name${path.extension(originalTitle)}';
   }
 
   @override
@@ -114,15 +118,11 @@ class _FileEditSheetState extends State<FileEditSheet> {
   }
 
   void _onSave() {
-    final originalTitle = widget.file.displayName;
-    final name = _titleController.text;
     final selectedCollections = _availableCollections
         .where((c) => _selectedCollectionIds.contains(c.id))
         .toList();
     final result = FileEditSheetResult(
-      title: name == path.withoutExtension(originalTitle)
-          ? originalTitle
-          : '$name${path.extension(originalTitle)}',
+      title: _titleForSave,
       caption: _captionController.text.trim(),
       selectedCollections: selectedCollections,
     );

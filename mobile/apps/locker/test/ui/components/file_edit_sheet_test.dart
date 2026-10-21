@@ -174,15 +174,15 @@ void main() {
     expect(saved!.title, 'a' * 200);
   });
 
-  testWidgets('an existing long extension still allows collection edits', (
-    tester,
-  ) async {
+  testWidgets('an existing overlong title cannot be saved', (tester) async {
     final original = 'scan.${'a' * 200}';
-    FileEditSheetResult? saved;
-    await openEditor(tester, original, (result) => saved = result);
-    await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
-    await tester.pumpAndSettle();
-    expect(saved!.title, original);
+    await openEditor(tester, original, (_) {});
+    expect(
+      tester
+          .widget<ButtonComponent>(find.widgetWithText(ButtonComponent, 'Save'))
+          .onTap,
+      isNull,
+    );
   });
 
   testWidgets('cannot rename when the extension exhausts the title limit', (
