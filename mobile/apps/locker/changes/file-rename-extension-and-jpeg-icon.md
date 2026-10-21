@@ -1,0 +1,1 @@
+- Preserved file extensions and spaces when renaming files, and fixed icons for .jpeg files.
