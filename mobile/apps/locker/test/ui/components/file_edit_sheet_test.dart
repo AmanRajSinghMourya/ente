@@ -127,6 +127,51 @@ void main() {
     }
   });
 
+  for (final (original, input, expected) in [
+    ('scan.jpeg', 'a' * 196, '${'a' * 195}.jpeg'),
+    ('README', 'a' * 201, 'a' * 200),
+    ('scan.👩‍💻', 'a' * 199, '${'a' * 198}.👩‍💻'),
+    ('scan.jpeg', '👩‍💻' * 196, '${'👩‍💻' * 195}.jpeg'),
+  ]) {
+    testWidgets(
+      'rename $original using ${input.characters.first} stays within 200 characters',
+      (tester) async {
+        FileEditSheetResult? saved;
+        await openEditor(tester, original, (result) => saved = result);
+        await tester.enterText(find.byType(TextField), input);
+        await tester.pump();
+        await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
+        await tester.pumpAndSettle();
+        expect(saved!.title, expected);
+      },
+    );
+  }
+
+  testWidgets('an existing long extension still allows collection edits', (
+    tester,
+  ) async {
+    final original = 'scan.${'a' * 200}';
+    FileEditSheetResult? saved;
+    await openEditor(tester, original, (result) => saved = result);
+    await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
+    await tester.pumpAndSettle();
+    expect(saved!.title, original);
+  });
+
+  testWidgets('cannot rename when the extension exhausts the title limit', (
+    tester,
+  ) async {
+    await openEditor(tester, 'scan.${'a' * 200}', (_) {});
+    await tester.enterText(find.byType(TextField), 'new');
+    await tester.pump();
+    expect(
+      tester
+          .widget<ButtonComponent>(find.widgetWithText(ButtonComponent, 'Save'))
+          .onTap,
+      isNull,
+    );
+  });
+
   testWidgets('a legacy whitespace basename cannot be cleared', (tester) async {
     await openEditor(tester, '  .pdf', (_) {});
     for (final input in ['', ' ', '   ']) {

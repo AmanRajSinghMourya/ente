@@ -41,13 +41,18 @@ class _FileEditSheetState extends State<FileEditSheet> {
   List<Collection> _availableCollections = [];
   bool _hasLoadedCollectionSelection = false;
 
-  bool get _canSave =>
-      _hasLoadedCollectionSelection &&
-      _selectedCollectionIds.isNotEmpty &&
-      (_titleController.text.trim().isNotEmpty ||
-          (widget.file.displayName.trim().isNotEmpty &&
-              _titleController.text ==
-                  path.withoutExtension(widget.file.displayName)));
+  bool get _canSave {
+    final name = _titleController.text;
+    return _hasLoadedCollectionSelection &&
+        _selectedCollectionIds.isNotEmpty &&
+        (name == path.withoutExtension(widget.file.displayName)
+            ? widget.file.displayName.trim().isNotEmpty
+            : name.trim().isNotEmpty &&
+                  name.characters.length <= _maxBaseNameLength);
+  }
+
+  int get _maxBaseNameLength =>
+      200 - path.extension(widget.file.displayName).characters.length;
 
   @override
   void initState() {
@@ -141,7 +146,7 @@ class _FileEditSheetState extends State<FileEditSheet> {
             controller: _titleController,
             label: context.strings.title,
             hintText: context.strings.enterNewTitle,
-            maxLength: 200,
+            maxLength: _maxBaseNameLength > 0 ? _maxBaseNameLength : 1,
           ),
           const SizedBox(height: 24),
           CollectionSelectionWidget(
