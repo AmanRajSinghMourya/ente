@@ -300,7 +300,7 @@ class NotificationService {
       final strings = await LanguageService.locals;
       await showNotification(
         strings.referralBonusNotificationTitle,
-        strings.referralBonusNotificationBody(storageInGB: "10"),
+        strings.referralBonusNotificationBody,
         channelID: "io.ente.photos.referrals",
         channelName: strings.referrals,
         payload: "ente://referral",
