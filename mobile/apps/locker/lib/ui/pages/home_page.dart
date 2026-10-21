@@ -704,7 +704,7 @@ class _HomePageState extends UploaderPageState<HomePage>
                     ),
                   ],
                 ),
-                floatingActionButton: isSearchActive || _isHomeEmptyState
+                floatingActionButton: isSearchActive
                     ? null
                     : ListenableBuilder(
                         listenable: _selectedFiles,
@@ -833,7 +833,6 @@ class _HomePageState extends UploaderPageState<HomePage>
           child: HomeEmptyStateWidget(
             isLoading: _isSyncing,
             onSetupLegacy: () => openLegacyFromHome(context),
-            onSaveToLocker: () => _openSavePage(includeScanner: true),
           ),
         ),
       ),

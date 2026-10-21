@@ -1,0 +1,1 @@
+- Improved access to adding items on the empty home screen.

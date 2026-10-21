@@ -10,12 +10,10 @@ class HomeEmptyStateWidget extends StatefulWidget {
     super.key,
     this.isLoading = false,
     this.onSetupLegacy,
-    this.onSaveToLocker,
   });
 
   final bool isLoading;
   final FutureOr<void> Function()? onSetupLegacy;
-  final FutureOr<void> Function()? onSaveToLocker;
 
   @override
   State<HomeEmptyStateWidget> createState() => _HomeEmptyStateWidgetState();
@@ -70,21 +68,10 @@ class _HomeEmptyStateWidgetState extends State<HomeEmptyStateWidget> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
-              Column(
-                children: [
-                  ButtonComponent(
-                    label: context.strings.setupYourLegacy,
-                    onTap: widget.onSetupLegacy,
-                    shouldSurfaceExecutionStates: false,
-                  ),
-                  const SizedBox(height: 12),
-                  ButtonComponent(
-                    label: context.strings.saveToLocker,
-                    variant: ButtonComponentVariant.neutral,
-                    onTap: widget.onSaveToLocker,
-                    shouldSurfaceExecutionStates: false,
-                  ),
-                ],
+              ButtonComponent(
+                label: context.strings.setupYourLegacy,
+                onTap: widget.onSetupLegacy,
+                shouldSurfaceExecutionStates: false,
               ),
             ],
           );
