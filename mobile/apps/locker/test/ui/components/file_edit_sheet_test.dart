@@ -113,25 +113,30 @@ void main() {
 
   testWidgets('an empty base name cannot be saved', (tester) async {
     await openEditor(tester, 'scan.jpeg', (_) {});
-    for (final input in ['', '   ']) {
-      await tester.enterText(find.byType(TextField), input);
-      await tester.pump();
-      expect(
-        tester
-            .widget<ButtonComponent>(
-              find.widgetWithText(ButtonComponent, 'Save'),
-            )
-            .onTap,
-        isNull,
-      );
-    }
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pump();
+    expect(
+      tester
+          .widget<ButtonComponent>(find.widgetWithText(ButtonComponent, 'Save'))
+          .onTap,
+      isNull,
+    );
   });
 
-  for (final (original, input, expected) in [
-    ('scan.jpeg', 'a' * 196, '${'a' * 195}.jpeg'),
-    ('README', 'a' * 201, 'a' * 200),
-    ('scan.👩‍💻', 'a' * 199, '${'a' * 198}.👩‍💻'),
-    ('scan.jpeg', '👩‍💻' * 196, '${'👩‍💻' * 195}.jpeg'),
+  testWidgets('a spaces-only basename is saved verbatim', (tester) async {
+    FileEditSheetResult? saved;
+    await openEditor(tester, 'scan.jpeg', (result) => saved = result);
+    await tester.enterText(find.byType(TextField), '   ');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
+    await tester.pumpAndSettle();
+    expect(saved!.title, '   .jpeg');
+  });
+
+  for (final (original, input, validInput, expected) in [
+    ('scan.jpeg', 'a' * 196, 'a' * 195, '${'a' * 195}.jpeg'),
+    ('scan.👩‍💻', 'a' * 199, 'a' * 198, '${'a' * 198}.👩‍💻'),
+    ('scan.jpeg', '👩‍💻' * 196, '👩‍💻' * 195, '${'👩‍💻' * 195}.jpeg'),
   ]) {
     testWidgets(
       'rename $original using ${input.characters.first} stays within 200 characters',
@@ -140,12 +145,34 @@ void main() {
         await openEditor(tester, original, (result) => saved = result);
         await tester.enterText(find.byType(TextField), input);
         await tester.pump();
+        expect(
+          tester
+              .widget<ButtonComponent>(
+                find.widgetWithText(ButtonComponent, 'Save'),
+              )
+              .onTap,
+          isNull,
+        );
+        await tester.enterText(find.byType(TextField), validInput);
+        await tester.pump();
         await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
         await tester.pumpAndSettle();
         expect(saved!.title, expected);
       },
     );
   }
+
+  testWidgets('a name without an extension keeps the input limit', (
+    tester,
+  ) async {
+    FileEditSheetResult? saved;
+    await openEditor(tester, 'README', (result) => saved = result);
+    await tester.enterText(find.byType(TextField), 'a' * 201);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ButtonComponent, 'Save'));
+    await tester.pumpAndSettle();
+    expect(saved!.title, 'a' * 200);
+  });
 
   testWidgets('an existing long extension still allows collection edits', (
     tester,
@@ -174,17 +201,13 @@ void main() {
 
   testWidgets('a legacy whitespace basename cannot be cleared', (tester) async {
     await openEditor(tester, '  .pdf', (_) {});
-    for (final input in ['', ' ', '   ']) {
-      await tester.enterText(find.byType(TextField), input);
-      await tester.pump();
-      expect(
-        tester
-            .widget<ButtonComponent>(
-              find.widgetWithText(ButtonComponent, 'Save'),
-            )
-            .onTap,
-        isNull,
-      );
-    }
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pump();
+    expect(
+      tester
+          .widget<ButtonComponent>(find.widgetWithText(ButtonComponent, 'Save'))
+          .onTap,
+      isNull,
+    );
   });
 }
