@@ -15,6 +15,7 @@ import 'package:locker/models/info/info_item.dart';
 import 'package:locker/services/collections/collections_service.dart';
 import 'package:locker/services/collections/models/collection.dart';
 import 'package:locker/services/configuration.dart';
+import 'package:locker/services/db/locker_db.dart';
 import 'package:locker/services/favorites_service.dart';
 import 'package:locker/services/files/sync/models/file.dart';
 import 'package:locker/services/info_file_service.dart';
@@ -53,6 +54,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
   bool get isInEditMode => _currentMode == InfoPageMode.edit;
 
   T? _currentData;
+  EnteFile? _uploadedFile;
 
   List<Collection> _availableCollections = [];
   Set<int> _selectedCollectionIds = {};
@@ -308,7 +310,10 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       throw Exception('Failed to update file metadata');
     }
 
-    await _updateCollectionMembership();
+    await _updateCollectionMembership(
+      widget.existingFile!,
+      _selectedCollectionIds,
+    );
 
     if (!mounted) return;
 
@@ -319,12 +324,14 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     refreshUIWithCurrentData();
   }
 
-  Future<void> _updateCollectionMembership() async {
-    if (widget.existingFile == null) return;
+  Future<void> _updateCollectionMembership(
+    EnteFile file,
+    Set<int> selectedCollectionIds,
+  ) async {
     if (!_hasLoadedCollectionSelection) return;
 
     final currentCollections = await CollectionService.instance
-        .getCollectionsForFile(widget.existingFile!);
+        .getCollectionsForFile(file);
 
     final allCollections = await CollectionService.instance.getCollections();
 
@@ -334,22 +341,14 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     final currentCollectionIds = currentCollections.map((c) => c.id).toSet();
 
     final wasFavorite = currentCollectionIds.contains(favoriteCollection.id);
-    final isFavoriteNow = _selectedCollectionIds.contains(
-      favoriteCollection.id,
-    );
-
-    if (wasFavorite && !isFavoriteNow) {
-      await FavoritesService.instance.removeFromFavorites(widget.existingFile!);
-    } else if (!wasFavorite && isFavoriteNow) {
-      await FavoritesService.instance.addToFavorites(widget.existingFile!);
-    }
+    final isFavoriteNow = selectedCollectionIds.contains(favoriteCollection.id);
 
     // Only Favorites is special. Uncategorized changes only when selected or
     // deselected like any other collection.
     final regularCurrentIds = currentCollectionIds
         .where((id) => id != favoriteCollection.id)
         .toSet();
-    final regularSelectedIds = _selectedCollectionIds
+    final regularSelectedIds = selectedCollectionIds
         .where((id) => id != favoriteCollection.id)
         .toSet();
 
@@ -362,9 +361,15 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       final collection = allCollections.firstWhere((c) => c.id == collectionId);
       await CollectionService.instance.addToCollection(
         collection,
-        widget.existingFile!,
+        file,
         runSync: false,
       );
+    }
+
+    if (wasFavorite && !isFavoriteNow) {
+      await FavoritesService.instance.removeFromFavorites(file);
+    } else if (!wasFavorite && isFavoriteNow) {
+      await FavoritesService.instance.addToFavorites(file);
     }
 
     for (final collectionId in collectionsToRemove) {
@@ -372,7 +377,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       await CollectionService.instance.moveFilesFromCurrentCollection(
         mounted ? context : null,
         collection,
-        [widget.existingFile!],
+        [file],
       );
     }
 
@@ -390,20 +395,28 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       selectedCollections.add(uncategorizedCollection);
     }
 
-    final uploadedFile = await InfoFileService.instance.createAndUploadInfoFile(
-      infoItem: infoItem,
-      collection: selectedCollections.first,
-    );
-
-    for (int i = 1; i < selectedCollections.length; i++) {
-      await CollectionService.instance.addToCollection(
-        selectedCollections[i],
-        uploadedFile,
-        runSync: false,
+    if (_uploadedFile == null) {
+      _uploadedFile = await InfoFileService.instance.createAndUploadInfoFile(
+        infoItem: infoItem,
+        collection: selectedCollections.first,
       );
+      await LockerDB.instance.addFilesToCollection(selectedCollections.first, [
+        _uploadedFile!,
+      ]);
+    } else {
+      final success = await InfoFileService.instance.updateInfoFile(
+        existingFile: _uploadedFile!,
+        updatedInfoItem: infoItem,
+      );
+      if (!success) {
+        throw Exception('Failed to update file metadata');
+      }
     }
 
-    await CollectionService.instance.sync();
+    await _updateCollectionMembership(
+      _uploadedFile!,
+      selectedCollections.map((c) => c.id).toSet(),
+    );
     Bus.instance.fire(UserDetailsRefreshEvent());
 
     if (!mounted) return;

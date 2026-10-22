@@ -145,10 +145,12 @@ class MetadataUpdaterService {
             ),
           ),
         );
-        file.pubMmdVersion = file.pubMmdVersion + 1;
       }
 
       await _enteDio.put("/files/public-magic-metadata", data: params);
+      for (final file in files) {
+        file.pubMmdVersion = file.pubMmdVersion + 1;
+      }
     } catch (e, s) {
       _logger.severe("Failed to update public metadata: $e", e, s);
       rethrow;

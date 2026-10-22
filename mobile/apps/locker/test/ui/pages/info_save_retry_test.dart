@@ -49,6 +49,7 @@ void main() {
         (1, 'Important', CollectionType.favorites),
         (2, 'Second', CollectionType.album),
         (3, 'Third', CollectionType.album),
+        (4, 'Uncategorized', CollectionType.uncategorized),
       ])
         Collection(
           id,
@@ -141,13 +142,131 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
     },
   );
+
+  testWidgets(
+    'retry after partial creation reuses the Note and latest content',
+    (tester) async {
+      await openNote(tester);
+      await tester.enterText(find.byType(TextField).last, 'Original content');
+      await tester.tap(find.text('Important'));
+      await tester.tap(find.text('Second'));
+      await save(tester);
+      expect(find.text('Error'), findsOneWidget);
+      expect(server.notes.length, 1);
+      final id = server.notes.keys.single;
+      expect(server.members[1], {id});
+
+      Navigator.of(tester.element(find.text('Error'))).pop();
+      await flush(tester);
+      await tester.enterText(
+        find.byType(TextField).last,
+        'Edited before retry',
+      );
+      await save(tester);
+      expect(server.notes.keys, [id]);
+      expect(server.members[1], {id});
+      expect(server.notes[id]!['content'], 'Edited before retry');
+
+      Navigator.of(tester.element(find.text('Error'))).pop();
+      await flush(tester);
+      server.rejectAdds = false;
+      server.pauseSync = Completer<void>();
+      await save(tester);
+      expect(server.notes.keys, [id]);
+      expect(server.members[2], {id});
+      // Dispose while the final sync is pending; HomePage is outside this test.
+      await tester.pumpWidget(const SizedBox.shrink());
+      server.pauseSync!.complete();
+      await flush(tester);
+    },
+  );
+
+  testWidgets('retry uses the latest collection selection', (tester) async {
+    await openNote(tester);
+    await tester.enterText(find.byType(TextField).last, 'Collection retry');
+    await tester.tap(find.text('Important'));
+    await tester.tap(find.text('Second'));
+    await save(tester);
+    expect(find.text('Error'), findsOneWidget);
+    final id = server.notes.keys.single;
+
+    Navigator.of(tester.element(find.text('Error'))).pop();
+    await flush(tester);
+    await tester.tap(find.text('Second'));
+    await tester.tap(find.text('Third'));
+    server.pauseSync = Completer<void>();
+    await save(tester);
+    expect(server.notes.keys, [id]);
+    expect(server.members[1], {id});
+    expect(server.members[2], isEmpty);
+    expect(server.members[3], {id});
+    await tester.pumpWidget(const SizedBox.shrink());
+    server.pauseSync!.complete();
+    await flush(tester);
+  });
+
+  testWidgets('retry recovers from a rejected metadata update', (tester) async {
+    await openNote(tester);
+    await tester.enterText(find.byType(TextField).last, 'Original content');
+    await tester.tap(find.text('Important'));
+    await tester.tap(find.text('Second'));
+    await save(tester);
+    final id = server.notes.keys.single;
+
+    Navigator.of(tester.element(find.text('Error'))).pop();
+    await flush(tester);
+    await tester.enterText(find.byType(TextField).last, 'Edited before retry');
+    server.rejectMetadata = true;
+    await save(tester);
+    expect(find.text('Error'), findsOneWidget);
+    expect(server.notes[id]!['content'], 'Original content');
+
+    Navigator.of(tester.element(find.text('Error'))).pop();
+    await flush(tester);
+    server.rejectMetadata = false;
+    server.rejectAdds = false;
+    server.pauseSync = Completer<void>();
+    await save(tester);
+    expect(server.notes.keys, [id]);
+    expect(server.notes[id]!['content'], 'Edited before retry');
+    expect(server.members[2], {id});
+    await tester.pumpWidget(const SizedBox.shrink());
+    server.pauseSync!.complete();
+    await flush(tester);
+  });
+
+  testWidgets('retry can deselect Important without adding Uncategorized', (
+    tester,
+  ) async {
+    await openNote(tester);
+    await tester.enterText(find.byType(TextField).last, 'Collection retry');
+    await tester.tap(find.text('Important'));
+    await tester.tap(find.text('Second'));
+    await save(tester);
+    final id = server.notes.keys.single;
+
+    Navigator.of(tester.element(find.text('Error'))).pop();
+    await flush(tester);
+    await tester.tap(find.text('Important'));
+    server.rejectAdds = false;
+    server.pauseSync = Completer<void>();
+    await save(tester);
+    expect(server.notes.keys, [id]);
+    expect(server.members[1], isEmpty);
+    expect(server.members[2], {id});
+    expect(server.members[4], isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    server.pauseSync!.complete();
+    await flush(tester);
+  });
 }
 
 class _Server {
   final notes = <int, Map<String, dynamic>>{};
   final versions = <int, int>{};
-  final members = <int, Set<int>>{1: {}, 2: {}, 3: {}};
+  final members = <int, Set<int>>{1: {}, 2: {}, 3: {}, 4: {}};
   bool rejectAdds = true;
+  bool rejectMetadata = false;
   Completer<void>? pauseSync;
 
   EnteFile note(int id) {
@@ -188,6 +307,16 @@ class _Server {
         members[data['collectionID']]!.add(id);
         response = {'id': id, 'ownerID': 1, 'updationTime': 1};
       case '/files/public-magic-metadata':
+        if (rejectMetadata) {
+          h.reject(
+            DioException(
+              requestOptions: request,
+              response: Response(requestOptions: request, statusCode: 503),
+              type: DioExceptionType.badResponse,
+            ),
+          );
+          return;
+        }
         for (final item in data['metadataList'] as List) {
           if (item['magicMetadata']['version'] != versions[item['id']]) {
             h.reject(
@@ -220,6 +349,11 @@ class _Server {
         }
         for (final file in data['files'] as List) {
           members[data['collectionID']]!.add(file['id'] as int);
+        }
+      case '/collections/move-files':
+        for (final file in data['files'] as List) {
+          members[data['fromCollectionID']]!.remove(file['id'] as int);
+          members[data['toCollectionID']]!.add(file['id'] as int);
         }
       case '/collections/v2':
         if (members[2]!.isNotEmpty || members[3]!.isNotEmpty) {

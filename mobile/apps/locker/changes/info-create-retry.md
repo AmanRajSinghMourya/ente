@@ -1,0 +1,1 @@
+- Fixed duplicate info items being created when retrying a failed collection addition.
