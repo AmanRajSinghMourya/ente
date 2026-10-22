@@ -1,0 +1,1 @@
+- Fixed collection update failures being reported as successful when saving info items.

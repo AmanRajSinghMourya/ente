@@ -23,7 +23,6 @@ import 'package:locker/ui/components/collection_selection_widget.dart';
 import 'package:locker/ui/pages/home_page.dart';
 import "package:locker/utils/bottom_sheet_illustration.dart";
 import "package:locker/utils/error_sheet.dart";
-import 'package:logging/logging.dart';
 
 enum InfoPageMode { view, edit }
 
@@ -42,7 +41,6 @@ abstract class BaseInfoPage<T extends InfoData> extends StatefulWidget {
 
 abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     extends State<W> {
-  final _logger = Logger('BaseInfoPageState');
   late InfoPageMode _currentMode;
 
   @protected
@@ -360,55 +358,22 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       regularSelectedIds,
     );
 
-    if (regularSelectedIds.isEmpty && collectionsToRemove.isNotEmpty) {
-      for (final collectionId in collectionsToRemove) {
-        try {
-          final collection = allCollections.firstWhere(
-            (c) => c.id == collectionId,
-          );
-          await CollectionService.instance.moveFilesFromCurrentCollection(
-            mounted ? context : null,
-            collection,
-            [widget.existingFile!],
-          );
-        } catch (e) {
-          _logger.severe(
-            'Failed to remove file from collection $collectionId: $e',
-          );
-        }
-      }
-    } else {
-      for (final collectionId in collectionsToAdd) {
-        try {
-          final collection = allCollections.firstWhere(
-            (c) => c.id == collectionId,
-          );
-          await CollectionService.instance.addToCollection(
-            collection,
-            widget.existingFile!,
-            runSync: false,
-          );
-        } catch (e) {
-          _logger.severe('Failed to add file to collection $collectionId: $e');
-        }
-      }
+    for (final collectionId in collectionsToAdd) {
+      final collection = allCollections.firstWhere((c) => c.id == collectionId);
+      await CollectionService.instance.addToCollection(
+        collection,
+        widget.existingFile!,
+        runSync: false,
+      );
+    }
 
-      for (final collectionId in collectionsToRemove) {
-        try {
-          final collection = allCollections.firstWhere(
-            (c) => c.id == collectionId,
-          );
-          await CollectionService.instance.moveFilesFromCurrentCollection(
-            mounted ? context : null,
-            collection,
-            [widget.existingFile!],
-          );
-        } catch (e) {
-          _logger.severe(
-            'Failed to remove file from collection $collectionId: $e',
-          );
-        }
-      }
+    for (final collectionId in collectionsToRemove) {
+      final collection = allCollections.firstWhere((c) => c.id == collectionId);
+      await CollectionService.instance.moveFilesFromCurrentCollection(
+        mounted ? context : null,
+        collection,
+        [widget.existingFile!],
+      );
     }
 
     await CollectionService.instance.sync();
