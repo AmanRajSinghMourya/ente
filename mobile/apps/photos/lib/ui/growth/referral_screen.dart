@@ -41,7 +41,7 @@ Future<void> openReferralScreen(
   }
   if (dialog != null && !await dialog.hide()) return;
   if (!context.mounted || ModalRoute.of(context)?.isCurrent != true) return;
-  await routeToPage(context, _ReferralScreen(initialData: data));
+  await routeToPage(context, ReferralScreen(initialData: data));
 }
 
 Future<Tuple2<ReferralView, UserDetails>> _fetchReferralData() async {
@@ -53,16 +53,16 @@ Future<Tuple2<ReferralView, UserDetails>> _fetchReferralData() async {
   return Tuple2(referralView, cachedUserDetails);
 }
 
-class _ReferralScreen extends StatefulWidget {
-  const _ReferralScreen({required this.initialData});
+class ReferralScreen extends StatefulWidget {
+  const ReferralScreen({this.initialData, super.key});
 
-  final Tuple2<ReferralView, UserDetails> initialData;
+  final Tuple2<ReferralView, UserDetails>? initialData;
 
   @override
-  State<_ReferralScreen> createState() => _ReferralScreenState();
+  State<ReferralScreen> createState() => _ReferralScreenState();
 }
 
-class _ReferralScreenState extends State<_ReferralScreen> {
+class _ReferralScreenState extends State<ReferralScreen> {
   late Future<Tuple2<ReferralView, UserDetails>> _dataFuture;
   Tuple2<ReferralView, UserDetails>? _initialData;
 
@@ -70,7 +70,9 @@ class _ReferralScreenState extends State<_ReferralScreen> {
   void initState() {
     super.initState();
     _initialData = widget.initialData;
-    _dataFuture = Future.value(widget.initialData);
+    _dataFuture = widget.initialData != null
+        ? Future.value(widget.initialData)
+        : _fetchReferralData();
   }
 
   void _safeUIUpdate() {

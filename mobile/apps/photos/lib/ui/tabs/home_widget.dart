@@ -60,6 +60,7 @@ import "package:photos/ui/collections/collection_action_sheet.dart";
 import "package:photos/ui/components/buttons/button_widget.dart";
 import "package:photos/ui/components/models/button_type.dart";
 import "package:photos/ui/extents_page_view.dart";
+import "package:photos/ui/growth/referral_screen.dart";
 import "package:photos/ui/home/christmas/christmas_pull_animation.dart";
 import "package:photos/ui/home/christmas/christmas_utils.dart";
 import "package:photos/ui/home/christmas/snow_fall_overlay.dart";
@@ -1324,6 +1325,12 @@ class _HomeWidgetState extends State<HomeWidget> {
         AppNavigationService.instance.pushPage(
           RitualCameraPage(ritualId: ritualId, albumId: albumId),
         );
+        return;
+      }
+      if (uri != null && uri.host == "referral") {
+        if (Configuration.instance.isLoggedIn()) {
+          await AppNavigationService.instance.pushPage(const ReferralScreen());
+        }
         return;
       }
       if (uri != null && uri.host.toLowerCase() == "feed") {

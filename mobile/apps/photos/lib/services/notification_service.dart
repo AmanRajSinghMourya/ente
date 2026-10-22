@@ -73,6 +73,8 @@ class NotificationService {
     if (event['eventType'] == 'album_shared') {
       _logger.info('Received encrypted album-share push');
       await onSync();
+    } else if (event['eventType'] == 'referral') {
+      await showReferralNotification();
     }
   }
 
@@ -291,6 +293,22 @@ class NotificationService {
 
   Future<void> setShouldShowSocialNotifications(bool value) {
     return _preferences.setBool(keyShouldShowSocialNotifications, value);
+  }
+
+  Future<void> showReferralNotification() async {
+    try {
+      if (!await hasGrantedPermissions()) return;
+      final strings = await LanguageService.locals;
+      await showNotification(
+        strings.referralBonusNotificationTitle,
+        strings.referralBonusNotificationBody,
+        channelID: "io.ente.photos.referrals",
+        channelName: strings.referrals,
+        payload: "ente://referral",
+      );
+    } catch (e, s) {
+      _logger.warning("Could not show referral notification", e, s);
+    }
   }
 
   Future<void> showNotification(
