@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"crypto/hpke"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -163,7 +166,7 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
+func TestAlbumShareSendsOnlyEncryptedEvents(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
@@ -179,6 +182,17 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 			FCMToken: platform + "-device", Platform: &platform,
 		}))
 	}
+	privateKey, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
+	platform := "android"
+	require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
+		FCMToken: "encrypted-device", Platform: &platform, NotificationKey: privateKey.PublicKey().Bytes(),
+	}))
+	require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
+		FCMToken: "invalid-key-device", Platform: &platform,
+	}))
+	_, err = db.Exec(`UPDATE push_tokens SET notification_public_key = $1 WHERE fcm_token = 'invalid-key-device'`, bytes.Repeat([]byte{0xff}, 1216))
+	require.NoError(t, err)
 	var messages []map[string]any
 	controller.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		require.NoError(t, request.Context().Err())
@@ -192,11 +206,17 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	controller.NotifyAlbumShare(ctx, []int64{1})
-	require.Equal(t, []map[string]any{{
-		"token":   "android-device",
-		"data":    map[string]any{"action": "sync"},
-		"android": map[string]any{"priority": "high", "ttl": "86400s"},
-	}}, messages)
+	require.Len(t, messages, 1)
+	message := messages[0]
+	require.Equal(t, map[string]any{"priority": "high", "ttl": "86400s"}, message["android"])
+	require.Equal(t, "encrypted-device", message["token"])
+	data := message["data"].(map[string]any)
+	require.Len(t, data, 1)
+	ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
+	require.NoError(t, err)
+	plaintext, err := hpke.Open(privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), ciphertext)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
@@ -221,9 +241,11 @@ func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
 		"unauthorized":     {http.StatusUnauthorized, "unauthorized"},
 		"invalid-argument": {http.StatusBadRequest, fcmInvalidArgumentBody},
 	}
+	privateKey, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
 	for token := range responses {
 		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
-			FCMToken: token, Platform: &platform,
+			FCMToken: token, Platform: &platform, NotificationKey: privateKey.PublicKey().Bytes(),
 		}))
 	}
 	var attempted []string
