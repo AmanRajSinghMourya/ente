@@ -1291,12 +1291,9 @@ class _HomeWidgetState extends State<HomeWidget> {
             : CollectionsService.instance.getCollectionByID(id);
         if (collection != null &&
             !collection.isDeleted &&
+            !collection.isHidden() &&
             collection.owner.id == Configuration.instance.getUserID() &&
             collection.hasLink) {
-          if (!await requestHiddenRitualAccessForAlbumId(context, id) ||
-              !mounted) {
-            return;
-          }
           await AppNavigationService.instance.pushPage(
             ManageSharedLinkWidget(collection: collection),
           );

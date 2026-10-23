@@ -104,6 +104,7 @@ class NotificationService {
     final collections = await CollectionsDB.instance.getAllCollections();
     for (final collection in collections) {
       if (collection.isDeleted ||
+          collection.isHidden() ||
           collection.owner.id != userID ||
           !collection.publicURLs.any(
             (link) =>
@@ -112,7 +113,7 @@ class NotificationService {
           )) {
         continue;
       }
-      final albumName = collection.isHidden() ? null : collection.name;
+      final albumName = collection.name;
       await showNotification(
         strings.entePhotos,
         albumName == null || albumName.isEmpty
