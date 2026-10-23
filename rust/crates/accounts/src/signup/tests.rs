@@ -58,10 +58,11 @@ async fn checkpoints_preserve_keys_and_reconcile_an_accepted_upload() {
         prepared.recovery_key().unwrap(),
         recovered.recovery_key().unwrap()
     );
-    let retried = recovered
-        .prepare(&client, "different-password")
-        .await
-        .unwrap();
+    assert!(matches!(
+        recovered.prepare(&client, "different-password").await,
+        Err(Error::IncorrectPassword)
+    ));
+    let retried = recovered.prepare(&client, "signup-password").await.unwrap();
     assert!(serde_json::to_vec(&retried).unwrap() == serde_json::to_vec(&recovered).unwrap());
     let keys = recovered.keys.as_ref().unwrap();
     empty.assert_async().await;
@@ -235,7 +236,7 @@ async fn create_account_uploads_keys_and_completes_srp_setup() {
         .with_body_from_request(move |request| {
             let payload: SetUserAttributesPayload = parse_request_body(request);
             let key_attributes = payload.key_attributes;
-            let mem_limit = u64::from(key_attributes.mem_limit);
+            let mem_limit = key_attributes.mem_limit;
             let ops_limit = u64::from(key_attributes.ops_limit);
 
             assert_eq!(mem_limit * ops_limit, 4_294_967_296);

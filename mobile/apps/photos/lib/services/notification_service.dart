@@ -9,6 +9,8 @@ import "package:logging/logging.dart";
 import "package:package_info_plus/package_info_plus.dart";
 import "package:permission_handler/permission_handler.dart";
 import "package:photos/core/configuration.dart";
+import "package:photos/db/collections_db.dart";
+import "package:photos/service_locator.dart";
 import "package:photos/services/language_service.dart";
 import "package:photos/services/notification_key_service.dart";
 import "package:photos/services/timezone_aliases.dart";
@@ -25,6 +27,8 @@ class NotificationService {
       "notifications_enabled_social";
   static const String _keyHasAttemptedNotificationPermission =
       "has_attempted_notification_permission";
+  static const String _keyPendingLinkExpiryWindowEnd =
+      'pending_link_expiry_window_end';
 
   NotificationService._privateConstructor();
 
@@ -65,6 +69,7 @@ class NotificationService {
         await showNotification(
           strings.entePhotos,
           strings.notificationNewActivity,
+          id: -1,
         );
       }
       return;
@@ -72,6 +77,53 @@ class NotificationService {
     if (event['eventType'] == 'album_shared') {
       _logger.info('Received encrypted album-share push');
       await onSync();
+    } else if (event['eventType'] == 'shared_link_expiring') {
+      final windowEnd = event['windowEnd'];
+      if (windowEnd is! int) return;
+      await _preferences.setInt(_keyPendingLinkExpiryWindowEnd, windowEnd);
+      await onSync();
+    }
+  }
+
+  Future<int?> consumeLinkExpiryRequest() async {
+    await _preferences.reload();
+    final windowEnd = _preferences.getInt(_keyPendingLinkExpiryWindowEnd);
+    if (windowEnd != null) {
+      await _preferences.remove(_keyPendingLinkExpiryWindowEnd);
+    }
+    return windowEnd;
+  }
+
+  Future<void> showLinkExpiryReminders(int windowEnd) async {
+    if (!flagService.internalUser ||
+        !shouldShowNotificationsForSharedPhotosAndAlbums() ||
+        !await hasGrantedPermissions()) {
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    final userID = Configuration.instance.getUserID();
+    final strings = await LanguageService.locals;
+    final collections = await CollectionsDB.instance.getAllCollections();
+    for (final collection in collections) {
+      if (collection.isDeleted ||
+          collection.isHidden() ||
+          collection.owner.id != userID ||
+          !collection.publicURLs.any(
+            (link) =>
+                link.validTill > now.microsecondsSinceEpoch &&
+                link.validTill <= windowEnd,
+          )) {
+        continue;
+      }
+      final albumName = collection.name;
+      await showNotification(
+        strings.entePhotos,
+        albumName == null || albumName.isEmpty
+            ? strings.notificationSharedLinkExpiresSoon
+            : strings.notificationAlbumLinkExpiresSoon(albumName: albumName),
+        id: collection.id.hashCode,
+        payload: 'ente://link-settings?collectionID=${collection.id}',
+      );
     }
   }
 
