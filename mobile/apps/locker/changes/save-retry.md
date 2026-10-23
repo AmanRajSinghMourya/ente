@@ -1,0 +1,1 @@
+- Fixed collection save errors and duplicate items when retrying saves.

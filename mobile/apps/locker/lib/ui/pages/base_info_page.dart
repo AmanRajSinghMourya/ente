@@ -23,7 +23,6 @@ import 'package:locker/ui/components/collection_selection_widget.dart';
 import 'package:locker/ui/pages/home_page.dart';
 import "package:locker/utils/bottom_sheet_illustration.dart";
 import "package:locker/utils/error_sheet.dart";
-import 'package:logging/logging.dart';
 
 enum InfoPageMode { view, edit }
 
@@ -42,7 +41,7 @@ abstract class BaseInfoPage<T extends InfoData> extends StatefulWidget {
 
 abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     extends State<W> {
-  final _logger = Logger('BaseInfoPageState');
+  EnteFile? _createdFile;
   late InfoPageMode _currentMode;
 
   @protected
@@ -261,7 +260,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       );
 
       if (widget.existingFile != null) {
-        await _updateExistingFile(infoItem);
+        await _updateExistingFile(widget.existingFile!, infoItem);
       } else {
         await _createNewFile(infoItem);
       }
@@ -297,12 +296,10 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     }
   }
 
-  Future<void> _updateExistingFile(InfoItem infoItem) async {
-    if (widget.existingFile == null) return;
-
+  Future<void> _updateExistingFile(EnteFile file, InfoItem infoItem) async {
     // updateInfoFile syncs internally.
     final success = await InfoFileService.instance.updateInfoFile(
-      existingFile: widget.existingFile!,
+      existingFile: file,
       updatedInfoItem: infoItem,
     );
 
@@ -310,7 +307,7 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       throw Exception('Failed to update file metadata');
     }
 
-    await _updateCollectionMembership();
+    await _updateCollectionMembership(file);
 
     if (!mounted) return;
 
@@ -321,29 +318,28 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     refreshUIWithCurrentData();
   }
 
-  Future<void> _updateCollectionMembership() async {
-    if (widget.existingFile == null) return;
+  Future<void> _updateCollectionMembership(EnteFile file) async {
     if (!_hasLoadedCollectionSelection) return;
 
     final currentCollections = await CollectionService.instance
-        .getCollectionsForFile(widget.existingFile!);
-
-    final allCollections = await CollectionService.instance.getCollections();
-
+        .getCollectionsForFile(file);
     final favoriteCollection = await CollectionService.instance
         .getOrCreateImportantCollection();
 
+    var selectedCollectionIds = _selectedCollectionIds;
+    if (widget.existingFile == null && selectedCollectionIds.isEmpty) {
+      final uncategorized = await CollectionService.instance
+          .getOrCreateUncategorizedCollection();
+      selectedCollectionIds = {uncategorized.id};
+    }
+    final allCollections = await CollectionService.instance.getCollections();
+
     final currentCollectionIds = currentCollections.map((c) => c.id).toSet();
-
     final wasFavorite = currentCollectionIds.contains(favoriteCollection.id);
-    final isFavoriteNow = _selectedCollectionIds.contains(
-      favoriteCollection.id,
-    );
+    final isFavoriteNow = selectedCollectionIds.contains(favoriteCollection.id);
 
-    if (wasFavorite && !isFavoriteNow) {
-      await FavoritesService.instance.removeFromFavorites(widget.existingFile!);
-    } else if (!wasFavorite && isFavoriteNow) {
-      await FavoritesService.instance.addToFavorites(widget.existingFile!);
+    if (!wasFavorite && isFavoriteNow) {
+      await FavoritesService.instance.addToFavorites(file);
     }
 
     // Only Favorites is special. Uncategorized changes only when selected or
@@ -351,64 +347,35 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
     final regularCurrentIds = currentCollectionIds
         .where((id) => id != favoriteCollection.id)
         .toSet();
-    final regularSelectedIds = _selectedCollectionIds
+    final regularSelectedIds = selectedCollectionIds
         .where((id) => id != favoriteCollection.id)
         .toSet();
 
-    final collectionsToAdd = regularSelectedIds.difference(regularCurrentIds);
-    final collectionsToRemove = regularCurrentIds.difference(
+    for (final collectionId in regularSelectedIds.difference(
+      regularCurrentIds,
+    )) {
+      final collection = allCollections.firstWhere((c) => c.id == collectionId);
+      await CollectionService.instance.addToCollection(
+        collection,
+        file,
+        runSync: false,
+      );
+    }
+
+    // Keep existing memberships until all destination additions succeed.
+    if (wasFavorite && !isFavoriteNow) {
+      await FavoritesService.instance.removeFromFavorites(file);
+    }
+
+    for (final collectionId in regularCurrentIds.difference(
       regularSelectedIds,
-    );
-
-    if (regularSelectedIds.isEmpty && collectionsToRemove.isNotEmpty) {
-      for (final collectionId in collectionsToRemove) {
-        try {
-          final collection = allCollections.firstWhere(
-            (c) => c.id == collectionId,
-          );
-          await CollectionService.instance.moveFilesFromCurrentCollection(
-            mounted ? context : null,
-            collection,
-            [widget.existingFile!],
-          );
-        } catch (e) {
-          _logger.severe(
-            'Failed to remove file from collection $collectionId: $e',
-          );
-        }
-      }
-    } else {
-      for (final collectionId in collectionsToAdd) {
-        try {
-          final collection = allCollections.firstWhere(
-            (c) => c.id == collectionId,
-          );
-          await CollectionService.instance.addToCollection(
-            collection,
-            widget.existingFile!,
-            runSync: false,
-          );
-        } catch (e) {
-          _logger.severe('Failed to add file to collection $collectionId: $e');
-        }
-      }
-
-      for (final collectionId in collectionsToRemove) {
-        try {
-          final collection = allCollections.firstWhere(
-            (c) => c.id == collectionId,
-          );
-          await CollectionService.instance.moveFilesFromCurrentCollection(
-            mounted ? context : null,
-            collection,
-            [widget.existingFile!],
-          );
-        } catch (e) {
-          _logger.severe(
-            'Failed to remove file from collection $collectionId: $e',
-          );
-        }
-      }
+    )) {
+      final collection = allCollections.firstWhere((c) => c.id == collectionId);
+      await CollectionService.instance.moveFilesFromCurrentCollection(
+        mounted ? context : null,
+        collection,
+        [file],
+      );
     }
 
     await CollectionService.instance.sync();
@@ -425,20 +392,28 @@ abstract class BaseInfoPageState<T extends InfoData, W extends BaseInfoPage<T>>
       selectedCollections.add(uncategorizedCollection);
     }
 
-    final uploadedFile = await InfoFileService.instance.createAndUploadInfoFile(
-      infoItem: infoItem,
-      collection: selectedCollections.first,
-    );
+    if (_createdFile == null) {
+      final uploadedFile = await InfoFileService.instance
+          .createAndUploadInfoFile(
+            infoItem: infoItem,
+            collection: selectedCollections.first,
+          );
+      // A membership failure must not make the next Save create another file.
+      _createdFile = uploadedFile;
 
-    for (int i = 1; i < selectedCollections.length; i++) {
-      await CollectionService.instance.addToCollection(
-        selectedCollections[i],
-        uploadedFile,
-        runSync: false,
-      );
+      for (int i = 1; i < selectedCollections.length; i++) {
+        await CollectionService.instance.addToCollection(
+          selectedCollections[i],
+          uploadedFile,
+          runSync: false,
+        );
+      }
+
+      await CollectionService.instance.sync();
+    } else {
+      await _updateExistingFile(_createdFile!, infoItem);
     }
 
-    await CollectionService.instance.sync();
     Bus.instance.fire(UserDetailsRefreshEvent());
 
     if (!mounted) return;
