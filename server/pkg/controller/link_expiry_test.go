@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"crypto/rand"
+	"crypto/hpke"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -15,7 +15,6 @@ import (
 	"github.com/ente/museum/pkg/repo/public"
 	"github.com/ente/museum/pkg/utils/auth"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/nacl/box"
 )
 
 func TestLinkExpiryReminders(t *testing.T) {
@@ -28,8 +27,9 @@ func TestLinkExpiryReminders(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "expiry-session", "", ""))
 	hash := auth.HashToken("expiry-session")
-	publicKey, privateKey, err := box.GenerateKey(rand.Reader)
+	privateKey, err := hpke.MLKEM768X25519().GenerateKey()
 	require.NoError(t, err)
+	publicKey := privateKey.PublicKey().Bytes()
 	c := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}, TaskLockRepo: &repo.TaskLockRepository{DB: db}, HostName: "expiry-host"}
 	for _, platform := range []string{"android", "ios"} {
 		require.NoError(t, c.AddToken(1, hash[:], ente.PushTokenRequest{FCMToken: platform, Platform: &platform, NotificationKey: publicKey[:]}))
@@ -99,8 +99,11 @@ func TestLinkExpiryReminders(t *testing.T) {
 		require.Len(t, msg.Message.Data, 1)
 		ciphertext, err := base64.StdEncoding.DecodeString(msg.Message.Data["notificationCiphertext"])
 		require.NoError(t, err)
-		plaintext, ok := box.OpenAnonymous(nil, ciphertext, publicKey, privateKey)
-		require.True(t, ok)
+		require.Greater(t, len(ciphertext), 1120)
+		recipient, err := hpke.NewRecipient(ciphertext[:1120], privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
+		require.NoError(t, err)
+		plaintext, err := recipient.Open(nil, ciphertext[1120:])
+		require.NoError(t, err)
 		var event map[string]any
 		require.NoError(t, json.Unmarshal(plaintext, &event))
 		require.Equal(t, map[string]any{

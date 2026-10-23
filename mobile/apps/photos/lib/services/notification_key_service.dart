@@ -1,62 +1,59 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:ente_crypto/ente_crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_sodium/flutter_sodium.dart';
+import 'package:photos/src/rust/api/notification_api.dart';
+import 'package:photos/src/rust/frb_generated.dart';
 
 class NotificationKeyService {
   static const _storage = FlutterSecureStorage();
-  static const _storageKey = 'notification_recipient';
+  static const _storageKey = 'notification_private_key';
+  static Future<String>? _pendingKey;
 
-  static Future<String?> generateNotificationKey() async {
-    if (!Platform.isAndroid) return null;
-    var pair = await getNotificationKeyPair();
-    if (pair == null) {
-      CryptoUtil.init();
-      pair = await CryptoUtil.generateKeyPair();
-      await setNotificationKeyPair(pair);
+  static Future<String?> generateNotificationKey() {
+    if (!Platform.isAndroid) return Future.value();
+    return _pendingKey ??= _getOrCreateNotificationKey().whenComplete(() {
+      _pendingKey = null;
+    });
+  }
+
+  static Future<String> _getOrCreateNotificationKey() async {
+    var privateKey = await getNotificationPrivateKey();
+    if (privateKey == null) {
+      privateKey = generateNotificationPrivateKey();
+      await setNotificationPrivateKey(privateKey);
     }
-    return base64Encode(pair.pk);
+    return base64Encode(getNotificationPublicKey(privateKey: privateKey));
   }
 
   static Future<Map<String, dynamic>?> decrypt(
     Map<String, dynamic> data,
   ) async {
-    final pair = await getNotificationKeyPair();
-    if (pair == null) return null;
-    CryptoUtil.init();
-    final plaintext = CryptoUtil.openSealSync(
-      base64Decode(data['notificationCiphertext'] as String),
-      pair.pk,
-      pair.sk,
+    final privateKey = await getNotificationPrivateKey();
+    if (privateKey == null) return null;
+    if (!EntePhotosRust.instance.initialized) {
+      await EntePhotosRust.init();
+    }
+    final plaintext = decryptNotification(
+      ciphertext: base64Decode(data['notificationCiphertext'] as String),
+      privateKey: privateKey,
     );
     final event = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
     if (event['eventType'] is! String) return null;
     return event;
   }
 
-  static Future<KeyPair?> getNotificationKeyPair() async {
+  static Future<Uint8List?> getNotificationPrivateKey() async {
     final encoded = await _storage.read(key: _storageKey);
-    if (encoded == null) return null;
-    final record = jsonDecode(encoded) as Map<String, dynamic>;
-    return KeyPair(
-      pk: base64Decode(record['publicKey'] as String),
-      sk: base64Decode(record['privateKey'] as String),
-    );
+    return encoded == null ? null : base64Decode(encoded);
   }
 
-  static Future<void> setNotificationKeyPair(KeyPair? pair) async {
-    if (pair == null) {
+  static Future<void> setNotificationPrivateKey(Uint8List? privateKey) async {
+    if (privateKey == null) {
       await _storage.delete(key: _storageKey);
     } else {
-      await _storage.write(
-        key: _storageKey,
-        value: jsonEncode({
-          'publicKey': base64Encode(pair.pk),
-          'privateKey': base64Encode(pair.sk),
-        }),
-      );
+      await _storage.write(key: _storageKey, value: base64Encode(privateKey));
     }
   }
 }

@@ -62,6 +62,8 @@ class NotificationService {
       _logger.warning('Could not decrypt notification');
     }
     if (event == null) {
+      await _preferences.reload();
+      if (_preferences.getString(Configuration.tokenKey) == null) return;
       if (shouldShowNotificationsForSharedPhotosAndAlbums()) {
         final strings = await LanguageService.locals;
         await showNotification(
