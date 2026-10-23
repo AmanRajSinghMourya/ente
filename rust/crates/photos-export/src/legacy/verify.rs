@@ -23,7 +23,7 @@ pub async fn file(
     source: &FileSnapshot,
     expected: &mut Option<Result<Vec<(Role, String)>, String>>,
 ) -> Result<usize> {
-    let record = item.legacy.as_ref().context("missing legacy record")?;
+    let record = item.legacy.as_mut().context("missing legacy record")?;
     let roles = transfer::roles(source);
     ensure!(
         source.kind == "livephoto" || record.parts.len() == 1,
@@ -42,6 +42,13 @@ pub async fn file(
             || record.parts[0].role != record.parts[1].role,
         "duplicate legacy component role"
     );
+    let discover = !record.desktop && source.kind == "livephoto" && record.parts.len() == 1;
+    if discover {
+        record.parts = std::mem::take(&mut record.candidates)
+            .into_iter()
+            .map(|name| super::read::Part { name, role: None })
+            .collect();
+    }
     let mut measured = Vec::new();
     for part in &record.parts {
         let path = names::check(check.root, &format!("{}/{}", album.path, part.name))?;
@@ -79,6 +86,35 @@ pub async fn file(
             .filter_map(|r| transfer::expected_hash(source, r).map(|h| (r.clone(), h.to_owned())))
             .collect()
     };
+    if discover {
+        let parts = std::mem::take(&mut record.parts);
+        let mut matched = Vec::new();
+        for (mut part, measurement) in parts.into_iter().zip(measured) {
+            let Some((_, hash, _)) = &measurement else {
+                continue;
+            };
+            let mut matches = known.iter().filter(|(_, expected)| expected == hash);
+            let Some((role, _)) = matches.next() else {
+                continue;
+            };
+            ensure!(
+                matches.next().is_none()
+                    && !record
+                        .parts
+                        .iter()
+                        .any(|part| part.role.as_ref() == Some(role)),
+                "ambiguous legacy Live Photo component at {}/{}",
+                album.path,
+                part.name
+            );
+            adopt::claim(check.index, album, &item.placement.id, &part.name, "")?;
+            part.role = Some(role.clone());
+            record.parts.push(part);
+            matched.push(measurement);
+        }
+        measured = matched;
+    }
+    let present = measured.iter().filter(|p| p.is_some()).count();
     let complete = present == roles.len();
     item.leftover = !complete && (source.kind == "livephoto" || record.desktop);
     item.placement.kind = source.kind.clone();
@@ -140,6 +176,8 @@ pub async fn file(
         }
     }
     if complete {
+        item.components
+            .sort_by_key(|component| component.role.name());
         let layout: Vec<_> = item.components.iter().map(Component::portable).collect();
         let favorited = check.store.db.query_row(
             "SELECT favorited FROM desired_files WHERE album=?1 AND file=?2",
@@ -216,14 +254,14 @@ async fn hashes(
             Digest::new(cancel).map_err(io::Error::other)
         })?
         .into_iter()
-        .map(|(role, _, writer)| Ok((role, writer.finish()?)))
-        .collect::<Result<Vec<_>>>()?
+        .map(|(role, _, writer)| (role, writer.finish()))
+        .collect()
     } else {
         let download = files::download(session, file.id, &file.key, &file.header, || {
             Digest::new(cancel).map_err(io::Error::other)
         });
         let writer = tokio::select! { result=download=>result?, _=receiver.changed()=>return Err(crate::Cancelled.into()) };
-        vec![(Role::Original, writer.finish()?)]
+        vec![(Role::Original, writer.finish())]
     };
     Ok(hashes)
 }
@@ -240,8 +278,8 @@ impl Digest {
             cancel: cancel.clone(),
         })
     }
-    fn finish(self) -> Result<String> {
-        Ok(b64::encode(&self.state.finalize()?))
+    fn finish(self) -> String {
+        b64::encode(&self.state.finalize())
     }
 }
 
@@ -250,7 +288,7 @@ impl Write for Digest {
         if *self.cancel.borrow() {
             return Err(io::Error::other(crate::Cancelled));
         }
-        self.state.update(bytes).map_err(io::Error::other)?;
+        self.state.update(bytes);
         Ok(bytes.len())
     }
     fn flush(&mut self) -> io::Result<()> {

@@ -1,22 +1,24 @@
-import {
-    GalleryBarAndListHeader,
-    type GalleryBarAndListHeaderProps,
-} from "@/components/Collections/GalleryBarAndListHeader";
+import { CreateAlbumDialog } from "@/components/collections/CreateAlbumDialog";
 import { SearchBar, type SearchBarProps } from "@/components/SearchBar";
+import { useIsOffline } from "@/components/utils/use-is-offline";
 import { uploadManager } from "@/services/upload-manager";
 import {
     Album02Icon,
     Home01Icon,
+    Link05Icon,
     Settings01Icon,
     Upload01Icon,
     UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import CloudOffIcon from "@mui/icons-material/CloudOff";
 import {
     Box,
+    CircularProgress,
     Stack,
     SvgIcon,
     Tooltip,
+    Typography,
     useMediaQuery,
     useTheme,
 } from "@mui/material";
@@ -31,41 +33,48 @@ import { thumbnailGridPadding } from "ente-new/photos/components/utils/thumbnail
 import { PseudoCollectionID } from "ente-new/photos/services/collection-summary";
 import { isMLSupported } from "ente-new/photos/services/ml";
 import { t } from "i18next";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import type { GalleryBarPresentationProps } from "./BarImpl";
+import type { RemotePullOpts } from ".";
+import {
+    GalleryBarImpl,
+    type GalleryBarImplProps,
+    type GalleryBarPresentationProps,
+} from "./BarImpl";
 import type { GalleryBarMode } from "./reducer";
+
+type GalleryNavigation = Omit<
+    GalleryBarImplProps,
+    | keyof GalleryBarPresentationProps
+    | "mode"
+    | "onCreateAlbum"
+    | "onSelectPerson"
+> & { onRemotePull: (opts?: RemotePullOpts) => Promise<void> };
 
 type PhotosNavigationShellProps = SearchBarProps & {
     onSidebar: () => void;
     onUpload: () => void;
     onHome: () => void;
     mode: GalleryBarMode;
-    onChangeMode: (mode: GalleryBarMode) => void;
+    onChangeMode: (mode: GalleryBarMode) => boolean;
 };
 
 export const PhotosNavigationShell: React.FC<
     React.PropsWithChildren<
         PhotosNavigationShellProps & {
-            showRail: boolean;
-            showNormalNavigation: boolean;
+            isFirstLoad: boolean;
             alternateHeader: ReactNode;
-            galleryBarProps:
-                | Omit<
-                      GalleryBarAndListHeaderProps,
-                      keyof GalleryBarPresentationProps
-                  >
-                | undefined;
+            galleryNavigation: GalleryNavigation | undefined;
         }
     >
 > = ({
-    showRail,
-    showNormalNavigation,
+    isFirstLoad,
     alternateHeader,
-    galleryBarProps,
+    galleryNavigation,
     children,
     ...props
 }) => {
+    const isOffline = useIsOffline();
     const [railOpen, setRailOpen] = useState(true);
     const [navigationCollapsed, setNavigationCollapsed] = useState(false);
     const toggleRail = () => setRailOpen((open) => !open);
@@ -73,6 +82,29 @@ export const PhotosNavigationShell: React.FC<
     const { show: showMobileNavigation, props: mobileDrawerProps } =
         useModalVisibility();
     const { onClose: closeMobileNavigation } = mobileDrawerProps;
+    const { onSelectCollectionID } = galleryNavigation ?? {};
+    const { onSelectPerson } = props;
+    const selectCollection = useCallback(
+        (id: number) => {
+            onSelectCollectionID?.(id);
+            closeMobileNavigation();
+        },
+        [onSelectCollectionID, closeMobileNavigation],
+    );
+    const selectPerson = useCallback(
+        (id: string) => {
+            onSelectPerson(id);
+            closeMobileNavigation();
+        },
+        [onSelectPerson, closeMobileNavigation],
+    );
+    const { show: showAlbumNameInput, props: albumNameInputVisibilityProps } =
+        useModalVisibility();
+    const [createInHiddenSection, setCreateInHiddenSection] = useState(false);
+    const openAlbumCreation = () => {
+        setCreateInHiddenSection(props.mode == "hidden-albums");
+        showAlbumNameInput();
+    };
     useEffect(() => {
         setNavigationCollapsed(false);
     }, [props.mode, props.isInSearchMode]);
@@ -80,16 +112,24 @@ export const PhotosNavigationShell: React.FC<
         if (!mobile) closeMobileNavigation();
     }, [mobile, closeMobileNavigation]);
     const handleChangeMode = (mode: GalleryBarMode) => {
+        if (mode == "people" && !mobile) {
+            closeMobileNavigation();
+            props.onChangeMode(mode);
+            return;
+        }
         const reopeningSection =
             mobile &&
             mode == "albums" &&
-            galleryBarProps &&
+            galleryNavigation &&
             !props.isInSearchMode &&
             (props.mode == "hidden-albums" || props.mode == "archive-albums");
         if (
-            galleryBarProps &&
+            galleryNavigation &&
             !props.isInSearchMode &&
-            (props.mode == mode || reopeningSection)
+            ((props.mode == mode &&
+                galleryNavigation.activeCollectionID !=
+                    PseudoCollectionID.all) ||
+                reopeningSection)
         ) {
             if (mobile) {
                 if (mobileDrawerProps.open) closeMobileNavigation();
@@ -99,8 +139,8 @@ export const PhotosNavigationShell: React.FC<
             }
             return;
         }
+        if (!props.onChangeMode(mode)) return;
         setNavigationCollapsed(false);
-        props.onChangeMode(mode);
         if (mobile) showMobileNavigation();
     };
     return (
@@ -109,83 +149,73 @@ export const PhotosNavigationShell: React.FC<
                 flex: 1,
                 minWidth: 0,
                 minHeight: 0,
-                ...(showRail && {
-                    bgcolor: "#F4F4F4",
-                    ...theme.applyStyles("light", {
-                        "& > :first-child .MuiButton-colorSecondary, & > :last-child > nav .MuiButton-colorSecondary":
-                            { "--mui-palette-secondary-main": "#FFFFFF" },
-                    }),
-                    ...theme.applyStyles("dark", { bgcolor: "#161616" }),
+                bgcolor: "#F4F4F4",
+                ...theme.applyStyles("light", {
+                    "& > :first-child .MuiButton-colorSecondary, & > :last-child > nav .MuiButton-colorSecondary":
+                        { "--mui-palette-secondary-main": "#FFFFFF" },
                 }),
+                ...theme.applyStyles("dark", { bgcolor: "#161616" }),
             })}
         >
-            {showRail && (
-                <NavbarBase
-                    sx={{
-                        pl: { xs: "9px", sm: "16px" },
-                        pr: { xs: "12px", sm: "16px" },
-                        flexBasis: { xs: "60px", sm: "76px" },
-                        borderBottom: "none",
-                    }}
-                >
-                    {showNormalNavigation ? (
-                        <NormalHeaderContents
-                            {...props}
-                            {...{ railOpen, toggleRail }}
-                        />
-                    ) : (
-                        alternateHeader
-                    )}
-                </NavbarBase>
-            )}
+            <NavbarBase
+                sx={{
+                    pl: { xs: "9px", sm: "16px" },
+                    pr: { xs: "12px", sm: "16px" },
+                    flexBasis: { xs: "60px", sm: "76px" },
+                    borderBottom: "none",
+                }}
+            >
+                {alternateHeader ?? (
+                    <NormalHeaderContents
+                        onUpload={props.onUpload}
+                        {...{ railOpen, toggleRail }}
+                    />
+                )}
+            </NavbarBase>
             <Stack
                 direction="row"
                 sx={{
                     flex: 1,
                     minWidth: 0,
                     minHeight: 0,
-                    p: showRail
-                        ? {
-                              xs: railOpen ? "0 8px 8px 0" : "0 8px 8px",
-                              sm: railOpen ? "0 11px 11px 0" : "0 11px 11px",
-                          }
-                        : 0,
+                    p: {
+                        xs: railOpen ? "0 8px 8px 0" : "0 8px 8px",
+                        sm: railOpen ? "0 11px 11px 0" : "0 11px 11px",
+                    },
                 }}
             >
-                {showRail && (
-                    <Box
-                        component="nav"
-                        sx={{
-                            display: railOpen ? "flex" : "none",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            flexShrink: 0,
-                            width: { xs: "56px", sm: "72px" },
-                            px: { xs: "9px", sm: "14px" },
-                            gap: "12px",
-                        }}
-                    >
-                        {showNormalNavigation && (
-                            <NormalNavigationRail
-                                {...props}
-                                isHome={
-                                    props.mode == "albums" &&
-                                    !props.isInSearchMode &&
-                                    galleryBarProps?.activeCollectionID ==
-                                        PseudoCollectionID.all
-                                }
-                                onChangeMode={handleChangeMode}
-                                opensDialog={mobile}
-                                navigationOpen={
-                                    !!galleryBarProps &&
-                                    (mobile
-                                        ? mobileDrawerProps.open
-                                        : !navigationCollapsed)
-                                }
-                            />
-                        )}
-                    </Box>
-                )}
+                <Box
+                    component="nav"
+                    sx={{
+                        display: railOpen ? "flex" : "none",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        flexShrink: 0,
+                        width: { xs: "56px", sm: "72px" },
+                        px: { xs: "9px", sm: "14px" },
+                        gap: "12px",
+                    }}
+                >
+                    {alternateHeader == null && (
+                        <NormalNavigationRail
+                            {...props}
+                            isHome={
+                                props.mode == "albums" &&
+                                !props.isInSearchMode &&
+                                galleryNavigation?.activeCollectionID ==
+                                    PseudoCollectionID.all
+                            }
+                            onChangeMode={handleChangeMode}
+                            opensDialog={mobile}
+                            navigationOpen={
+                                !!galleryNavigation &&
+                                (mobile
+                                    ? mobileDrawerProps.open
+                                    : !navigationCollapsed)
+                            }
+                        />
+                    )}
+                </Box>
                 <Stack
                     sx={{
                         flex: 1,
@@ -194,22 +224,38 @@ export const PhotosNavigationShell: React.FC<
                         flexDirection: { xs: "column", md: "row" },
                     }}
                 >
-                    {galleryBarProps && (
-                        <GalleryBarAndListHeader
-                            {...galleryBarProps}
-                            collapsed={
-                                showRail && (!railOpen || navigationCollapsed)
-                            }
-                            mobileDrawerProps={mobileDrawerProps}
-                        />
+                    {galleryNavigation && !props.isInSearchMode && (
+                        <>
+                            <GalleryBarImpl
+                                {...galleryNavigation}
+                                mode={props.mode}
+                                collapsed={!railOpen || navigationCollapsed}
+                                mobileDrawerProps={mobileDrawerProps}
+                                onCreateAlbum={openAlbumCreation}
+                                onSelectCollectionID={selectCollection}
+                                onSelectPerson={selectPerson}
+                            />
+                            <CreateAlbumDialog
+                                {...albumNameInputVisibilityProps}
+                                isHidden={createInHiddenSection}
+                                onRemotePull={galleryNavigation.onRemotePull}
+                                onSelectCollectionID={selectCollection}
+                            />
+                        </>
                     )}
                     <Stack
-                        sx={(theme) => ({
-                            flex: 1,
-                            minWidth: 0,
-                            minHeight: 0,
-                            pt: showRail ? `${thumbnailGridPadding}px` : 0,
-                            ...(showRail && {
+                        sx={{ flex: 1, minWidth: 0, minHeight: 0, gap: "8px" }}
+                    >
+                        <Stack
+                            sx={(theme) => ({
+                                flex: 1,
+                                minWidth: 0,
+                                minHeight: 0,
+                                pt: {
+                                    xs: `${thumbnailGridPadding}px`,
+                                    md: "36px",
+                                },
+                                px: { xs: 0, md: "12px" },
                                 "--mui-palette-background-default": "#FFFFFF",
                                 bgcolor: "background.default",
                                 borderRadius: "20px",
@@ -218,10 +264,12 @@ export const PhotosNavigationShell: React.FC<
                                     "--mui-palette-background-default":
                                         "#212121",
                                 }),
-                            }),
-                        })}
-                    >
-                        {children}
+                            })}
+                        >
+                            {children}
+                        </Stack>
+                        {isFirstLoad && <FirstLoadMessage />}
+                        {isOffline && <OfflineMessage />}
                     </Stack>
                 </Stack>
             </Stack>
@@ -230,7 +278,10 @@ export const PhotosNavigationShell: React.FC<
 };
 
 const NormalHeaderContents: React.FC<
-    PhotosNavigationShellProps & { railOpen: boolean; toggleRail: () => void }
+    Pick<PhotosNavigationShellProps, "onUpload"> & {
+        railOpen: boolean;
+        toggleRail: () => void;
+    }
 > = ({ onUpload, railOpen, toggleRail }) => {
     return (
         <Box
@@ -293,7 +344,8 @@ const NormalHeaderContents: React.FC<
 };
 
 const NormalNavigationRail: React.FC<
-    Omit<PhotosNavigationShellProps, "onUpload"> & {
+    Omit<PhotosNavigationShellProps, "onUpload" | "onChangeMode"> & {
+        onChangeMode: (mode: GalleryBarMode) => void;
         isHome: boolean;
         opensDialog: boolean;
         navigationOpen: boolean;
@@ -322,7 +374,7 @@ const NormalNavigationRail: React.FC<
                 ...theme.applyStyles("dark", { bgcolor: "#3E3E3E" }),
             })}
         />
-        {(["albums", "people"] as const).map((item) =>
+        {(["albums", "people", "links"] as const).map((item) =>
             item == "people" && !isMLSupported ? null : (
                 <Tooltip key={item} title={t(item)}>
                     <FocusVisibleButton
@@ -356,7 +408,11 @@ const NormalNavigationRail: React.FC<
                     >
                         <HugeiconsIcon
                             icon={
-                                item == "albums" ? Album02Icon : UserGroupIcon
+                                item == "albums"
+                                    ? Album02Icon
+                                    : item == "links"
+                                      ? Link05Icon
+                                      : UserGroupIcon
                             }
                             size={20}
                             strokeWidth={1.8}
@@ -472,3 +528,50 @@ const UploadButton: React.FC<ButtonishProps> = ({ onClick }) => {
         </>
     );
 };
+
+const GalleryStatusMessage: React.FC<
+    React.PropsWithChildren<{ icon: ReactNode }>
+> = ({ icon, children }) => (
+    <Stack
+        direction="row"
+        role="status"
+        sx={{
+            flexShrink: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 1.25,
+            px: 1,
+            py: 1.25,
+            color: "text.muted",
+            opacity: 0.65,
+        }}
+    >
+        {icon}
+        <Typography variant="small" sx={{ textAlign: "center" }}>
+            {children}
+        </Typography>
+    </Stack>
+);
+
+const FirstLoadMessage: React.FC = () => (
+    <GalleryStatusMessage
+        icon={
+            <CircularProgress
+                size={12}
+                thickness={5}
+                color="inherit"
+                aria-hidden
+            />
+        }
+    >
+        {t("initial_load_delay_warning")}
+    </GalleryStatusMessage>
+);
+
+const OfflineMessage: React.FC = () => (
+    <GalleryStatusMessage
+        icon={<CloudOffIcon sx={{ fontSize: 16 }} aria-hidden />}
+    >
+        {t("offline_message")}
+    </GalleryStatusMessage>
+);

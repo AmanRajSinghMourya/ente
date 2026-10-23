@@ -36,21 +36,23 @@ Future<T?> showAlbumActionsSheet<T>(
               final gridWidth = constraints.maxWidth - Spacing.md * 2;
               final minTileWidth =
                   64 *
-                  media.textScaler.scale(TextStyles.body.fontSize!) /
-                  TextStyles.body.fontSize!;
+                  media.textScaler.scale(TextStyles.mini.fontSize!) /
+                  TextStyles.mini.fontSize!;
               final columns = gridWidth >= minTileWidth * 4 + Spacing.xs * 3
                   ? 4
                   : 2;
+              final showTiles = options.length > 1;
               final tiles = [
                 ...options
                     .where(
                       (option) =>
+                          showTiles &&
                           option.labelColor == null &&
                           option.secondaryLabel == null &&
                           option.trailingWidget == null,
                     )
                     .take(criticalIndex == -1 ? columns : columns - 1),
-                if (criticalIndex != -1) options[criticalIndex],
+                if (showTiles && criticalIndex != -1) options[criticalIndex],
               ];
               final rows = options
                   .where((option) => !tiles.contains(option))
@@ -67,24 +69,27 @@ Future<T?> showAlbumActionsSheet<T>(
                     ),
                   ),
                   SizedBox(height: isLandscape ? Spacing.sm : Spacing.md),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: Spacing.xs,
-                      children: [
-                        for (final option in tiles)
-                          Expanded(
-                            child: _AlbumActionTile(
-                              option: option,
-                              onTap: () =>
-                                  Navigator.of(context).pop(option.value),
+                  if (tiles.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.md,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: Spacing.xs,
+                        children: [
+                          for (final option in tiles)
+                            Expanded(
+                              child: _AlbumActionTile(
+                                option: option,
+                                onTap: () =>
+                                    Navigator.of(context).pop(option.value),
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  if (rows.isNotEmpty)
+                  if (tiles.isNotEmpty && rows.isNotEmpty)
                     DividerComponent(
                       padding: EdgeInsets.symmetric(
                         horizontal: Spacing.lg,
@@ -263,7 +268,7 @@ class _AlbumActionTile<T> extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyles.body.copyWith(color: foreground),
+                  style: TextStyles.mini.copyWith(color: foreground),
                 ),
               ],
             ),
@@ -305,7 +310,7 @@ class _AlbumActionRow<T> extends StatelessWidget {
                     option.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyles.body.copyWith(
+                    style: TextStyles.mini.copyWith(
                       color: option.labelColor ?? colors.textBase,
                     ),
                   ),

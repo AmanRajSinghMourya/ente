@@ -69,11 +69,13 @@ class NotificationService {
         await showNotification(
           strings.entePhotos,
           strings.notificationNewActivity,
+          id: -1,
         );
       }
       return;
     }
     if (event['eventType'] == 'album_shared') {
+      _logger.info('Received encrypted album-share push');
       await onSync();
     } else if (event['eventType'] == 'shared_link_expiring') {
       final windowEnd = event['windowEnd'];

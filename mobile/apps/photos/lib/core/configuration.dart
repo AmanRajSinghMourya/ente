@@ -12,6 +12,7 @@ import 'package:ente_pure_utils/ente_pure_utils.dart';
 import "package:flutter/services.dart";
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_sodium/flutter_sodium.dart' show SodiumException;
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import "package:photos/app_mode.dart";
@@ -20,6 +21,7 @@ import 'package:photos/core/cache/thumbnail_in_memory_cache.dart';
 import 'package:photos/core/cache/video_cache_manager.dart';
 import 'package:photos/core/constants.dart';
 import 'package:photos/core/error-reporting/super_logging.dart';
+import 'package:photos/core/errors.dart';
 import 'package:photos/core/event_bus.dart';
 import 'package:photos/db/collections_db.dart';
 import 'package:photos/db/files_db.dart';
@@ -48,6 +50,7 @@ import "package:photos/services/machine_learning/ml_run_control.dart";
 import "package:photos/services/machine_learning/ml_service.dart";
 import "package:photos/services/machine_learning/similar_images_service.dart";
 import "package:photos/services/memory_share_service.dart";
+import 'package:photos/services/notification_key_service.dart';
 import "package:photos/services/notification_service.dart";
 import 'package:photos/services/photos_contacts_service.dart';
 import 'package:photos/services/search_service.dart';
@@ -146,6 +149,9 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       // https://github.com/mogol/flutter_secure_storage/issues/541
       if (e is PlatformException) {
         final PlatformException error = e;
+        if (error.code == 'notification_key_store') {
+          rethrow;
+        }
         final bool isBadPaddingError =
             error.toString().contains('BadPaddingException') ||
             (error.message ?? '').contains('BadPaddingException');
@@ -197,9 +203,7 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
     _logger.info("Logging out, autoLogout: $autoLogout");
     MLService.instance.stopActiveRun(MlStopReason.logout);
     if (!autoLogout) {
-      if (flagService.stopStreamProcess) {
-        VideoPreviewService.instance.stop('logout');
-      }
+      VideoPreviewService.instance.stop('logout');
       if (SyncService.instance.isSyncInProgress()) {
         SyncService.instance.stopSync();
         try {
@@ -212,6 +216,9 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       }
     }
 
+    if (Platform.isIOS) {
+      await NotificationKeyService.setNotificationPrivateKey(null);
+    }
     await _clearTempFolderOnLogout();
 
     await _preferences.clear();
@@ -420,16 +427,20 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       attributes.opsLimit!,
     );
 
+    final encryptedKey = CryptoUtil.base642bin(attributes.encryptedKey);
+    final keyDecryptionNonce = CryptoUtil.base642bin(
+      attributes.keyDecryptionNonce,
+    );
     Uint8List key;
     try {
       key = CryptoUtil.decryptSync(
-        CryptoUtil.base642bin(attributes.encryptedKey),
+        encryptedKey,
         keyEncryptionKey,
-        CryptoUtil.base642bin(attributes.keyDecryptionNonce),
+        keyDecryptionNonce,
       );
-    } catch (e) {
+    } on SodiumException catch (e) {
       _logger.warning('master-key decryption failed: $e');
-      throw Exception("Incorrect password");
+      throw IncorrectPasswordError();
     }
     await setKey(CryptoUtil.bin2base64(key));
     final secretKey = CryptoUtil.decryptSync(

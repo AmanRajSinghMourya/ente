@@ -113,7 +113,11 @@ class LocalSettings {
   static const _kRustMlDbOverride = "ls.rust_ml_db_override";
   static const _kAppMode = "ls.app_mode";
   static const _kShowLocalGalleryModeOption = "ls.show_offline_mode_option";
+  static const _kLocalGalleryOnboardingPending =
+      "ls.local_gallery_onboarding_pending";
   static const _kDeletePreference = "delete_preference";
+  static const _kSharedPhotoLocationWarningDismissed =
+      "shared_photo_location_warning_dismissed";
   static const _kMediaManagementHintDeleteAttempts =
       "media_management_hint_delete_attempts";
   static const _kMediaManagementHintDismissedAt =
@@ -673,6 +677,13 @@ class LocalSettings {
     await _prefs.setBool(_kShowLocalGalleryModeOption, value);
   }
 
+  bool get isLocalGalleryOnboardingPending =>
+      _prefs.getBool(_kLocalGalleryOnboardingPending) ?? false;
+
+  Future<void> setLocalGalleryOnboardingPending(bool value) async {
+    await _prefs.setBool(_kLocalGalleryOnboardingPending, value);
+  }
+
   bool get isLocalGalleryGetStartedBannerDismissed {
     final dismissedAtMs =
         _prefs.getInt(_kLocalGalleryGetStartedBannerDismissedAt) ?? 0;
@@ -748,6 +759,13 @@ class LocalSettings {
       _kMediaManagementHintDismissedAt,
       DateTime.now().millisecondsSinceEpoch,
     );
+  }
+
+  bool get isSharedPhotoLocationWarningDismissed =>
+      _prefs.getBool(_kSharedPhotoLocationWarningDismissed) ?? false;
+
+  Future<void> dismissSharedPhotoLocationWarning() async {
+    await _prefs.setBool(_kSharedPhotoLocationWarningDismissed, true);
   }
 
   DeletePreference? getDeletePreference() {
