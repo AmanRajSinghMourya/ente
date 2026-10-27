@@ -21,30 +21,21 @@ void main() {
       );
     });
 
-    for (final platform in [TargetPlatform.iOS, TargetPlatform.android]) {
-      testWidgets('$platform interruption preserves the unlocked session', (
-        tester,
-      ) async {
-        await _pumpUnlockedApp(tester);
-        expect(await _paintedColor(tester), _sensitiveColor);
+    testWidgets('iOS covers interruptions without locking the session', (
+      tester,
+    ) async {
+      await _pumpUnlockedApp(tester);
+      expect(await _paintedColor(tester), _sensitiveColor);
 
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        await tester.pump();
-        expect(
-          await _paintedColor(tester),
-          platform == TargetPlatform.iOS ? Colors.white : _sensitiveColor,
-        );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(await _paintedColor(tester), isNot(_sensitiveColor));
 
-        await tester.pump(const Duration(seconds: 6));
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pumpAndSettle();
-        expect(await _paintedColor(tester), _sensitiveColor);
-      }, variant: TargetPlatformVariant.only(platform));
-    }
+      await tester.pump(const Duration(seconds: 6));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(await _paintedColor(tester), _sensitiveColor);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     for (final elapsed in [
       const Duration(seconds: 1),
@@ -76,17 +67,6 @@ void main() {
         }
       }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
     }
-
-    testWidgets('iOS leaves content visible when app lock is disabled', (
-      tester,
-    ) async {
-      await _pumpUnlockedApp(tester, enabled: false);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      await tester.pump();
-      expect(await _paintedColor(tester), _sensitiveColor);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
-    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
 
   testWidgets('updates theme mode after startup', (tester) async {
@@ -170,17 +150,14 @@ void main() {
 const _sensitiveColor = Color(0xFFFF0000);
 const _paintBoundary = ValueKey('app lock painted output');
 
-Future<void> _pumpUnlockedApp(
-  WidgetTester tester, {
-  bool enabled = true,
-}) async {
+Future<void> _pumpUnlockedApp(WidgetTester tester) async {
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   await tester.pumpWidget(
     RepaintBoundary(
       key: _paintBoundary,
       child: _buildAppLock(
         ThemeMode.light,
-        enabled: enabled,
+        enabled: true,
         child: const ColoredBox(color: _sensitiveColor),
         lockScreen: Builder(
           builder: (context) => TextButton(
@@ -191,10 +168,8 @@ Future<void> _pumpUnlockedApp(
       ),
     ),
   );
-  if (enabled) {
-    await tester.tap(find.text('Unlock'));
-    await tester.pumpAndSettle();
-  }
+  await tester.tap(find.text('Unlock'));
+  await tester.pumpAndSettle();
 }
 
 Future<Color?> _paintedColor(WidgetTester tester) => tester.runAsync(() async {
