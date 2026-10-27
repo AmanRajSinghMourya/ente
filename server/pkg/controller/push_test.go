@@ -1,14 +1,19 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"crypto/hpke"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
@@ -174,9 +179,15 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "session", "", ""))
 	hash := auth.HashToken("session")
 	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	key, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
 	for _, platform := range []string{"ios", "android"} {
+		var publicKey []byte
+		if platform == "android" {
+			publicKey = key.PublicKey().Bytes()
+		}
 		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
-			FCMToken: platform + "-device", Platform: &platform,
+			FCMToken: platform + "-device", Platform: &platform, NotificationKey: publicKey,
 		}))
 	}
 	var messages []map[string]any
@@ -197,6 +208,70 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 		"data":    map[string]any{"action": "sync"},
 		"android": map[string]any{"priority": "high", "ttl": "86400s"},
 	}}, messages)
+}
+
+func TestAlbumShareSendsEncryptedIOSAlert(t *testing.T) {
+	testutil.WithServerRoot(t)
+	db := testutil.RequireTestDB(t)
+	testutil.ResetTables(t, db)
+	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "internal@example.com", CreationTime: 1})
+	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(1,'internalUser','true')`)
+	require.NoError(t, err)
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "session", "", ""))
+	hash := auth.HashToken("session")
+	platform := "ios"
+	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	keys := make(map[string]hpke.PrivateKey)
+	for _, token := range []string{"iphone", "ipad"} {
+		key, err := hpke.MLKEM768X25519().GenerateKey()
+		require.NoError(t, err)
+		keys[token] = key
+		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
+			FCMToken: token, Platform: &platform, NotificationKey: key.PublicKey().Bytes(),
+		}))
+	}
+	// A corrupt stored key must not prevent delivery to other devices.
+	_, err = db.Exec(`INSERT INTO push_tokens(user_id,fcm_token,platform,session_token_hash,notification_public_key) VALUES(1,'invalid','ios',$1,$2)`, hash[:], bytes.Repeat([]byte{0xff}, 1216))
+	require.NoError(t, err)
+	var delivered []string
+	controller.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var envelope struct {
+			Message struct {
+				Token string            `json:"token"`
+				Data  map[string]string `json:"data"`
+				APNS  struct {
+					Headers map[string]string `json:"headers"`
+					Payload struct {
+						APS map[string]any `json:"aps"`
+					} `json:"payload"`
+				} `json:"apns"`
+			} `json:"message"`
+		}
+		require.NoError(t, json.NewDecoder(request.Body).Decode(&envelope))
+		msg := envelope.Message
+		require.Contains(t, keys, msg.Token)
+		require.Len(t, msg.Data, 1)
+		encrypted, err := base64.StdEncoding.DecodeString(msg.Data["notificationCiphertext"])
+		require.NoError(t, err)
+		plaintext, err := hpke.Open(keys[msg.Token], hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), encrypted)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
+		require.Equal(t, "alert", msg.APNS.Headers["apns-push-type"])
+		require.Equal(t, "10", msg.APNS.Headers["apns-priority"])
+		require.Equal(t, "io.ente.frame", msg.APNS.Headers["apns-topic"])
+		expiry, err := strconv.ParseInt(msg.APNS.Headers["apns-expiration"], 10, 64)
+		require.NoError(t, err)
+		require.WithinDuration(t, time.Now().Add(24*time.Hour), time.Unix(expiry, 0), 5*time.Second)
+		require.Equal(t, map[string]any{
+			"alert":           map[string]any{"title": "Ente", "body": "New activity"},
+			"mutable-content": float64(1), "sound": "default",
+		}, msg.APNS.Payload.APS)
+		delivered = append(delivered, msg.Token)
+		return jsonResponse(http.StatusOK, "{}"), nil
+	})}}
+	controller.NotifyAlbumShare(context.Background(), []int64{1})
+	require.ElementsMatch(t, []string{"iphone", "ipad"}, delivered)
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
@@ -221,9 +296,11 @@ func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
 		"unauthorized":     {http.StatusUnauthorized, "unauthorized"},
 		"invalid-argument": {http.StatusBadRequest, fcmInvalidArgumentBody},
 	}
+	key, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
 	for token := range responses {
 		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
-			FCMToken: token, Platform: &platform,
+			FCMToken: token, Platform: &platform, NotificationKey: key.PublicKey().Bytes(),
 		}))
 	}
 	var attempted []string

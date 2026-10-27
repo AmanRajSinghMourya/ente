@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/hpke"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,11 +124,7 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	}
 	var unregisteredTokens []string
 	for _, token := range tokens {
-		err = c.fcm.sendMessage(ctx, map[string]any{
-			"token":   token.FCMToken,
-			"data":    map[string]string{"action": "sync"},
-			"android": map[string]string{"priority": "high", "ttl": "86400s"},
-		})
+		err = c.fcm.sendAlbumShare(ctx, token)
 		if err != nil {
 			log.WithError(err).Warn("album share push failed; album remains shared")
 			if errors.Is(err, errUnregisteredToken) {
@@ -256,6 +253,42 @@ func (c *PushController) pruneTokens(fcmTokens []string) {
 		return
 	}
 	log.Info("Pruned " + strconv.Itoa(len(fcmTokens)) + " unregistered FCM tokens")
+}
+
+func (c *fcmClient) sendAlbumShare(ctx context.Context, token ente.PushToken) error {
+	if token.Platform != "ios" {
+		return c.sendMessage(ctx, map[string]any{
+			"token":   token.FCMToken,
+			"data":    map[string]string{"action": "sync"},
+			"android": map[string]string{"priority": "high", "ttl": "86400s"},
+		})
+	}
+	publicKey, err := hpke.MLKEM768X25519().NewPublicKey(token.NotificationKey)
+	if err != nil {
+		return stacktrace.Propagate(err, "invalid notification public key")
+	}
+	ciphertext, err := hpke.Seal(publicKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(),
+		[]byte("ente-push"), []byte(`{"eventType":"album_shared"}`))
+	if err != nil {
+		return stacktrace.Propagate(err, "could not encrypt album share notification")
+	}
+	return c.sendMessage(ctx, map[string]any{
+		"token": token.FCMToken,
+		"data":  map[string]string{"notificationCiphertext": base64.StdEncoding.EncodeToString(ciphertext)},
+		"apns": map[string]any{
+			"headers": map[string]string{
+				"apns-push-type":  "alert",
+				"apns-priority":   "10",
+				"apns-topic":      "io.ente.frame",
+				"apns-expiration": strconv.FormatInt(gotime.Now().Add(24*gotime.Hour).Unix(), 10),
+			},
+			"payload": map[string]any{"aps": map[string]any{
+				"alert":           map[string]string{"title": "Ente", "body": "New activity"},
+				"mutable-content": 1,
+				"sound":           "default",
+			}},
+		},
+	})
 }
 
 func (c *fcmClient) send(ctx context.Context, token string, data map[string]string) error {

@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"crypto/hpke"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -185,6 +186,8 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
 	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	key, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
 	var userIDs []int64
 	for id, tc := range []struct {
 		name, platform, flag, session string
@@ -192,6 +195,12 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 	}{
 		{"eligible", "android", "true", "active", ente.Photos},
 		{"ios", "ios", "true", "active", ente.Photos},
+		{"ios-keyless", "ios", "true", "active", ente.Photos},
+		{"android-keyless", "android", "true", "active", ente.Photos},
+		{"ios-external", "ios", "false", "active", ente.Photos},
+		{"ios-revoked", "ios", "true", "revoked", ente.Photos},
+		{"ios-legacy", "ios", "true", "missing", ente.Photos},
+		{"ios-other-app", "ios", "true", "active", ente.Locker},
 		{"non-internal", "android", "false", "active", ente.Photos},
 		{"missing flag", "android", "", "active", ente.Photos},
 		{"legacy", "android", "true", "missing", ente.Photos},
@@ -203,7 +212,7 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 		userIDs = append(userIDs, userID)
 		testutil.InsertUser(t, db, testutil.UserFixture{UserID: userID, Email: fmt.Sprintf("user%d@example.com", userID), CreationTime: 1})
 		hash := sha256.Sum256([]byte(tc.name))
-		var sessionHash []byte
+		var sessionHash any
 		if tc.session != "missing" {
 			require.NoError(t, (&UserAuthRepository{DB: db}).AddToken(userID, tc.app, tc.name, "", ""))
 			sessionHash = hash[:]
@@ -219,6 +228,10 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 		_, err := db.Exec(`INSERT INTO push_tokens(user_id,fcm_token,apns_token,platform,session_token_hash,last_notified_at)
 			VALUES($1,$2,'apns',$3,$4,0)`, userID, tc.name, tc.platform, sessionHash)
 		require.NoError(t, err)
+		if tc.name != "ios-keyless" && tc.name != "android-keyless" {
+			_, err = db.Exec(`UPDATE push_tokens SET notification_public_key=$1 WHERE fcm_token=$2`, key.PublicKey().Bytes(), tc.name)
+			require.NoError(t, err)
+		}
 		if tc.flag != "" {
 			_, err = db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES($1,'internalUser',$2)`, userID, tc.flag)
 			require.NoError(t, err)
@@ -231,7 +244,7 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 	for _, token := range tokens {
 		selected = append(selected, token.FCMToken)
 	}
-	require.Equal(t, []string{"eligible"}, selected)
+	require.ElementsMatch(t, []string{"eligible", "ios"}, selected)
 	for _, apnsToken := range []any{"", nil} {
 		_, err := db.Exec(`UPDATE push_tokens SET apns_token=$1 WHERE fcm_token='eligible'`, apnsToken)
 		require.NoError(t, err)
@@ -242,8 +255,11 @@ func TestAlbumShareTokensRequireInternalAndActiveSession(t *testing.T) {
 	}
 	tokens, err = r.GetTokensToBeNotified(1, 100)
 	require.NoError(t, err)
-	require.Len(t, tokens, 1)
-	require.Equal(t, "ios", tokens[0].FCMToken)
+	var silentTokens []string
+	for _, token := range tokens {
+		silentTokens = append(silentTokens, token.FCMToken)
+	}
+	require.ElementsMatch(t, []string{"ios", "ios-keyless", "ios-external", "ios-legacy", "ios-other-app"}, silentTokens)
 	_, err = db.Exec(`UPDATE remote_store SET key_value='false' WHERE user_id=1`)
 	require.NoError(t, err)
 	tokens, err = r.GetTokensForAlbumShare(context.Background(), []int64{1})
