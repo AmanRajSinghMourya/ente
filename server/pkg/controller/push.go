@@ -279,7 +279,6 @@ func (c *fcmClient) sendAlbumShare(ctx context.Context, token ente.PushToken) er
 			"headers": map[string]string{
 				"apns-push-type":  "alert",
 				"apns-priority":   "10",
-				"apns-topic":      "io.ente.frame",
 				"apns-expiration": strconv.FormatInt(gotime.Now().Add(24*gotime.Hour).Unix(), 10),
 			},
 			"payload": map[string]any{"aps": map[string]any{

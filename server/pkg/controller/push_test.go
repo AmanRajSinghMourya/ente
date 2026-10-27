@@ -259,7 +259,7 @@ func TestAlbumShareSendsEncryptedIOSAlert(t *testing.T) {
 		require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
 		require.Equal(t, "alert", msg.APNS.Headers["apns-push-type"])
 		require.Equal(t, "10", msg.APNS.Headers["apns-priority"])
-		require.Equal(t, "io.ente.frame", msg.APNS.Headers["apns-topic"])
+		require.NotContains(t, msg.APNS.Headers, "apns-topic", "FCM must select the topic for the registered app")
 		expiry, err := strconv.ParseInt(msg.APNS.Headers["apns-expiration"], 10, 64)
 		require.NoError(t, err)
 		require.WithinDuration(t, time.Now().Add(24*time.Hour), time.Unix(expiry, 0), 5*time.Second)
