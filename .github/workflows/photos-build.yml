@@ -247,9 +247,6 @@ jobs:
             - run: cargo codegen frb photos
               working-directory: rust
 
-            - run: cargo codegen native notifications
-              working-directory: rust
-
             - name: Install iOS pods
               run: pod install --deployment
               working-directory: mobile/apps/photos/ios

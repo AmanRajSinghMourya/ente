@@ -2840,7 +2840,7 @@ dependencies = [
 
 [[package]]
 name = "ente-notification-uniffi"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ente-core",
  "thiserror 2.0.21",
