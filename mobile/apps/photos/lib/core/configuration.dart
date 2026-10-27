@@ -217,7 +217,12 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
     }
 
     if (Platform.isIOS) {
-      await NotificationKeyService.setNotificationPrivateKey(null);
+      try {
+        await NotificationKeyService.setNotificationPrivateKey(null);
+      } on PlatformException catch (e, s) {
+        if (e.code != 'notification_key_store') rethrow;
+        _logger.warning("Could not delete notification key", e, s);
+      }
     }
     await _clearTempFolderOnLogout();
 
