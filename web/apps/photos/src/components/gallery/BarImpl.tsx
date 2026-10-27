@@ -7,20 +7,15 @@ import {
 } from "@/utils/album-filters";
 import type { PeopleSortBy } from "@/utils/people-sort";
 import {
-    Delete02Icon,
-    Download05Icon,
-    GeometricShapes01Icon,
+    ArrowDown01Icon,
     Link05Icon,
     PinIcon,
     StarIcon,
-    ViewOffSlashIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import AddIcon from "@mui/icons-material/Add";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import CloseIcon from "@mui/icons-material/Close";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PeopleIcon from "@mui/icons-material/People";
 import SearchIcon from "@mui/icons-material/Search";
 import {
@@ -41,7 +36,6 @@ import type { ModalVisibilityProps } from "ente-base/components/utils/modal";
 import { ItemCard } from "ente-new/photos/components/Tiles";
 import {
     PseudoCollectionID,
-    type CollectionSummaries,
     type CollectionSummary,
     type CollectionSummaryAttribute,
     type CollectionsSortBy,
@@ -60,6 +54,7 @@ import React, {
 import AutoSizer from "react-virtualized-auto-sizer";
 import {
     FixedSizeList,
+    VariableSizeList,
     areEqual,
     type ListChildComponentProps,
 } from "react-window";
@@ -77,9 +72,9 @@ export interface GalleryBarImplProps extends GalleryBarPresentationProps {
     onAlbumSearchQueryChange: (query: string) => void;
     onShowAlbumOverview: (filter: AlbumFilter) => void;
     onShowPeopleOverview: () => void;
+    onShowLinksOverview: () => void;
     collectionSummaries: CollectionSummary[];
     visibleAlbumFilters: typeof albumFilters;
-    normalCollectionSummaries: CollectionSummaries;
     uncategorizedCollectionSummaryID: number;
     onShowCollectionSummary: (
         collectionSummaryID: number,
@@ -104,9 +99,9 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
     onAlbumSearchQueryChange,
     onShowAlbumOverview,
     onShowPeopleOverview,
+    onShowLinksOverview,
     collectionSummaries,
     visibleAlbumFilters,
-    normalCollectionSummaries,
     uncategorizedCollectionSummaryID,
     onShowCollectionSummary,
     activeCollectionID,
@@ -125,8 +120,10 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
     const mobile = useMediaQuery(useTheme().breakpoints.down("md"));
     const titleID = useId();
     const listRef = useRef<FixedSizeList | null>(null);
+    const albumListRef = useRef<VariableSizeList | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const [peopleSearchQuery, setPeopleSearchQuery] = useState("");
+    const [groupExpanded, setGroupExpanded] = useState(true);
     const searchQuery = mode == "people" ? peopleSearchQuery : albumSearchQuery;
     const setSearchQuery =
         mode == "people" ? setPeopleSearchQuery : onAlbumSearchQueryChange;
@@ -174,6 +171,7 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
     }, [albumFilter]);
     useEffect(() => {
         setPeopleSearchQuery("");
+        setGroupExpanded(true);
     }, [mode]);
 
     useEffect(() => {
@@ -186,40 +184,11 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
     }, [mode, mobile, mobileDrawerProps.open, collapsed]);
 
     useEffect(() => {
-        if (isSearching) listRef.current?.scrollTo(0);
-    }, [searchQuery, isSearching]);
-
-    useEffect(() => {
-        if (!listRef.current || isSearching) return;
-        let i = -1;
-        switch (mode) {
-            case "albums":
-            case "hidden-albums":
-            case "archive-albums":
-            case "links":
-                i = displayedCollectionSummaries.findIndex(
-                    ({ id }) => id == activeCollectionID,
-                );
-                break;
-            case "people":
-                i = matchingPeople.findIndex(
-                    ({ id }) => id == activePerson?.id,
-                );
-                break;
+        if (isSearching) {
+            listRef.current?.scrollTo(0);
+            albumListRef.current?.scrollTo(0);
         }
-        if (i != -1) listRef.current.scrollToItem(i, "smart");
-    }, [
-        mode,
-        displayedCollectionSummaries,
-        activeCollectionID,
-        matchingPeople,
-        activePerson,
-        collapsed,
-        mobile,
-        mobileDrawerProps.open,
-        viewportHeight,
-        isSearching,
-    ]);
+    }, [searchQuery, isSearching]);
 
     const itemData = useMemo<ItemData>(
         () =>
@@ -230,7 +199,10 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
                 ? {
                       type: "collections",
                       collectionSummaries: displayedCollectionSummaries,
-                      indented: mode == "albums",
+                      indented:
+                          mode == "albums" ||
+                          mode == "links" ||
+                          mode == "hidden-albums",
                       activeCollectionID: activeCollectionID!,
                       onSelectCollectionID,
                   }
@@ -266,48 +238,29 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
         {
             id: uncategorizedCollectionSummaryID,
             label: t("section_uncategorized"),
-            icon: GeometricShapes01Icon,
             active: activeCollectionID == uncategorizedCollectionSummaryID,
         },
         {
             id: PseudoCollectionID.hiddenItems,
             label: t("section_hidden"),
-            icon: ViewOffSlashIcon,
             active: mode == "hidden-albums",
         },
         {
             id: PseudoCollectionID.archiveItems,
             label: t("section_archive"),
-            icon: Download05Icon,
             active: mode == "archive-albums",
         },
         {
             id: PseudoCollectionID.trash,
             label: t("section_trash"),
-            icon: Delete02Icon,
             active: activeCollectionID == PseudoCollectionID.trash,
         },
-    ];
+    ].filter(({ label }) =>
+        label.toLowerCase().includes(normalizedSearchQuery),
+    );
 
-    const albumListID = `${titleID}-albums`;
     const items = (
-        <Box
-            id={mode == "albums" ? albumListID : undefined}
-            sx={{
-                flex: mode == "albums" ? "0 1 auto" : 1,
-                height:
-                    mode == "albums"
-                        ? getItemCount(itemData) * (mobile ? 46 : 50)
-                        : undefined,
-                minHeight:
-                    mode == "albums" && getItemCount(itemData) > 0
-                        ? mobile
-                            ? 46
-                            : 50
-                        : 0,
-                minWidth: 0,
-            }}
-        >
+        <Box sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
             <AutoSizer onResize={({ height }) => setViewportHeight(height)}>
                 {({ width, height }) => (
                     <FixedSizeList
@@ -363,6 +316,171 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
         </Stack>
     );
 
+    const rowHeight = mobile ? 46 : 50;
+    const albumNavigationRows: AlbumNavigationRow[] = [];
+    for (const filter of visibleAlbumFilters) {
+        albumNavigationRows.push({
+            key: `filter-${filter.value}`,
+            height: rowHeight,
+            content: (
+                <BarCard
+                    aria-label={filter.title()}
+                    aria-current={
+                        activeCollectionID === undefined &&
+                        albumFilter == filter.value
+                            ? "page"
+                            : undefined
+                    }
+                    aria-expanded={displayedAlbumFilter == filter.value}
+                    onClick={() => {
+                        lastAlbumFilter.current = filter.value;
+                        setExpandedAlbumFilter(
+                            displayedAlbumFilter == filter.value
+                                ? undefined
+                                : filter.value,
+                        );
+                        onShowAlbumOverview(filter.value);
+                        mobileDrawerProps.onClose();
+                    }}
+                    sx={{ flexShrink: 0 }}
+                >
+                    <CardText>{filter.label()}</CardText>
+                    <Box
+                        component={HugeiconsIcon}
+                        icon={ArrowDown01Icon}
+                        size={16}
+                        strokeWidth={1.8}
+                        sx={{
+                            color: "text.muted",
+                            transform:
+                                displayedAlbumFilter == filter.value
+                                    ? undefined
+                                    : "rotate(-90deg)",
+                        }}
+                    />
+                </BarCard>
+            ),
+        });
+        if (displayedAlbumFilter == filter.value) {
+            for (const collectionSummary of displayedCollectionSummaries) {
+                albumNavigationRows.push({
+                    key: `collection-${collectionSummary.id}`,
+                    height: rowHeight,
+                    content: (
+                        <CollectionBarCard
+                            key={`${collectionSummary.id}-${collectionSummary.coverFile?.id}`}
+                            collectionSummary={collectionSummary}
+                            activeCollectionID={activeCollectionID!}
+                            onSelectCollectionID={onSelectCollectionID}
+                            indented={
+                                !collectionSummary.attributes.has("system")
+                            }
+                        />
+                    ),
+                });
+            }
+        }
+    }
+    if (visibleAlbumFilters.length && albumShortcuts.length) {
+        albumNavigationRows.push({
+            key: "shortcut-divider",
+            height: 18,
+            content: (
+                <Divider
+                    sx={{
+                        mt: "8px",
+                        height: "2px",
+                        border: 0,
+                        bgcolor: "divider",
+                        opacity: 0.5,
+                    }}
+                />
+            ),
+        });
+    }
+    for (const { id, label, active } of albumShortcuts) {
+        albumNavigationRows.push({
+            key: `shortcut-${id}`,
+            height: rowHeight,
+            content: (
+                <BarCard
+                    aria-label={label}
+                    aria-current={active ? "true" : undefined}
+                    onClick={() => {
+                        void onShowCollectionSummary(
+                            id,
+                            id == PseudoCollectionID.hiddenItems,
+                        ).then(async (success) => {
+                            if (!success || !mobile) return;
+                            if (id == PseudoCollectionID.hiddenItems)
+                                await wait(10);
+                            mobileDrawerProps.onClose();
+                        });
+                    }}
+                    sx={{ flexShrink: 0 }}
+                >
+                    <CardText>{label}</CardText>
+                </BarCard>
+            ),
+        });
+    }
+
+    const albumRowSizes = albumNavigationRows
+        .map(({ height }) => height)
+        .join(",");
+    const activeAlbumRowIndex = albumNavigationRows.findIndex(
+        ({ key }) => key == `collection-${activeCollectionID}`,
+    );
+    useEffect(() => {
+        albumListRef.current?.resetAfterIndex(0);
+    }, [albumRowSizes]);
+
+    useEffect(() => {
+        if (isSearching) return;
+        if (mode == "albums") {
+            if (activeAlbumRowIndex != -1)
+                albumListRef.current?.scrollToItem(
+                    activeAlbumRowIndex,
+                    "smart",
+                );
+            return;
+        }
+        if (!listRef.current) return;
+        let i = -1;
+        switch (mode) {
+            case "hidden-albums":
+            case "archive-albums":
+            case "links":
+                i = displayedCollectionSummaries.findIndex(
+                    ({ id }) => id == activeCollectionID,
+                );
+                break;
+            case "people":
+                i = matchingPeople.findIndex(
+                    ({ id }) => id == activePerson?.id,
+                );
+                break;
+        }
+        if (i != -1) listRef.current.scrollToItem(i, "smart");
+    }, [
+        mode,
+        activeAlbumRowIndex,
+        displayedCollectionSummaries,
+        activeCollectionID,
+        matchingPeople,
+        activePerson,
+        collapsed,
+        mobile,
+        mobileDrawerProps.open,
+        viewportHeight,
+        isSearching,
+    ]);
+
+    const isGroupOverview =
+        mode == "links"
+            ? activeCollectionID === undefined
+            : activeCollectionID == PseudoCollectionID.hiddenItems;
+
     const navigation = (
         <Stack
             component="nav"
@@ -377,9 +495,8 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
                 "--gallery-navigation-surface": "#FFFFFF",
                 "--gallery-navigation-hover":
                     "color-mix(in srgb, var(--mui-palette-text-base) 8%, var(--gallery-navigation-surface))",
-                display: collapsed && !mobile ? "none" : "flex",
                 flexShrink: 0,
-                width: mobile ? "100%" : 328,
+                width: "100%",
                 height: "100%",
                 minHeight: 0,
                 px: mobile ? "12px" : "16px",
@@ -551,119 +668,79 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
             </Stack>
             {isSearching &&
             (mode == "albums"
-                ? !visibleAlbumFilters.length
+                ? !visibleAlbumFilters.length && !albumShortcuts.length
                 : !getItemCount(itemData)) ? (
                 searchEmptyState
             ) : mode == "albums" ? (
-                <Stack
+                <Box
                     role="group"
                     aria-label={t("filter_albums")}
-                    sx={{
-                        flex: 1,
-                        minHeight: 0,
-                        gap: "2px",
-                        overflowY: "auto",
-                        pb: "12px",
-                    }}
+                    sx={{ flex: 1, minHeight: 0, minWidth: 0 }}
                 >
-                    {visibleAlbumFilters.map((filter) => (
-                        <React.Fragment key={filter.value}>
-                            <BarCard
-                                aria-label={filter.title()}
-                                aria-current={
-                                    activeCollectionID === undefined &&
-                                    albumFilter == filter.value
-                                        ? "page"
-                                        : undefined
+                    <AutoSizer
+                        onResize={({ height }) => setViewportHeight(height)}
+                    >
+                        {({ width, height }) => (
+                            <VariableSizeList
+                                ref={albumListRef}
+                                width={width}
+                                height={height}
+                                itemData={albumNavigationRows}
+                                itemCount={albumNavigationRows.length}
+                                itemKey={(index, rows) => rows[index]!.key}
+                                itemSize={(index) =>
+                                    albumNavigationRows[index]!.height
                                 }
-                                aria-expanded={
-                                    displayedAlbumFilter == filter.value
-                                }
-                                aria-controls={
-                                    displayedAlbumFilter == filter.value
-                                        ? albumListID
-                                        : undefined
-                                }
-                                onClick={() => {
-                                    lastAlbumFilter.current = filter.value;
-                                    setExpandedAlbumFilter(
-                                        displayedAlbumFilter == filter.value
-                                            ? undefined
-                                            : filter.value,
-                                    );
-                                    onShowAlbumOverview(filter.value);
-                                    mobileDrawerProps.onClose();
-                                }}
-                                sx={{ flexShrink: 0 }}
+                                style={{ overflowX: "hidden" }}
                             >
-                                <CardText>{filter.label()}</CardText>
-                                <ExpandMoreIcon
-                                    sx={{
-                                        fontSize: 16,
-                                        color: "text.muted",
-                                        transform:
-                                            displayedAlbumFilter == filter.value
-                                                ? undefined
-                                                : "rotate(-90deg)",
-                                    }}
-                                />
-                            </BarCard>
-                            {displayedAlbumFilter == filter.value && items}
-                        </React.Fragment>
-                    ))}
+                                {AlbumNavigationItem}
+                            </VariableSizeList>
+                        )}
+                    </AutoSizer>
+                </Box>
+            ) : mode == "links" || mode == "hidden-albums" ? (
+                <Stack
+                    role="group"
+                    aria-label={t(mode == "links" ? "links" : "section_hidden")}
+                    sx={{ flex: 1, minHeight: 0, minWidth: 0 }}
+                >
+                    <BarCard
+                        aria-current={isGroupOverview ? "page" : undefined}
+                        aria-expanded={isSearching || groupExpanded}
+                        onClick={() => {
+                            setGroupExpanded(
+                                !isGroupOverview || !groupExpanded,
+                            );
+                            if (mode == "links") onShowLinksOverview();
+                            else
+                                onSelectCollectionID(
+                                    PseudoCollectionID.hiddenItems,
+                                );
+                            mobileDrawerProps.onClose();
+                        }}
+                        sx={{ flexShrink: 0, height: rowHeight }}
+                    >
+                        <CardText>
+                            {t(mode == "links" ? "links" : "section_hidden")}
+                        </CardText>
+                        <Box
+                            component={HugeiconsIcon}
+                            icon={ArrowDown01Icon}
+                            size={16}
+                            strokeWidth={1.8}
+                            sx={{
+                                color: "text.muted",
+                                transform:
+                                    isSearching || groupExpanded
+                                        ? undefined
+                                        : "rotate(-90deg)",
+                            }}
+                        />
+                    </BarCard>
+                    {(isSearching || groupExpanded) && items}
                 </Stack>
             ) : (
                 items
-            )}
-            {mode != "people" && mode != "links" && (
-                <Stack sx={{ flexShrink: 0, gap: "2px", pb: "8px" }}>
-                    <Divider
-                        sx={{
-                            mb: "8px",
-                            height: "2px",
-                            border: 0,
-                            bgcolor: "divider",
-                            opacity: 0.5,
-                        }}
-                    />
-                    {albumShortcuts.map(({ id, label, icon, active }) => (
-                        <BarCard
-                            key={id}
-                            aria-label={label}
-                            aria-current={active ? "true" : undefined}
-                            onClick={() => {
-                                void onShowCollectionSummary(
-                                    id,
-                                    id == PseudoCollectionID.hiddenItems,
-                                ).then(async (success) => {
-                                    if (!success || !mobile) return;
-                                    if (id == PseudoCollectionID.hiddenItems)
-                                        await wait(10);
-                                    mobileDrawerProps.onClose();
-                                });
-                            }}
-                            sx={{ flexShrink: 0 }}
-                        >
-                            <HugeiconsIcon icon={icon} size={20} aria-hidden />
-                            <CardText>{label}</CardText>
-                            {id == PseudoCollectionID.hiddenItems ? (
-                                <LockOutlinedIcon
-                                    sx={{ color: "text.muted", fontSize: 19 }}
-                                />
-                            ) : (
-                                <Typography
-                                    variant="small"
-                                    sx={{ color: "text.muted" }}
-                                >
-                                    {
-                                        normalCollectionSummaries.get(id)
-                                            ?.fileCount
-                                    }
-                                </Typography>
-                            )}
-                        </BarCard>
-                    ))}
-                </Stack>
             )}
         </Stack>
     );
@@ -695,6 +772,19 @@ export const GalleryBarImpl: React.FC<GalleryBarImplProps> = ({
         navigation
     );
 };
+
+interface AlbumNavigationRow {
+    key: string;
+    height: number;
+    content: React.ReactNode;
+}
+
+const AlbumNavigationItem = memo(
+    ({ data, index, style }: ListChildComponentProps<AlbumNavigationRow[]>) => (
+        <div style={style}>{data[index]!.content}</div>
+    ),
+    areEqual,
+);
 
 type ItemData =
     | {

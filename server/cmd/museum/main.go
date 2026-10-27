@@ -228,7 +228,7 @@ func main() {
 	collectionLinkRepo.Cache = accessTokenCache
 	discordController := discord.NewDiscordController(userRepo, hostName, environment)
 	userLookupController := controller.NewUserLookupController(userRepo, discordController)
-	rateLimiter := middleware.NewRateLimitMiddleware(discordController, 1000, 1*time.Second)
+	rateLimiter := middleware.NewRateLimitMiddleware(discordController, 1000, 1000, 1*time.Second)
 	defer rateLimiter.Stop()
 
 	emailNotificationCtrl := &email.EmailNotificationController{
@@ -378,6 +378,7 @@ func main() {
 		EmailNotificationCtrl: emailNotificationCtrl,
 		CollectionLinkRepo:    collectionLinkRepo,
 		FileLinkRepo:          fileLinkRepo,
+		MemoryShareRepo:       memoryShareRepo,
 		CollectionRepo:        collectionRepo,
 		UserRepo:              userRepo,
 		JwtSecret:             jwtSecretBytes,
@@ -1225,8 +1226,8 @@ func setupDatabase() *sql.DB {
 		panic(err)
 	}
 
-	db.SetMaxIdleConns(30)
-	db.SetMaxOpenConns(60)
+	db.SetMaxIdleConns(50)
+	db.SetMaxOpenConns(80)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	db.SetConnMaxIdleTime(10 * time.Minute)
 
