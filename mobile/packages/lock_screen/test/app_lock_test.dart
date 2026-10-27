@@ -29,7 +29,8 @@ void main() {
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump();
-      expect(await _paintedColor(tester), isNot(_sensitiveColor));
+      expect(await _paintedColor(tester), Colors.white);
+      expect(find.text('Unlock'), findsNothing);
 
       await tester.pump(const Duration(seconds: 6));
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
