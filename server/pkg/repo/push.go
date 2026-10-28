@@ -63,10 +63,10 @@ func (repo *PushTokenRepository) GetTokensToBeNotified(lastNotificationTime int6
 }
 
 func (repo *PushTokenRepository) GetTokensForAlbumShare(ctx context.Context, userIDs []int64) ([]ente.PushToken, error) {
-	rows, err := repo.DB.QueryContext(ctx, `SELECT p.fcm_token, p.platform, p.notification_public_key FROM push_tokens p
+	rows, err := repo.DB.QueryContext(ctx, `SELECT p.fcm_token FROM push_tokens p
 		JOIN tokens t ON t.token_hash = p.session_token_hash AND t.user_id = p.user_id AND t.is_deleted = false AND t.app = $3
 		JOIN remote_store r ON r.user_id = p.user_id AND r.key_name = $2 AND r.key_value = 'true'
-		WHERE p.user_id = ANY($1) AND p.notification_public_key IS NOT NULL`,
+		WHERE p.user_id = ANY($1) AND p.platform = 'android'`,
 		pq.Array(userIDs), string(ente.IsInternalUser), string(ente.Photos))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
@@ -75,7 +75,7 @@ func (repo *PushTokenRepository) GetTokensForAlbumShare(ctx context.Context, use
 	var tokens []ente.PushToken
 	for rows.Next() {
 		var token ente.PushToken
-		if err := rows.Scan(&token.FCMToken, &token.Platform, &token.NotificationKey); err != nil {
+		if err := rows.Scan(&token.FCMToken); err != nil {
 			return nil, stacktrace.Propagate(err, "")
 		}
 		tokens = append(tokens, token)

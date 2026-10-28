@@ -14,12 +14,10 @@ type PushTokenRequest struct {
 }
 
 type PushToken struct {
-	Platform        string
-	NotificationKey []byte
-	UserID          int64  `json:"userID"`
-	FCMToken        string `json:"fcmToken"`
-	CreatedAt       int64  `json:"createdAt"`
-	LastNotifiedAt  int64  `json:"lastNotifiedAt"`
+	UserID         int64  `json:"userID"`
+	FCMToken       string `json:"fcmToken"`
+	CreatedAt      int64  `json:"createdAt"`
+	LastNotifiedAt int64  `json:"lastNotifiedAt"`
 }
 
 func (pt *PushToken) MarshalJSON() ([]byte, error) {
