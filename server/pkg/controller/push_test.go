@@ -2,8 +2,11 @@ package controller
 
 import (
 	"context"
+	"crypto/hpke"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -163,22 +166,30 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
+func TestAlbumShareRolloutSendsOnlyAndroidSync(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
 	t.Cleanup(func() { testutil.ResetTables(t, db) })
-	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "internal@example.com", CreationTime: 1})
-	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(1,'internalUser','true')`)
-	require.NoError(t, err)
-	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "session", "", ""))
-	hash := auth.HashToken("session")
 	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
-	for _, platform := range []string{"ios", "android"} {
-		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
-			FCMToken: platform + "-device", Platform: &platform,
-		}))
+	authRepo := &repo.UserAuthRepository{DB: db}
+	// Fixed cohort fixtures: user 8 is in bucket 29, user 22 in bucket 30,
+	// and internal user 2 is outside the rollout in bucket 41.
+	for _, userID := range []int64{2, 8, 22} {
+		testutil.InsertUser(t, db, testutil.UserFixture{UserID: userID, Email: fmt.Sprintf("user%d@example.com", userID), CreationTime: 1})
+		session := fmt.Sprint(userID)
+		require.NoError(t, authRepo.AddToken(userID, ente.Photos, session, "", ""))
+		hash := auth.HashToken(session)
+		for _, platform := range []string{"ios", "android"} {
+			for device := range 2 {
+				require.NoError(t, controller.AddToken(userID, hash[:], ente.PushTokenRequest{
+					FCMToken: fmt.Sprintf("%d-%s-%d", userID, platform, device), Platform: &platform,
+				}))
+			}
+		}
 	}
+	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(2,'internalUser','true')`)
+	require.NoError(t, err)
 	var messages []map[string]any
 	controller.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		require.NoError(t, request.Context().Err())
@@ -191,12 +202,80 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 	})}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	controller.NotifyAlbumShare(ctx, []int64{1})
-	require.Equal(t, []map[string]any{{
-		"token":   "android-device",
-		"data":    map[string]any{"action": "sync"},
-		"android": map[string]any{"priority": "high", "ttl": "86400s"},
-	}}, messages)
+	var expected []map[string]any
+	for _, token := range []string{"2-android-0", "2-android-1", "8-android-0", "8-android-1"} {
+		expected = append(expected, map[string]any{
+			"token":   token,
+			"data":    map[string]any{"action": "sync"},
+			"android": map[string]any{"priority": "high", "ttl": "86400s"},
+		})
+	}
+	for range 2 {
+		messages = nil
+		controller.NotifyAlbumShare(ctx, []int64{2, 8, 22})
+		require.ElementsMatch(t, expected, messages)
+	}
+	hash := auth.HashToken("8")
+	_, err = authRepo.RemoveTokenByHash(8, hash[:])
+	require.NoError(t, err)
+	messages = nil
+	controller.NotifyAlbumShare(ctx, []int64{8, 22})
+	require.Empty(t, messages, "logged-out and excluded users must receive no pushes")
+}
+
+func TestAlbumShareEncryptsForEachEnrolledDevice(t *testing.T) {
+	testutil.WithServerRoot(t)
+	db := testutil.RequireTestDB(t)
+	testutil.ResetTables(t, db)
+	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 8, Email: "rollout@example.com", CreationTime: 1})
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(8, ente.Photos, "session", "", ""))
+	hash := auth.HashToken("session")
+	platform := "android"
+	c := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	keys := make(map[string]hpke.PrivateKey)
+	for _, token := range []string{"first-device", "second-device"} {
+		key, err := hpke.MLKEM768X25519().GenerateKey()
+		require.NoError(t, err)
+		keys[token] = key
+		require.NoError(t, c.AddToken(8, hash[:], ente.PushTokenRequest{
+			FCMToken: token, Platform: &platform, NotificationKey: key.PublicKey().Bytes(),
+		}))
+	}
+	require.NoError(t, c.AddToken(8, hash[:], ente.PushTokenRequest{FCMToken: "legacy", Platform: &platform}))
+	var messages []wireMsg
+	c.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var message wireMsg
+		require.NoError(t, json.NewDecoder(request.Body).Decode(&message))
+		messages = append(messages, message)
+		return jsonResponse(http.StatusOK, "{}"), nil
+	})}}
+	c.NotifyAlbumShare(context.Background(), []int64{8})
+	require.Len(t, messages, 3)
+	for _, envelope := range messages {
+		message := envelope.Message
+		if message.Token == "legacy" {
+			require.Equal(t, map[string]string{"action": "sync"}, message.Data)
+			continue
+		}
+		require.Len(t, message.Data, 1)
+		require.Contains(t, message.Data, "notificationCiphertext")
+		ciphertext, err := base64.StdEncoding.DecodeString(message.Data["notificationCiphertext"])
+		require.NoError(t, err)
+		plaintext, err := hpke.Open(keys[message.Token], hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), ciphertext)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
+	}
+	// A registration without a key must stop encrypted delivery to that device.
+	require.NoError(t, c.AddToken(8, hash[:], ente.PushTokenRequest{FCMToken: "first-device", Platform: &platform}))
+	messages = nil
+	c.NotifyAlbumShare(context.Background(), []int64{8})
+	require.Len(t, messages, 3)
+	for _, envelope := range messages {
+		if envelope.Message.Token == "first-device" {
+			require.Equal(t, map[string]string{"action": "sync"}, envelope.Message.Data)
+		}
+	}
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
