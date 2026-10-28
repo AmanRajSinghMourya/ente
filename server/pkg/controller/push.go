@@ -111,20 +111,55 @@ func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token e
 }
 
 func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int64) {
-	c.notify(ctx, recipients, "sync")
-}
-
-func (c *PushController) NotifyReferral(ctx context.Context, userID int64) {
-	c.notify(ctx, []int64{userID}, "referral")
-}
-
-func (c *PushController) notify(ctx context.Context, recipients []int64, action string) {
 	if viper.GetBool("internal.silent") || c.fcm == nil || len(recipients) == 0 {
 		return
 	}
 	ctx = context.WithoutCancel(ctx)
 	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
-	tokens, err := c.PushRepo.GetInternalPushTokens(lookupCtx, recipients)
+	tokens, err := c.PushRepo.GetTokensForAlbumShare(lookupCtx, recipients)
+	cancel()
+	if err != nil {
+		log.WithError(err).Warn("album share push token lookup failed")
+		return
+	}
+	var unregisteredTokens []string
+	for _, token := range tokens {
+		if token.NotificationPublicKey == nil {
+			continue
+		}
+		publicKey, err := hpke.MLKEM768X25519().NewPublicKey(token.NotificationPublicKey)
+		if err != nil {
+			log.WithError(err).Warn("invalid album share notification public key")
+			continue
+		}
+		ciphertext, err := hpke.Seal(publicKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(),
+			[]byte("ente-push"), []byte(`{"eventType":"album_shared"}`))
+		if err != nil {
+			log.WithError(err).Warn("album share notification encryption failed")
+			continue
+		}
+		err = c.fcm.sendMessage(ctx, map[string]any{
+			"token":   token.FCMToken,
+			"data":    map[string]string{"notificationCiphertext": base64.StdEncoding.EncodeToString(ciphertext)},
+			"android": map[string]string{"priority": "high", "ttl": "86400s"},
+		})
+		if err != nil {
+			log.WithError(err).Warn("album share push failed; album remains shared")
+			if errors.Is(err, errUnregisteredToken) {
+				unregisteredTokens = append(unregisteredTokens, token.FCMToken)
+			}
+		}
+	}
+	c.pruneTokens(unregisteredTokens)
+}
+
+func (c *PushController) NotifyReferral(ctx context.Context, userID int64) {
+	if viper.GetBool("internal.silent") || c.fcm == nil {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
+	tokens, err := c.PushRepo.GetInternalPushTokens(lookupCtx, []int64{userID})
 	cancel()
 	if err != nil {
 		log.WithError(err).Warn("push token lookup failed")
@@ -132,22 +167,24 @@ func (c *PushController) notify(ctx context.Context, recipients []int64, action 
 	}
 	var unregisteredTokens []string
 	for _, token := range tokens {
-		if action == "sync" && token.Platform != "android" {
+		if len(token.NotificationPublicKey) == 0 {
 			continue
 		}
-		data := map[string]string{"action": action}
-		if action == "referral" {
-			if len(token.NotificationPublicKey) == 0 {
-				continue
-			}
-			ciphertext, err := encryptNotificationPayload([]byte(`{"eventType":"referral"}`), token.NotificationPublicKey)
-			if err != nil {
-				log.WithError(err).Warn("could not encrypt referral push")
-				continue
-			}
-			data = map[string]string{"notificationCiphertext": ciphertext}
+		publicKey, err := hpke.MLKEM768X25519().NewPublicKey(token.NotificationPublicKey)
+		if err != nil {
+			log.WithError(err).Warn("invalid referral notification public key")
+			continue
 		}
-		message := map[string]any{"token": token.FCMToken, "data": data}
+		ciphertext, err := hpke.Seal(publicKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(),
+			[]byte("ente-push"), []byte(`{"eventType":"referral"}`))
+		if err != nil {
+			log.WithError(err).Warn("referral notification encryption failed")
+			continue
+		}
+		message := map[string]any{
+			"token": token.FCMToken,
+			"data":  map[string]string{"notificationCiphertext": base64.StdEncoding.EncodeToString(ciphertext)},
+		}
 		if token.Platform == "ios" {
 			message["apns"] = map[string]any{
 				"headers": map[string]string{
@@ -173,22 +210,6 @@ func (c *PushController) notify(ctx context.Context, recipients []int64, action 
 		}
 	}
 	c.pruneTokens(unregisteredTokens)
-}
-
-func encryptNotificationPayload(payload, publicKey []byte) (string, error) {
-	key, err := hpke.MLKEM768X25519().NewPublicKey(publicKey)
-	if err != nil {
-		return "", err
-	}
-	encapsulated, sender, err := hpke.NewSender(key, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
-	if err != nil {
-		return "", err
-	}
-	ciphertext, err := sender.Seal(nil, payload)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(append(encapsulated, ciphertext...)), nil
 }
 
 func (c *PushController) RemoveTokensForUser(userID int64) error {
