@@ -106,7 +106,7 @@ class PushService {
   Future<void> _setPushTokenOnServer(String fcmToken, String? apnsToken) async {
     String? notificationKey;
     try {
-      if (flagService.internalUser) {
+      if (Platform.isAndroid || flagService.internalUser) {
         notificationKey =
             await NotificationKeyService.generateNotificationKey();
       }
