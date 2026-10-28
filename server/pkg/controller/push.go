@@ -111,27 +111,30 @@ func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token e
 }
 
 func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int64) {
-	c.notifyAndroid(ctx, recipients, "sync")
+	c.notify(ctx, recipients, "sync")
 }
 
 func (c *PushController) NotifyReferral(ctx context.Context, userID int64) {
-	c.notifyAndroid(ctx, []int64{userID}, "referral")
+	c.notify(ctx, []int64{userID}, "referral")
 }
 
-func (c *PushController) notifyAndroid(ctx context.Context, recipients []int64, action string) {
+func (c *PushController) notify(ctx context.Context, recipients []int64, action string) {
 	if viper.GetBool("internal.silent") || c.fcm == nil || len(recipients) == 0 {
 		return
 	}
 	ctx = context.WithoutCancel(ctx)
 	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
-	tokens, err := c.PushRepo.GetInternalAndroidTokens(lookupCtx, recipients)
+	tokens, err := c.PushRepo.GetInternalPushTokens(lookupCtx, recipients)
 	cancel()
 	if err != nil {
-		log.WithError(err).Warn("Android push token lookup failed")
+		log.WithError(err).Warn("push token lookup failed")
 		return
 	}
 	var unregisteredTokens []string
 	for _, token := range tokens {
+		if action == "sync" && token.Platform != "android" {
+			continue
+		}
 		data := map[string]string{"action": action}
 		if action == "referral" {
 			if len(token.NotificationPublicKey) == 0 {
@@ -144,13 +147,26 @@ func (c *PushController) notifyAndroid(ctx context.Context, recipients []int64, 
 			}
 			data = map[string]string{"notificationCiphertext": ciphertext}
 		}
-		err = c.fcm.sendMessage(ctx, map[string]any{
-			"token":   token.FCMToken,
-			"data":    data,
-			"android": map[string]string{"priority": "high", "ttl": "86400s"},
-		})
+		message := map[string]any{"token": token.FCMToken, "data": data}
+		if token.Platform == "ios" {
+			message["apns"] = map[string]any{
+				"headers": map[string]string{
+					"apns-push-type":  "alert",
+					"apns-priority":   "10",
+					"apns-expiration": strconv.FormatInt(gotime.Now().Add(24*gotime.Hour).Unix(), 10),
+				},
+				"payload": map[string]any{"aps": map[string]any{
+					"alert":           map[string]string{"title": "Ente", "body": "New activity"},
+					"mutable-content": 1,
+					"sound":           "default",
+				}},
+			}
+		} else {
+			message["android"] = map[string]string{"priority": "high", "ttl": "86400s"}
+		}
+		err = c.fcm.sendMessage(ctx, message)
 		if err != nil {
-			log.WithError(err).Warn("Android push failed")
+			log.WithError(err).Warn("push failed")
 			if errors.Is(err, errUnregisteredToken) {
 				unregisteredTokens = append(unregisteredTokens, token.FCMToken)
 			}

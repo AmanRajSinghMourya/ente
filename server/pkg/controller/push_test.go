@@ -8,9 +8,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
@@ -165,7 +167,7 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestReferralPushEncryptsEventForInternalAndroid(t *testing.T) {
+func TestReferralPushEncryptsEventForInternalMobileSessions(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
@@ -210,22 +212,43 @@ func TestReferralPushEncryptsEventForInternalAndroid(t *testing.T) {
 		}))
 	}
 	controller.NotifyReferral(ctx, 1)
-	require.Len(t, messages, 2)
-	require.Equal(t, "android-device", messages[1]["token"])
-	data := messages[1]["data"].(map[string]any)
-	require.Len(t, data, 1)
-	ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
-	require.NoError(t, err)
-	recipient, err := hpke.NewRecipient(ciphertext[:1120], privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
-	require.NoError(t, err)
-	plaintext, err := recipient.Open(nil, ciphertext[1120:])
-	require.NoError(t, err)
-	require.JSONEq(t, `{"eventType":"referral"}`, string(plaintext))
+	require.Len(t, messages, 3)
+	var recipients []string
+	for _, message := range messages[1:] {
+		recipients = append(recipients, message["token"].(string))
+		data := message["data"].(map[string]any)
+		require.Len(t, data, 1)
+		ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
+		require.NoError(t, err)
+		recipient, err := hpke.NewRecipient(ciphertext[:1120], privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"))
+		require.NoError(t, err)
+		plaintext, err := recipient.Open(nil, ciphertext[1120:])
+		require.NoError(t, err)
+		require.JSONEq(t, `{"eventType":"referral"}`, string(plaintext))
+		if message["token"] == "ios-device" {
+			require.NotContains(t, message, "android")
+			apns := message["apns"].(map[string]any)
+			headers := apns["headers"].(map[string]any)
+			require.Equal(t, "alert", headers["apns-push-type"])
+			require.Equal(t, "10", headers["apns-priority"])
+			expires, err := strconv.ParseInt(headers["apns-expiration"].(string), 10, 64)
+			require.NoError(t, err)
+			require.WithinDuration(t, time.Now().Add(24*time.Hour), time.Unix(expires, 0), 5*time.Second)
+			require.Equal(t, map[string]any{"aps": map[string]any{
+				"alert":           map[string]any{"title": "Ente", "body": "New activity"},
+				"mutable-content": float64(1), "sound": "default",
+			}}, apns["payload"])
+		} else {
+			require.NotContains(t, message, "apns")
+			require.Equal(t, map[string]any{"priority": "high", "ttl": "86400s"}, message["android"])
+		}
+	}
+	require.ElementsMatch(t, []string{"ios-device", "android-device"}, recipients)
 
 	_, err = db.Exec(`DELETE FROM remote_store WHERE user_id = 1 AND key_name = 'internalUser'`)
 	require.NoError(t, err)
 	controller.NotifyReferral(ctx, 1)
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 3)
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {

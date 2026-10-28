@@ -15,6 +15,7 @@ type PushTokenRequest struct {
 
 type PushToken struct {
 	NotificationPublicKey []byte `json:"-"`
+	Platform              string `json:"-"`
 	UserID                int64  `json:"userID"`
 	FCMToken              string `json:"fcmToken"`
 	CreatedAt             int64  `json:"createdAt"`
