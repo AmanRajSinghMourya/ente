@@ -105,7 +105,7 @@ func sendReferralEmail(userEmail, fromName, subject, template string) error {
 	images := []map[string]interface{}{{
 		"cid": "header-image", "mime_type": "image/png", "content": referralHeaderImage,
 	}}
-	return email.SendTemplatedEmail([]string{userEmail}, fromName, "team@ente.com", subject, template, nil, images)
+	return email.SendTemplatedEmailV2([]string{userEmail}, fromName, "team@ente.com", subject, "legacy/legacy_base.html", template, nil, images)
 }
 
 func (c *EmailNotificationController) OnLinkJoined(ownerID int64, otherUserID int64, role ente.CollectionParticipantRole) {
