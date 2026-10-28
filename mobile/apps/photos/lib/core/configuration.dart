@@ -50,11 +50,14 @@ import "package:photos/services/machine_learning/ml_run_control.dart";
 import "package:photos/services/machine_learning/ml_service.dart";
 import "package:photos/services/machine_learning/similar_images_service.dart";
 import "package:photos/services/memory_share_service.dart";
+import 'package:photos/services/notification_key_service.dart';
 import "package:photos/services/notification_service.dart";
 import 'package:photos/services/photos_contacts_service.dart';
 import 'package:photos/services/search_service.dart';
 import 'package:photos/services/sync/sync_service.dart';
 import 'package:photos/services/video_preview_service.dart';
+import 'package:photos/src/rust/third_party/ente_frb_lib/account_deletion.dart'
+    as account_deletion;
 import 'package:photos/utils/validator_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import "package:tuple/tuple.dart";
@@ -148,6 +151,9 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       // https://github.com/mogol/flutter_secure_storage/issues/541
       if (e is PlatformException) {
         final PlatformException error = e;
+        if (error.code == 'notification_key_store') {
+          rethrow;
+        }
         final bool isBadPaddingError =
             error.toString().contains('BadPaddingException') ||
             (error.message ?? '').contains('BadPaddingException');
@@ -199,9 +205,7 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
     _logger.info("Logging out, autoLogout: $autoLogout");
     MLService.instance.stopActiveRun(MlStopReason.logout);
     if (!autoLogout) {
-      if (flagService.stopStreamProcess) {
-        VideoPreviewService.instance.stop('logout');
-      }
+      VideoPreviewService.instance.stop('logout');
       if (SyncService.instance.isSyncInProgress()) {
         SyncService.instance.stopSync();
         try {
@@ -214,6 +218,14 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       }
     }
 
+    if (Platform.isIOS) {
+      try {
+        await NotificationKeyService.setNotificationPrivateKey(null);
+      } on PlatformException catch (e, s) {
+        if (e.code != 'notification_key_store') rethrow;
+        _logger.warning("Could not delete notification key", e, s);
+      }
+    }
     await _clearTempFolderOnLogout();
 
     await _preferences.clear();
@@ -571,14 +583,24 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
   }
 
   @override
-  String decryptDeleteChallenge(String encryptedChallenge) {
-    final challenge = CryptoUtil.openSealSync(
-      CryptoUtil.base642bin(encryptedChallenge),
-      CryptoUtil.base642bin(getKeyAttributes()!.publicKey),
-      getSecretKey()!,
-    );
-    return utf8.decode(challenge);
-  }
+  Future<AccountDeletionSummary?> getDeletionSummary() =>
+      account_deletion.getDeletionSummary(session: authenticatedSession());
+
+  @override
+  Future<String> getDeleteChallenge() =>
+      account_deletion.getDeleteChallenge(session: authenticatedSession());
+
+  @override
+  Future<void> deleteAccount({
+    required String encryptedChallenge,
+    required String reason,
+    String? feedback,
+  }) => account_deletion.deleteAccount(
+    session: authenticatedSession(),
+    encryptedChallenge: encryptedChallenge,
+    reason: reason,
+    feedback: feedback,
+  );
 
   Future<void> setKey(String? key) async {
     _key = key;

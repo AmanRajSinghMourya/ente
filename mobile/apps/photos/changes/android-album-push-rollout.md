@@ -1,0 +1,1 @@
+- Added encryption key registration for Android notifications.

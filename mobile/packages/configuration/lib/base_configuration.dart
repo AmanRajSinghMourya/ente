@@ -58,6 +58,8 @@ abstract class BaseConfiguration {
 
   List<String> get secureStorageKeys;
 
+  List<String> get lockScreenSecureStorageKeys => const [];
+
   Future<void> init(List<EnteBaseDatabase> dbs) async {
     _databases = dbs;
     _tempDocumentsDirPath =
@@ -79,6 +81,9 @@ abstract class BaseConfiguration {
     await _clearTempFolderOnLogout();
     await _preferences.clear();
     await resetSecureStorage();
+    for (final key in lockScreenSecureStorageKeys) {
+      await _secureStorage.delete(key: key);
+    }
     for (final db in _databases) {
       await db.clearTable();
     }
@@ -364,15 +369,6 @@ abstract class BaseConfiguration {
 
   Uint8List? getSecretKey() {
     return _secretKey == null ? null : CryptoUtil.base642bin(_secretKey!);
-  }
-
-  String decryptDeleteChallenge(String encryptedChallenge) {
-    final challenge = CryptoUtil.openSealSync(
-      CryptoUtil.base642bin(encryptedChallenge),
-      CryptoUtil.base642bin(getKeyAttributes()!.publicKey),
-      getSecretKey()!,
-    );
-    return utf8.decode(challenge);
   }
 
   Uint8List getRecoveryKey() {
