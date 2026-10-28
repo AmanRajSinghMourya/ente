@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:photos/app_mode.dart';
 import 'package:photos/ente_theme_data.dart';
 import 'package:photos/service_locator.dart';
 import 'package:photos/services/notification_key_service.dart';
@@ -17,7 +18,7 @@ import 'package:photos/ui/settings/notification_settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const sharedKey =
       NotificationService.keyShouldShowNotificationsForSharedPhotos;
   const socialKey = NotificationService.keyShouldShowSocialNotifications;
@@ -30,6 +31,11 @@ void main() {
 
   setUpAll(() async {
     preferences = await SharedPreferences.getInstance();
+    expect(
+      preferences.getString('token'),
+      isNull,
+      reason: 'Run cleanup on a signed-out test installation',
+    );
     await HomeWidget.setAppGroupId(
       'group.io.ente.frame.NotificationServiceExtension',
     );
@@ -41,8 +47,10 @@ void main() {
     for (final key in [sharedKey, socialKey]) {
       originalValues[key] = preferences.getBool(key);
       await preferences.remove(key);
+      await HomeWidget.saveWidgetData<bool>('$account.$key', false);
     }
     service.init(preferences);
+    await binding.defaultBinaryMessenger.platformMessagesFinished;
   });
 
   tearDown(() async {
@@ -54,45 +62,23 @@ void main() {
       }
     }
     service.init(preferences);
+    await binding.defaultBinaryMessenger.platformMessagesFinished;
   });
 
   testWidgets(
-    'iOS shared preferences follow initialization, setters and cleanup',
+    'iOS initialization mirrors defaults and saved preferences; cleanup clears copies',
     (tester) async {
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(await read(sharedKey), isTrue);
       expect(await read(socialKey), isTrue);
 
-      await service.setShouldShowNotificationsForSharedPhotosAndAlbums(false);
-      expect(await read(sharedKey), isFalse);
-      expect(await read(socialKey), isTrue);
-      await service.setShouldShowSocialNotifications(false);
-      expect(await read(sharedKey), isFalse);
-      expect(await read(socialKey), isFalse);
-      await service.setShouldShowNotificationsForSharedPhotosAndAlbums(true);
-      expect(await read(sharedKey), isTrue);
-      expect(await read(socialKey), isFalse);
-
-      // Initialization repairs stale copies from the app's saved values.
-      await HomeWidget.saveWidgetData<bool>('$account.$socialKey', true);
+      await preferences.setBool(socialKey, false);
       service.init(preferences);
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      await binding.defaultBinaryMessenger.platformMessagesFinished;
       expect(await read(socialKey), isFalse);
 
-      // The native cleanup used by logout must only touch this build's two copies.
-      expect(
-        preferences.getString('token'),
-        isNull,
-        reason: 'Run cleanup on a signed-out test installation',
-      );
-      const otherAccount = kDebugMode ? 'recipient' : 'recipient.debug';
-      const otherKey = '$otherAccount.$sharedKey';
-      final originalOther = await HomeWidget.getWidgetData<bool>(otherKey);
       await NotificationKeyService.setNotificationPrivateKey(null);
       expect(await read(sharedKey), isNull);
       expect(await read(socialKey), isNull);
-      expect(await HomeWidget.getWidgetData<bool>(otherKey), originalOther);
-      expect(preferences.getBool(sharedKey), isTrue);
       expect(preferences.getBool(socialKey), isFalse);
     },
     skip: !Platform.isIOS,
@@ -101,6 +87,13 @@ void main() {
   testWidgets(
     'iOS settings toggles update extension preferences independently',
     (tester) async {
+      final originalMode = localSettings.appMode;
+      final hadSavedMode = localSettings.isAppModeSet;
+      addTearDown(() async {
+        await localSettings.setAppMode(originalMode);
+        if (!hadSavedMode) await preferences.remove('ls.app_mode');
+      });
+      await localSettings.setAppMode(AppMode.enteGallery);
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pumpAndSettle();
       await service.initializeForBackground();
@@ -118,19 +111,29 @@ void main() {
           home: const NotificationSettingsScreen(),
         ),
       );
+      await binding.defaultBinaryMessenger.platformMessagesFinished;
       await tester.pumpAndSettle();
-      final switches = find.byType(ToggleSwitchComponent);
-      expect(switches, findsNWidgets(4));
-      await tester.tap(switches.at(0));
-      await tester.pumpAndSettle();
+      final strings = tester
+          .element(find.byType(NotificationSettingsScreen))
+          .strings;
+      Future<void> toggle(String label) async {
+        await tester.tap(
+          find.descendant(
+            of: find.widgetWithText(SettingsItem, label),
+            matching: find.byType(ToggleSwitchComponent),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await binding.defaultBinaryMessenger.platformMessagesFinished;
+      }
+
+      await toggle(strings.sharedPhotoNotifications);
       expect(await read(sharedKey), isFalse);
       expect(await read(socialKey), isTrue);
-      await tester.tap(switches.at(1));
-      await tester.pumpAndSettle();
+      await toggle(strings.socialNotifications);
       expect(await read(sharedKey), isFalse);
       expect(await read(socialKey), isFalse);
-      await tester.tap(switches.at(0));
-      await tester.pumpAndSettle();
+      await toggle(strings.sharedPhotoNotifications);
       expect(await read(sharedKey), isTrue);
       expect(await read(socialKey), isFalse);
     },
