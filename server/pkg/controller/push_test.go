@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"crypto/hpke"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -197,6 +199,61 @@ func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 		"data":    map[string]any{"action": "sync"},
 		"android": map[string]any{"priority": "high", "ttl": "86400s"},
 	}}, messages)
+}
+
+func TestAlbumShareEncryptsForEachEnrolledDevice(t *testing.T) {
+	testutil.WithServerRoot(t)
+	db := testutil.RequireTestDB(t)
+	testutil.ResetTables(t, db)
+	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 8, Email: "rollout@example.com", CreationTime: 1})
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(8, ente.Photos, "session", "", ""))
+	hash := auth.HashToken("session")
+	platform := "android"
+	c := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	keys := make(map[string]hpke.PrivateKey)
+	for _, token := range []string{"first-device", "second-device"} {
+		key, err := hpke.MLKEM768X25519().GenerateKey()
+		require.NoError(t, err)
+		keys[token] = key
+		require.NoError(t, c.AddToken(8, hash[:], ente.PushTokenRequest{
+			FCMToken: token, Platform: &platform, NotificationKey: key.PublicKey().Bytes(),
+		}))
+	}
+	require.NoError(t, c.AddToken(8, hash[:], ente.PushTokenRequest{FCMToken: "legacy", Platform: &platform}))
+	var messages []wireMsg
+	c.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var message wireMsg
+		require.NoError(t, json.NewDecoder(request.Body).Decode(&message))
+		messages = append(messages, message)
+		return jsonResponse(http.StatusOK, "{}"), nil
+	})}}
+	c.NotifyAlbumShare(context.Background(), []int64{8})
+	require.Len(t, messages, 3)
+	for _, envelope := range messages {
+		message := envelope.Message
+		if message.Token == "legacy" {
+			require.Equal(t, map[string]string{"action": "sync"}, message.Data)
+			continue
+		}
+		require.Len(t, message.Data, 1)
+		require.Contains(t, message.Data, "notificationCiphertext")
+		ciphertext, err := base64.StdEncoding.DecodeString(message.Data["notificationCiphertext"])
+		require.NoError(t, err)
+		plaintext, err := hpke.Open(keys[message.Token], hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), ciphertext)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
+	}
+	// A registration without a key must stop encrypted delivery to that device.
+	require.NoError(t, c.AddToken(8, hash[:], ente.PushTokenRequest{FCMToken: "first-device", Platform: &platform}))
+	messages = nil
+	c.NotifyAlbumShare(context.Background(), []int64{8})
+	require.Len(t, messages, 3)
+	for _, envelope := range messages {
+		if envelope.Message.Token == "first-device" {
+			require.Equal(t, map[string]string{"action": "sync"}, envelope.Message.Data)
+		}
+	}
 }
 
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
