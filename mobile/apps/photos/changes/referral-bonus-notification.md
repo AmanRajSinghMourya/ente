@@ -1,1 +1,1 @@
-- (i) Added referral bonus notifications on Android.
+- (i) Added referral bonus notifications on Android and iOS.
