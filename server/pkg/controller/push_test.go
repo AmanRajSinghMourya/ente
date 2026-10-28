@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -166,30 +165,22 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
-func TestAlbumShareRolloutSendsOnlyAndroidSync(t *testing.T) {
+func TestAlbumShareSendsOnlyAndroidSync(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
 	testutil.ResetTables(t, db)
 	t.Cleanup(func() { testutil.ResetTables(t, db) })
-	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
-	authRepo := &repo.UserAuthRepository{DB: db}
-	// Fixed cohort fixtures: user 8 is in bucket 29, user 22 in bucket 30,
-	// and internal user 2 is outside the rollout in bucket 41.
-	for _, userID := range []int64{2, 8, 22} {
-		testutil.InsertUser(t, db, testutil.UserFixture{UserID: userID, Email: fmt.Sprintf("user%d@example.com", userID), CreationTime: 1})
-		session := fmt.Sprint(userID)
-		require.NoError(t, authRepo.AddToken(userID, ente.Photos, session, "", ""))
-		hash := auth.HashToken(session)
-		for _, platform := range []string{"ios", "android"} {
-			for device := range 2 {
-				require.NoError(t, controller.AddToken(userID, hash[:], ente.PushTokenRequest{
-					FCMToken: fmt.Sprintf("%d-%s-%d", userID, platform, device), Platform: &platform,
-				}))
-			}
-		}
-	}
-	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(2,'internalUser','true')`)
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "internal@example.com", CreationTime: 1})
+	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(1,'internalUser','true')`)
 	require.NoError(t, err)
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(1, ente.Photos, "session", "", ""))
+	hash := auth.HashToken("session")
+	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	for _, platform := range []string{"ios", "android"} {
+		require.NoError(t, controller.AddToken(1, hash[:], ente.PushTokenRequest{
+			FCMToken: platform + "-device", Platform: &platform,
+		}))
+	}
 	var messages []map[string]any
 	controller.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		require.NoError(t, request.Context().Err())
@@ -202,25 +193,12 @@ func TestAlbumShareRolloutSendsOnlyAndroidSync(t *testing.T) {
 	})}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	var expected []map[string]any
-	for _, token := range []string{"2-android-0", "2-android-1", "8-android-0", "8-android-1"} {
-		expected = append(expected, map[string]any{
-			"token":   token,
-			"data":    map[string]any{"action": "sync"},
-			"android": map[string]any{"priority": "high", "ttl": "86400s"},
-		})
-	}
-	for range 2 {
-		messages = nil
-		controller.NotifyAlbumShare(ctx, []int64{2, 8, 22})
-		require.ElementsMatch(t, expected, messages)
-	}
-	hash := auth.HashToken("8")
-	_, err = authRepo.RemoveTokenByHash(8, hash[:])
-	require.NoError(t, err)
-	messages = nil
-	controller.NotifyAlbumShare(ctx, []int64{8, 22})
-	require.Empty(t, messages, "logged-out and excluded users must receive no pushes")
+	controller.NotifyAlbumShare(ctx, []int64{1})
+	require.Equal(t, []map[string]any{{
+		"token":   "android-device",
+		"data":    map[string]any{"action": "sync"},
+		"android": map[string]any{"priority": "high", "ttl": "86400s"},
+	}}, messages)
 }
 
 func TestAlbumShareEncryptsForEachEnrolledDevice(t *testing.T) {

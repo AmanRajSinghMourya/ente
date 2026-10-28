@@ -17,7 +17,7 @@ type PushTokenRepository struct {
 
 const (
 	androidAlbumShareRolloutPercentage = 30
-	androidAlbumShareRolloutNonce      = "android-album-share-v1"
+	androidAlbumShareRolloutSeed       = "android-album-share-v1"
 )
 
 func (repo *PushTokenRepository) AddToken(userID int64, sessionTokenHash []byte, token ente.PushTokenRequest) error {
@@ -85,7 +85,7 @@ func (repo *PushTokenRepository) GetTokensForAlbumShare(ctx context.Context, use
 		if err := rows.Scan(&token.UserID, &token.FCMToken, &token.NotificationPublicKey, &internalUser); err != nil {
 			return nil, stacktrace.Propagate(err, "")
 		}
-		if internalUser || rollout.IsInPercentageRollout(token.UserID, androidAlbumShareRolloutNonce, androidAlbumShareRolloutPercentage) {
+		if internalUser || rollout.IsInPercentageRollout(token.UserID, androidAlbumShareRolloutSeed, androidAlbumShareRolloutPercentage) {
 			tokens = append(tokens, token)
 		}
 	}
