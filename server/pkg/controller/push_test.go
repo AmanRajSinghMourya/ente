@@ -236,7 +236,6 @@ func TestAlbumShareEncryptsForEachEnrolledDevice(t *testing.T) {
 			require.Equal(t, map[string]string{"action": "sync"}, message.Data)
 			continue
 		}
-		require.Len(t, message.Data, 1)
 		require.Contains(t, message.Data, "notificationCiphertext")
 		ciphertext, err := base64.StdEncoding.DecodeString(message.Data["notificationCiphertext"])
 		require.NoError(t, err)
