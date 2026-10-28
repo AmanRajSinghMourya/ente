@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	stdtime "time"
 
 	"github.com/avct/uasurfer"
 	"github.com/ente/museum/ente"
@@ -56,7 +57,16 @@ const (
 	FamilyNudgeTemplate   = "family_nudge.html"
 	FamilyNudgeSubject    = "Share your Ente Subscription with your Family!"
 	FamilyNudgeTemplateID = "family_nudge"
+
+	PhotosNoUploadMailLock = "photos_no_upload_mail_lock"
+	PhotosNoUploadTemplate = "photos_no_upload.html"
+	PhotosNoUploadSubject  = "Your photos deserve a safe home"
 )
+
+// TODO: set to the rollout date before merging.
+var photosNoUploadCutoff = stdtime.Date(2026, stdtime.November, 1, 0, 0, 0, 0, stdtime.UTC).UnixMicro()
+
+var sendPhotosNoUploadEmail = email.SendTemplatedEmailV2
 
 type EmailNotificationController struct {
 	UserRepo                           *repo.UserRepository
@@ -302,5 +312,39 @@ func (c *EmailNotificationController) NudgePaidSubscriberForFamily() {
 			continue
 		}
 		c.NotificationHistoryRepo.SetLastNotificationTimeToNow(u.ID, FamilyNudgeTemplateID)
+	}
+}
+
+func (c *EmailNotificationController) SendPhotosNoUploadMails() {
+	log.Info("Running SendPhotosNoUploadMails")
+	lockStatus := c.LockController.TryLock(PhotosNoUploadMailLock, time.MicrosecondsAfterHours(24))
+	if !lockStatus {
+		log.Error("Could not acquire lock to send photos no upload mails")
+		return
+	}
+	defer c.LockController.ReleaseLock(PhotosNoUploadMailLock)
+
+	userIDs, err := c.NotificationHistoryRepo.GetPhotosNoUploadCandidates(context.Background(), photosNoUploadCutoff, time.MicrosecondsBeforeDays(2), 500)
+	if err != nil {
+		log.Error("Error while fetching photos no upload candidates", err)
+		return
+	}
+	for _, userID := range userIDs {
+		logger := log.WithField("user_id", userID)
+		user, err := c.UserRepo.Get(userID)
+		if err != nil {
+			logger.Error("Could not fetch user", err)
+			continue
+		}
+		err = c.NotificationHistoryRepo.SetLastNotificationTimeToNow(userID, repo.PhotosNoUploadTemplateID)
+		if err != nil {
+			logger.Error("Could not record photos no upload mail", err)
+			continue
+		}
+		logger.Info("Sending photos no upload mail")
+		err = sendPhotosNoUploadEmail([]string{user.Email}, "Ente", "team@ente.com", PhotosNoUploadSubject, "legacy/legacy_base.html", PhotosNoUploadTemplate, nil, nil)
+		if err != nil {
+			logger.Error("Error sending photos no upload mail", err)
+		}
 	}
 }
