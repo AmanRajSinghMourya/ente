@@ -156,14 +156,10 @@ func (c *UserController) GetDetailsV2(ctx *gin.Context, userID int64, fetchMemor
 			}
 		}
 		if familyData != nil {
-			for i := range familyData.Members {
-				member := &familyData.Members[i]
-				if member.Status != ente.SELF && member.Status != ente.ACCEPTED {
-					continue
-				}
+			for _, member := range familyData.Members {
 				for _, userLockerUsage := range lockerUsage.Users {
 					if userLockerUsage.UserID == member.MemberUserID {
-						member.Usage -= userLockerUsage.Usage
+						result.Usage -= userLockerUsage.Usage
 					}
 				}
 			}
