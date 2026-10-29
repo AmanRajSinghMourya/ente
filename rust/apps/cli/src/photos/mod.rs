@@ -14,6 +14,7 @@ use crate::{
     core_db::SqliteResult,
     db, home,
     output::{self, AlbumView, FileView, MAX_CANDIDATES, select},
+    usage,
 };
 use replica::Replica;
 
@@ -21,6 +22,7 @@ pub async fn run(command: PhotosCommand, selected: Option<&str>, options: &Optio
     match command {
         PhotosCommand::Api(args) => return api::run(App::Photos, args, selected, options).await,
         PhotosCommand::Export(args) => return export::run(args, selected, options).await,
+        PhotosCommand::Usage => return usage::photos(selected, options).await,
         _ => {}
     }
     ensure!(
@@ -48,7 +50,7 @@ pub async fn run(command: PhotosCommand, selected: Option<&str>, options: &Optio
         );
     }
     match command {
-        PhotosCommand::Api(_) | PhotosCommand::Export(_) => unreachable!(),
+        PhotosCommand::Api(_) | PhotosCommand::Export(_) | PhotosCommand::Usage => unreachable!(),
         PhotosCommand::Album { command } => album(command, &replica, options),
         PhotosCommand::File { album, command } => {
             file(command, album.as_deref(), &session, &mut replica, options).await

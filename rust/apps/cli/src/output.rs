@@ -3,7 +3,10 @@ use std::{fmt::Display, io::Write};
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, SecondsFormat};
 use dialoguer::console::{Alignment, measure_text_width, pad_str};
-use ente_accounts::admin::{Subscription, User, UserDetails};
+use ente_accounts::{
+    admin::{Subscription, User, UserDetails},
+    details::{AccountDetails, LockerUsage},
+};
 use ente_photos::{
     collections::{Collection, Visibility},
     files::File,
@@ -352,6 +355,107 @@ pub fn admin_user(details: &UserDetails, as_json: bool) -> Result<()> {
         fields.push(("Subscription", "unavailable".into()));
     }
     write_fields(&fields)
+}
+
+pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
+    let active = details.plan_active();
+    if as_json {
+        let family = details.family().map(|family| {
+            json_value!({
+                "usedBytes": family.usage(),
+                "storageBytes": family.storage,
+                "members": family.members.iter().map(|member| json_value!({
+                    "email": member.email, "status": member.status, "admin": member.is_admin,
+                    "usedBytes": member.usage, "storageLimitBytes": member.storage_limit,
+                })).collect::<Vec<_>>(),
+            })
+        });
+        return json(&json_value!({
+            "email": details.email,
+            "totalBytes": details.total_storage(),
+            "usedBytes": details.usage,
+            "freeBytes": details.free_storage(),
+            "planBytes": details.plan_storage(),
+            "bonusBytes": details.storage_bonus,
+            "planActive": active,
+            "planExpiresAt": timestamp(details.plan_expiry_time())?,
+            "files": details.file_count,
+            "family": family,
+        }));
+    }
+    let mut fields = vec![
+        ("Email", escape_controls(&details.email)),
+        ("Total", storage_size(details.total_storage())),
+        ("Used", storage_size(details.usage)),
+        ("Free", storage_size(details.free_storage())),
+        ("Plan", storage_size(details.plan_storage())),
+        (
+            "Status",
+            if active { "active" } else { "expired" }.to_owned(),
+        ),
+        ("Bonus", storage_size(details.storage_bonus)),
+        (
+            "Files",
+            details
+                .file_count
+                .map_or("unknown".to_owned(), |count| count.to_string()),
+        ),
+    ];
+    match details.family() {
+        Some(family) => {
+            let members = family
+                .members
+                .iter()
+                .map(|member| {
+                    let mut label = escape_controls(&member.email);
+                    if member.is_admin {
+                        label.push_str(" (admin)");
+                    } else if member.status != "ACCEPTED" {
+                        label.push_str(&format!(" ({})", member.status.to_lowercase()));
+                    }
+                    label
+                })
+                .collect::<Vec<_>>();
+            fields.extend([
+                ("Family", members.join(", ")),
+                ("Family used", storage_size(family.usage())),
+                ("Family storage", storage_size(family.storage)),
+            ]);
+            if let Some(limit) = details.family_member().and_then(|m| m.storage_limit) {
+                fields.push(("Your limit", storage_size(limit)));
+            }
+        }
+        None => fields.push(("Family", "none".to_owned())),
+    }
+    write_fields(&fields)
+}
+
+pub fn locker_usage(usage: &LockerUsage, as_json: bool) -> Result<()> {
+    if as_json {
+        return json(&json_value!({
+            "usedFiles": usage.used_file_count,
+            "fileLimit": usage.file_limit,
+            "remainingFiles": usage.remaining_file_count,
+            "usedBytes": usage.used_storage,
+            "storageLimitBytes": usage.storage_limit,
+            "remainingBytes": usage.remaining_storage,
+            "paid": usage.is_paid,
+            "family": usage.is_family,
+        }));
+    }
+    write_fields(&[
+        ("Files", usage.used_file_count.to_string()),
+        ("File limit", usage.file_limit.to_string()),
+        ("Files left", usage.remaining_file_count.to_string()),
+        ("Storage", storage_size(usage.used_storage)),
+        ("Storage limit", storage_size(usage.storage_limit)),
+        ("Storage left", storage_size(usage.remaining_storage)),
+        ("Paid", if usage.is_paid { "yes" } else { "no" }.to_owned()),
+        (
+            "Family",
+            if usage.is_family { "yes" } else { "none" }.to_owned(),
+        ),
+    ])
 }
 
 pub fn storage_size(bytes: i64) -> String {

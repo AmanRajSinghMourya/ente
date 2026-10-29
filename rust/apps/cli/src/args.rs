@@ -375,6 +375,16 @@ Examples:
   ente photos export ~/Pictures/Ente --album Holidays --account personal"
     )]
     Export(PhotosExportArgs),
+    #[command(
+        about = "Show storage usage and file count",
+        after_long_help = "Requires network access.
+Total is the plan plus bonuses, or the family admin's plan in a family; Free honours a member limit when the admin set one.
+With --json, returns one object.
+In a family, Plan and Status describe the family plan. Status is active or expired; an expired plan still counts in Total, as in the apps.
+Fields: email, planExpiresAt (strings); planActive (boolean); totalBytes, usedBytes, freeBytes, planBytes, bonusBytes (integers).
+Nullable fields: files (integer); family ({usedBytes, storageBytes (integers); members: [{email, status (strings); admin (boolean); usedBytes (integer); storageLimitBytes (integer, nullable)}]})."
+    )]
+    Usage,
     #[command(about = "Manage albums")]
     Album {
         #[command(subcommand)]
@@ -444,6 +454,12 @@ pub struct PhotosExportArgs {
 pub enum LockerCommand {
     #[command(about = "Make an authenticated API request", after_help = API_HELP)]
     Api(ApiArgs),
+    #[command(
+        about = "Show Locker usage against its file and storage limits",
+        after_long_help = "Requires network access. With --json, returns one object.
+Fields: usedFiles, fileLimit, remainingFiles, usedBytes, storageLimitBytes, remainingBytes (integers); paid, family (booleans)."
+    )]
+    Usage,
 }
 
 #[derive(Args)]

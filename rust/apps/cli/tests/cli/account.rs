@@ -660,3 +660,217 @@ fn interactive_creation_password_retry_and_enrollment() -> ente_test_support::Te
         Ok(())
     })
 }
+
+fn details_body(family: Value) -> String {
+    json!({
+        "email": "fixture@example.org", "usage": 3 * GB, "fileCount": 339, "sharedCollectionsCount": 2,
+        "storageBonus": 10 * GB,
+        "subscription": {"productID": "free", "storage": 10 * GB, "expiryTime": 4942020944746699i64,
+            "originalTransactionID": "none", "paymentProvider": "", "attributes": {}},
+        "familyData": family,
+    })
+    .to_string()
+}
+
+#[test]
+fn usage_reads_account_details_with_the_saved_login() {
+    let mut server = mockito::Server::new();
+    let home = TestHome::new();
+    home.seed(&server.url());
+    let details = server
+        .mock("GET", "/users/details/v2")
+        .match_query(Matcher::UrlEncoded("memoryCount".into(), "true".into()))
+        .match_header("x-client-package", "io.ente.photos")
+        .match_header("x-auth-token", b64::encode_url_safe(&[0xfb, 0xef]).as_str())
+        .with_body(details_body(Value::Null))
+        .expect(2)
+        .create();
+    assert_eq!(
+        home.json(&["photos", "usage"]),
+        json!({"email": "fixture@example.org", "usedBytes": 3 * GB, "totalBytes": 20 * GB,
+            "planBytes": 10 * GB, "bonusBytes": 10 * GB, "freeBytes": 17 * GB, "files": 339,
+            "planExpiresAt": "2126-08-10T07:35:44.746699Z", "planActive": true, "family": null})
+    );
+    let plain = success(home.run(&["photos", "usage"]));
+    assert_eq!(
+        String::from_utf8_lossy(&plain.stdout),
+        "Email   fixture@example.org\nTotal   20 GB (21474836480 bytes)\n\
+         Used    3 GB (3221225472 bytes)\nFree    17 GB (18253611008 bytes)\n\
+         Plan    10 GB (10737418240 bytes)\nStatus  active\n\
+         Bonus   10 GB (10737418240 bytes)\nFiles   339\nFamily  none\n"
+    );
+    details.assert();
+}
+
+#[test]
+fn family_usage_reports_the_admin_plan_and_the_member_limit() {
+    let mut server = mockito::Server::new();
+    let home = TestHome::new();
+    home.seed(&server.url());
+    let family = json!({"storage": 200 * GB, "expiryTime": 4942020944746699i64, "adminBonus": 0, "members": [
+        {"id": "a", "email": "admin@example.org", "status": "ACCEPTED", "usage": 50 * GB, "isAdmin": true},
+        {"id": "b", "email": "fixture@example.org", "status": "ACCEPTED", "usage": 3 * GB, "storageLimit": 5 * GB},
+        {"id": "c", "email": "new@example.org", "status": "INVITED"}
+    ]});
+    // A member's own subscription is a lapsed plan; the family plan is what counts.
+    let mut body: Value = serde_json::from_str(&details_body(family)).unwrap();
+    body["subscription"]["expiryTime"] = json!(1);
+    let details = server
+        .mock("GET", "/users/details/v2")
+        .match_query(Matcher::Any)
+        .with_body(body.to_string())
+        .expect(2)
+        .create();
+    let usage = home.json(&["photos", "usage"]);
+    assert_eq!(usage["planBytes"], 200 * GB);
+    assert_eq!(usage["planActive"], true);
+    assert_eq!(usage["planExpiresAt"], "2126-08-10T07:35:44.746699Z");
+    assert_eq!(usage["totalBytes"], 210 * GB);
+    assert_eq!(usage["freeBytes"], 2 * GB);
+    assert_eq!(usage["family"]["usedBytes"], 53 * GB);
+    assert_eq!(usage["family"]["storageBytes"], 200 * GB);
+    assert_eq!(
+        usage["family"]["members"][2],
+        json!({"email": "new@example.org", "status": "INVITED", "admin": false, "usedBytes": 0, "storageLimitBytes": null})
+    );
+    let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout).unwrap();
+    assert!(
+        plain.contains("Plan            200 GB (214748364800 bytes)\nStatus          active\n"),
+        "{plain}"
+    );
+    assert!(plain.contains(
+        "Family          admin@example.org (admin), fixture@example.org, new@example.org (invited)\n\
+         Family used     53 GB (56908316672 bytes)\nFamily storage  200 GB (214748364800 bytes)\n\
+         Your limit      5 GB (5368709120 bytes)\n"
+    ));
+    assert!(!plain.contains("Shared"));
+    assert!(usage.get("sharedAlbums").is_none());
+    details.assert();
+}
+
+#[test]
+fn locker_usage_needs_a_locker_login() {
+    let mut server = mockito::Server::new();
+    let home = TestHome::new();
+    home.seed(&server.url());
+    assert!(failure(&home.run(&["locker", "usage"])).contains("not logged into Ente Locker"));
+    home.seed_sessions(
+        &server.url(),
+        json!({"photos": {"token": [0xfb, 0xef]}, "locker": {"token": [0x01, 0x02]}}),
+    );
+    let usage = server
+        .mock("GET", "/users/locker-usage")
+        .match_header("x-client-package", "io.ente.locker")
+        .match_header("x-auth-token", b64::encode_url_safe(&[0x01, 0x02]).as_str())
+        .with_body(r#"{"isPaid":false,"isFamily":false,"usedFileCount":92,"fileLimit":100,"remainingFileCount":8,"usedStorage":266830722,"storageLimit":1073741824,"remainingStorage":806911102,"userFileCount":92,"userStorage":266830722}"#)
+        .expect(2)
+        .create();
+    assert_eq!(
+        home.json(&["locker", "usage"]),
+        json!({"usedFiles": 92, "fileLimit": 100, "remainingFiles": 8, "usedBytes": 266830722,
+            "storageLimitBytes": 1073741824, "remainingBytes": 806911102, "paid": false, "family": false})
+    );
+    let plain = success(home.run(&["locker", "usage"]));
+    assert_eq!(
+        String::from_utf8_lossy(&plain.stdout),
+        "Files          92\nFile limit     100\nFiles left     8\nStorage        254.47 MB (266830722 bytes)\n\
+         Storage limit  1 GB (1073741824 bytes)\nStorage left   769.53 MB (806911102 bytes)\nPaid           no\nFamily         none\n"
+    );
+    usage.assert();
+}
+
+#[test]
+fn usage_counts_photos_files_and_needs_a_photos_login() {
+    let mut server = mockito::Server::new();
+    let home = TestHome::new();
+    let details = server
+        .mock("GET", "/users/details/v2")
+        .match_query(Matcher::Any)
+        .match_header("x-client-package", "io.ente.photos")
+        .match_header("x-auth-token", b64::encode_url_safe(&[0xfb, 0xef]).as_str())
+        .with_body(details_body(Value::Null))
+        .expect(2)
+        .create();
+    for (app, token) in [("locker", [1u8, 2]), ("auth", [3, 4])] {
+        home.seed_sessions(&server.url(), json!({app: {"token": token}}));
+        let error = failure(&home.run(&["photos", "usage"]));
+        assert!(error.contains("not logged into Ente Photos"), "{error}");
+        assert!(
+            error.contains("account login --account \"fixture\" --app photos"),
+            "{error}"
+        );
+    }
+    home.seed_sessions(
+        &server.url(),
+        json!({"locker": {"token": [1, 2]}, "photos": {"token": [0xfb, 0xef]}}),
+    );
+    let with_locker = home.json(&["photos", "usage"]);
+    assert_eq!(with_locker["files"], 339);
+    home.seed_sessions(&server.url(), json!({"photos": {"token": [0xfb, 0xef]}}));
+    assert_eq!(home.json(&["photos", "usage"]), with_locker);
+    details.assert();
+}
+
+#[test]
+fn usage_commands_report_server_errors_and_refuse_offline_or_missing_accounts() {
+    let mut server = mockito::Server::new();
+    let home = TestHome::new();
+    assert!(failure(&home.run(&["photos", "usage"])).contains("no accounts"));
+    assert!(failure(&home.run(&["locker", "usage"])).contains("no accounts"));
+    home.seed_sessions(
+        &server.url(),
+        json!({"photos": {"token": [0xfb, 0xef]}, "locker": {"token": [1, 2]}}),
+    );
+    assert!(
+        failure(&home.run(&["locker", "usage", "--offline"])).contains("requires network access")
+    );
+    assert!(failure(&home.run(&["photos", "usage", "--account", "nobody"])).contains("nobody"));
+    let details = server
+        .mock("GET", "/users/details/v2")
+        .match_query(Matcher::Any)
+        .with_status(503)
+        .with_body("maintenance")
+        .expect(1)
+        .create();
+    let locker = server
+        .mock("GET", "/users/locker-usage")
+        .with_status(500)
+        .with_body(r#"{"code":"INTERNAL"}"#)
+        .expect(1)
+        .create();
+    let photos = home.run(&["photos", "usage", "--json"]);
+    assert!(failure(&photos).contains("HTTP 503"));
+    assert!(photos.stdout.is_empty());
+    let locker_output = home.run(&["locker", "usage"]);
+    assert!(failure(&locker_output).contains("500"));
+    assert!(locker_output.stdout.is_empty());
+    details.assert();
+    locker.assert();
+}
+
+#[test]
+fn usage_marks_an_expired_plan() {
+    let mut server = mockito::Server::new();
+    let home = TestHome::new();
+    home.seed(&server.url());
+    let mut body: Value = serde_json::from_str(&details_body(Value::Null)).unwrap();
+    body["subscription"]["storage"] = json!(50 * GB);
+    body["subscription"]["expiryTime"] = json!(1_767_225_600_000_000i64);
+    let details = server
+        .mock("GET", "/users/details/v2")
+        .match_query(Matcher::Any)
+        .with_body(body.to_string())
+        .expect(2)
+        .create();
+    let usage = home.json(&["photos", "usage"]);
+    assert_eq!(usage["planBytes"], 50 * GB);
+    assert_eq!(usage["planExpiresAt"], "2026-01-01T00:00:00.000000Z");
+    assert_eq!(usage["planActive"], false);
+    assert_eq!(usage["totalBytes"], 60 * GB);
+    let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout).unwrap();
+    assert!(
+        plain.contains("Plan    50 GB (53687091200 bytes)\nStatus  expired\n"),
+        "{plain}"
+    );
+    details.assert();
+}

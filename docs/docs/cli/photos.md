@@ -90,6 +90,26 @@ ente photos file download 1580559962386999 --output ./IMG_0001.jpg
 
 A file selector is a file ID or an exact name; when several files share a name, the CLI lists the candidates and you pick an ID. Download prints `Downloaded "IMG_0001.jpg" to ./IMG_0001.jpg.` and refuses to overwrite an existing file. A Live Photo downloads as a ZIP archive. Lists show 100 results and then print `Showing first 100 results; use --limit N or --all to see more.` on the terminal.
 
+## Check storage and file count
+
+```sh
+ente photos usage
+```
+
+```
+Email   alice@example.com
+Total   20 GB (21474836480 bytes)
+Used    3.61 GB (3873026520 bytes)
+Free    16.39 GB (17601809960 bytes)
+Plan    10 GB (10737418240 bytes)
+Status  active
+Bonus   10 GB (10737418240 bytes)
+Files   339
+Family  none
+```
+
+Total is the plan plus bonuses such as referrals. Status says whether the plan is active or expired; an expired plan still counts in Total, as in the apps. In a family, Plan, Status and Total describe the family admin's plan, Family lists the members, Family used and Family storage show the shared totals, and Your limit appears when the admin has capped your share; Free is then what is left under that cap. Locker has its own limits; see `ente locker usage` in [Accounts](./accounts.md#check-locker-usage).
+
 ## Read as JSON
 
 Lists return arrays and `view` returns one object. IDs are strings; timestamps are RFC 3339 strings in UTC.
@@ -99,11 +119,12 @@ Lists return arrays and `view` returns one object. IDs are strings; timestamps a
 | `album list`, `album view` | `id`, `name`, `type` (`album`, `folder`, `favorites`, `uncategorized`, `defaultHidden`, `quicklink`), `visibility` (`visible`, `archived`, `hidden`), `ownerId`, `updatedAt`                                                                                        |
 | `file list`, `file view`   | `id`, `name`, `type` (`image`, `video`, `livephoto`), `ownerId`, `albumIds`, `createdAt`, `updatedAt`; nullable `modifiedAt`, `location` (`latitude`, `longitude`), `caption`, `hash`, `dateTime`, `offsetTime`, `visibility`, `durationSeconds`, `width`, `height` |
 | `file download`            | `id`, `output`, `bytes`                                                                                                                                                                                                                                             |
+| `usage`                    | `email`, `planExpiresAt`, `planActive`, `totalBytes`, `usedBytes`, `freeBytes`, `planBytes`, `bonusBytes`, `files` (nullable), `family` (nullable: `usedBytes`, `storageBytes`, `members` with `email`, `status`, `admin`, `usedBytes`, `storageLimitBytes`)        |
 | `export`                   | See [Automation](./automation.md#export-summary)                                                                                                                                                                                                                    |
 
 ## Read offline
 
-`album list`, `album view`, `file list` and `file view` work with `--offline` using the metadata an earlier online run synced. An online `album list` syncs albums only; run `file list` online for each album whose files you want to read offline. Export and download need the network.
+`album list`, `album view`, `file list` and `file view` work with `--offline` using the metadata an earlier online run synced. An online `album list` syncs albums only; run `file list` online for each album whose files you want to read offline. Export, download and usage need the network.
 
 ## Limits
 

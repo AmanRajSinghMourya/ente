@@ -53,6 +53,27 @@ SELECTED  NAME               EMAIL              HOST                     LOGGED 
 
 Commands use the selected account. Adding an account selects it; logging in to an existing one keeps the selection. Change the selection with `ente account switch home-server`, or pick an account for one command with `--account NAME` after the subcommand. `ente account rename alice@example.com personal` changes a local name.
 
+## Check Locker usage
+
+Locker counts files against its own limit, 100 on the free plan and 1,000 on a paid plan, with 1 GB or 10 GB of storage:
+
+```sh
+ente locker usage
+```
+
+```
+Files          92
+File limit     100
+Files left     8
+Storage        254.47 MB (266830722 bytes)
+Storage limit  1 GB (1073741824 bytes)
+Storage left   769.53 MB (806911102 bytes)
+Paid           no
+Family         none
+```
+
+With `--json` the result is one object with `usedFiles`, `fileLimit`, `remainingFiles`, `usedBytes`, `storageLimitBytes`, `remainingBytes`, `paid` and `family`.
+
 ## Create an account
 
 ```sh

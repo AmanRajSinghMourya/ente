@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, io::Write};
 use anyhow::{Context, Result, ensure};
 use dialoguer::{Confirm, Password, console::Term};
 use ente_accounts::{DEFAULT_API_ORIGIN, lifecycle::TwoFactorSetup, signup::Signup};
-use ente_core::{b64, crypto::Key};
+use ente_core::crypto::Key;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
@@ -293,8 +293,7 @@ pub async fn totp(
     let state = State::load()?;
     let account = &state.accounts[state.resolve(selected)?];
     let app = account.app(app)?;
-    let client = api::accounts_client(&account.origin, app)?;
-    client.set_auth_token(Some(b64::encode_url_safe(account.token(app)?)));
+    let client = api::authenticated_client(account, app)?;
     let enabled = client.get_two_factor_status().await?;
     if matches!(command, TotpCommand::Status) {
         return output::action(

@@ -125,6 +125,70 @@ fn auth_login_refresh_and_offline_export_across_processes() -> TestResult {
 
 #[cfg(unix)]
 #[test]
+fn usage_reports_server_figures_and_plan_expiry() -> TestResult {
+    Museum::run(|museum| {
+        tokio::runtime::Runtime::new()?.block_on(async {
+            let origin = museum.endpoint();
+            let email = format!("usage-{}@example.org", Uuid::new_v4());
+            let owner = create_account(origin, &email).await;
+            let (album, key) = create_album(origin, &owner, "Usage", "album").await;
+            let original = b"original photo bytes from Museum";
+            upload_fixture(
+                origin,
+                &owner,
+                album,
+                &key,
+                original,
+                json!({"title": "usage.jpg", "fileType": 0, "creationTime": 1_700_000_000_000_000i64, "modificationTime": 1_700_000_000_000_000i64}),
+            )
+            .await;
+            let home = TestHome::new();
+            login(&home, "photos", &email, &["--host", origin, "--no-input"]);
+            assert!(
+                failure(&home.run(&["locker", "usage"])).contains("not logged into Ente Locker")
+            );
+            let usage = home.json(&["photos", "usage"]);
+            assert_eq!(usage["email"], email);
+            assert_eq!(usage["files"], 1);
+            assert_eq!(usage["planBytes"], 10 * GB);
+            assert_eq!(usage["planActive"], true);
+            assert_eq!(usage["family"], Value::Null);
+            let (used, total, bonus) = (
+                usage["usedBytes"].as_i64().unwrap(),
+                usage["totalBytes"].as_i64().unwrap(),
+                usage["bonusBytes"].as_i64().unwrap(),
+            );
+            assert!(used >= original.len() as i64, "{usage}");
+            assert_eq!(total, 10 * GB + bonus);
+            assert_eq!(usage["freeBytes"], total - used);
+            login(&home, "locker", &email, &[]);
+            // A self-hosted server treats every account as paid while its plan is active.
+            assert_eq!(
+                home.json(&["locker", "usage"]),
+                json!({"usedFiles": 0, "fileLimit": 1000, "remainingFiles": 1000, "usedBytes": 0,
+                    "storageLimitBytes": 10 * GB, "remainingBytes": 10 * GB,
+                    "paid": true, "family": false})
+            );
+            museum.execute_sql(&format!(
+                "UPDATE subscriptions SET expiry_time = 1 WHERE user_id = {}",
+                owner.user_id
+            ))?;
+            let expired = home.json(&["photos", "usage"]);
+            assert_eq!(expired["planActive"], false);
+            assert_eq!(expired["planExpiresAt"], "1970-01-01T00:00:00.000001Z");
+            assert_eq!(expired["totalBytes"], total);
+            let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout)?;
+            assert!(plain.contains("Status  expired\n"), "{plain}");
+            let locker = home.json(&["locker", "usage"]);
+            assert_eq!(locker["paid"], false);
+            assert_eq!(locker["fileLimit"], 100);
+            assert_eq!(locker["storageLimitBytes"], GB);
+            Ok(())
+        })
+    })
+}
+
+#[test]
 fn login_save_failures_follow_the_vault_replacement() -> TestResult {
     use std::os::unix::fs::PermissionsExt;
 
