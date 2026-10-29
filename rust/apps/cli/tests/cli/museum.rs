@@ -144,9 +144,6 @@ fn usage_reports_server_figures_and_plan_expiry() -> TestResult {
             .await;
             let home = TestHome::new();
             login(&home, "photos", &email, &["--host", origin, "--no-input"]);
-            assert!(
-                failure(&home.run(&["locker", "usage"])).contains("not logged into Ente Locker")
-            );
             let usage = home.json(&["photos", "usage"]);
             assert_eq!(usage["email"], email);
             assert_eq!(usage["files"], 1);
@@ -161,14 +158,6 @@ fn usage_reports_server_figures_and_plan_expiry() -> TestResult {
             assert!(used >= original.len() as i64, "{usage}");
             assert_eq!(total, 10 * GB + bonus);
             assert_eq!(usage["freeBytes"], total - used);
-            login(&home, "locker", &email, &[]);
-            // A self-hosted server treats every account as paid while its plan is active.
-            assert_eq!(
-                home.json(&["locker", "usage"]),
-                json!({"usedFiles": 0, "fileLimit": 1000, "remainingFiles": 1000, "usedBytes": 0,
-                    "storageLimitBytes": 10 * GB, "remainingBytes": 10 * GB,
-                    "paid": true, "family": false})
-            );
             museum.execute_sql(&format!(
                 "UPDATE subscriptions SET expiry_time = 1 WHERE user_id = {}",
                 owner.user_id
@@ -179,10 +168,6 @@ fn usage_reports_server_figures_and_plan_expiry() -> TestResult {
             assert_eq!(expired["totalBytes"], total);
             let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout)?;
             assert!(plain.contains("Status  expired\n"), "{plain}");
-            let locker = home.json(&["locker", "usage"]);
-            assert_eq!(locker["paid"], false);
-            assert_eq!(locker["fileLimit"], 100);
-            assert_eq!(locker["storageLimitBytes"], GB);
             Ok(())
         })
     })

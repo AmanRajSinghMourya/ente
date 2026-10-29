@@ -1,1 +1,0 @@
-- Show Photos storage usage and file count with `photos usage`, and Locker usage against its limits with `locker usage`.

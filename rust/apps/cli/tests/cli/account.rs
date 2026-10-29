@@ -764,38 +764,6 @@ fn family_usage_reports_the_admin_plan_and_the_member_limit() {
 }
 
 #[test]
-fn locker_usage_needs_a_locker_login() {
-    let mut server = mockito::Server::new();
-    let home = TestHome::new();
-    home.seed(&server.url());
-    assert!(failure(&home.run(&["locker", "usage"])).contains("not logged into Ente Locker"));
-    seed_sessions(
-        &home,
-        &server.url(),
-        json!({"photos": {"token": [0xfb, 0xef]}, "locker": {"token": [0x01, 0x02]}}),
-    );
-    let usage = server
-        .mock("GET", "/users/locker-usage")
-        .match_header("x-client-package", "io.ente.locker")
-        .match_header("x-auth-token", b64::encode_url_safe(&[0x01, 0x02]).as_str())
-        .with_body(r#"{"isPaid":false,"isFamily":false,"usedFileCount":92,"fileLimit":100,"remainingFileCount":8,"usedStorage":266830722,"storageLimit":1073741824,"remainingStorage":806911102,"userFileCount":92,"userStorage":266830722}"#)
-        .expect(2)
-        .create();
-    assert_eq!(
-        home.json(&["locker", "usage"]),
-        json!({"usedFiles": 92, "fileLimit": 100, "remainingFiles": 8, "usedBytes": 266830722,
-            "storageLimitBytes": 1073741824, "remainingBytes": 806911102, "paid": false, "family": false})
-    );
-    let plain = success(home.run(&["locker", "usage"]));
-    assert_eq!(
-        String::from_utf8_lossy(&plain.stdout),
-        "Files          92\nFile limit     100\nFiles left     8\nStorage        254.47 MB\n\
-         Storage limit  1 GB\nStorage left   769.53 MB\nPaid           no\nFamily         none\n"
-    );
-    usage.assert();
-}
-
-#[test]
 fn usage_counts_photos_files_and_needs_a_photos_login() {
     let mut server = mockito::Server::new();
     let home = TestHome::new();
@@ -833,18 +801,13 @@ fn usage_counts_photos_files_and_needs_a_photos_login() {
 }
 
 #[test]
-fn usage_commands_report_server_errors_and_refuse_offline_or_missing_accounts() {
+fn usage_reports_server_errors_and_refuses_offline_or_missing_accounts() {
     let mut server = mockito::Server::new();
     let home = TestHome::new();
     assert!(failure(&home.run(&["photos", "usage"])).contains("no accounts"));
-    assert!(failure(&home.run(&["locker", "usage"])).contains("no accounts"));
-    seed_sessions(
-        &home,
-        &server.url(),
-        json!({"photos": {"token": [0xfb, 0xef]}, "locker": {"token": [1, 2]}}),
-    );
+    home.seed(&server.url());
     assert!(
-        failure(&home.run(&["locker", "usage", "--offline"])).contains("requires network access")
+        failure(&home.run(&["photos", "usage", "--offline"])).contains("requires network access")
     );
     assert!(failure(&home.run(&["photos", "usage", "--account", "nobody"])).contains("nobody"));
     let details = server
@@ -854,20 +817,10 @@ fn usage_commands_report_server_errors_and_refuse_offline_or_missing_accounts() 
         .with_body("maintenance")
         .expect(1)
         .create();
-    let locker = server
-        .mock("GET", "/users/locker-usage")
-        .with_status(500)
-        .with_body(r#"{"code":"INTERNAL"}"#)
-        .expect(1)
-        .create();
     let photos = home.run(&["photos", "usage", "--json"]);
     assert!(failure(&photos).contains("HTTP 503"));
     assert!(photos.stdout.is_empty());
-    let locker_output = home.run(&["locker", "usage"]);
-    assert!(failure(&locker_output).contains("500"));
-    assert!(locker_output.stdout.is_empty());
     details.assert();
-    locker.assert();
 }
 
 #[test]

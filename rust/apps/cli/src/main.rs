@@ -119,13 +119,10 @@ async fn run(cli: Cli) -> Result<()> {
         Command::Photos { selector, command } => {
             photos::run(command, selector.account.as_deref(), &options).await
         }
-        Command::Locker { selector, command } => {
-            let account = selector.account.as_deref();
-            match command {
-                LockerCommand::Api(args) => api::run(App::Locker, args, account, &options).await,
-                LockerCommand::Usage => usage::locker(account, &options).await,
-            }
-        }
+        Command::Locker {
+            selector,
+            command: LockerCommand::Api(args),
+        } => api::run(App::Locker, args, selector.account.as_deref(), &options).await,
         Command::Auth { selector, command } => {
             auth::run(command, selector.account.as_deref(), &options).await
         }

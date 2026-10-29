@@ -5,7 +5,7 @@ use chrono::{DateTime, SecondsFormat};
 use dialoguer::console::{Alignment, measure_text_width, pad_str};
 use ente_accounts::{
     admin::{Subscription, User, UserDetails},
-    details::{AccountDetails, LockerUsage},
+    details::AccountDetails,
 };
 use ente_photos::{
     collections::{Collection, Visibility},
@@ -428,34 +428,6 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
         None => fields.push(("Family", "none".to_owned())),
     }
     write_fields(&fields)
-}
-
-pub fn locker_usage(usage: &LockerUsage, as_json: bool) -> Result<()> {
-    if as_json {
-        return json(&json_value!({
-            "usedFiles": usage.used_file_count,
-            "fileLimit": usage.file_limit,
-            "remainingFiles": usage.remaining_file_count,
-            "usedBytes": usage.used_storage,
-            "storageLimitBytes": usage.storage_limit,
-            "remainingBytes": usage.remaining_storage,
-            "paid": usage.is_paid,
-            "family": usage.is_family,
-        }));
-    }
-    write_fields(&[
-        ("Files", usage.used_file_count.to_string()),
-        ("File limit", usage.file_limit.to_string()),
-        ("Files left", usage.remaining_file_count.to_string()),
-        ("Storage", size(usage.used_storage)),
-        ("Storage limit", size(usage.storage_limit)),
-        ("Storage left", size(usage.remaining_storage)),
-        ("Paid", if usage.is_paid { "yes" } else { "no" }.to_owned()),
-        (
-            "Family",
-            if usage.is_family { "yes" } else { "none" }.to_owned(),
-        ),
-    ])
 }
 
 pub fn storage_size(bytes: i64) -> String {

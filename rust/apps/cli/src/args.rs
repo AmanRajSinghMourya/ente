@@ -375,13 +375,15 @@ Examples:
   ente photos export ~/Pictures/Ente --album Holidays --account personal"
     )]
     Export(PhotosExportArgs),
+    #[command(about = "Show storage usage, plan status and file count")]
     #[command(
-        about = "Show storage usage and file count",
-        after_long_help = "Requires network access. With --json, returns one object.
-Total is the plan plus bonuses, or the family plan in a family; Free honours a member limit when the admin set one.
-Status is active or expired; an expired plan still counts in Total, as in the apps.
-Fields: email, planExpiresAt (strings); planActive (boolean); totalBytes, usedBytes, freeBytes, planBytes, bonusBytes (integers).
-Nullable fields: files (integer); family ({usedBytes, storageBytes (integers); members: [{email, status (strings); admin (boolean); usedBytes (integer); storageLimitBytes (integer, nullable)}]})."
+        after_long_help = "Reads your account details from the server; requires network access.
+In a family, the plan and total are the family admin's, and a member limit set by the admin caps your free space.
+JSON fields: email, planExpiresAt (UTC), planActive, totalBytes, usedBytes, freeBytes, planBytes, bonusBytes, files, family.
+planActive is false once the plan has expired; the plan still counts in totalBytes, as in the apps.
+files is null when the server has no count.
+family is null outside a family; otherwise it contains usedBytes, storageBytes and members.
+Each member has email, status, admin, usedBytes and storageLimitBytes (null without a cap)."
     )]
     Usage,
     #[command(about = "Manage albums")]
@@ -453,12 +455,6 @@ pub struct PhotosExportArgs {
 pub enum LockerCommand {
     #[command(about = "Make an authenticated API request", after_help = API_HELP)]
     Api(ApiArgs),
-    #[command(
-        about = "Show storage usage and file count against the Locker limits",
-        after_long_help = "Requires network access. With --json, returns one object.
-Fields: usedFiles, fileLimit, remainingFiles, usedBytes, storageLimitBytes, remainingBytes (integers); paid, family (booleans)."
-    )]
-    Usage,
 }
 
 #[derive(Args)]

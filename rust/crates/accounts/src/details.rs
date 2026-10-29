@@ -38,19 +38,6 @@ pub struct FamilyMember {
     pub storage_limit: Option<i64>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LockerUsage {
-    pub is_paid: bool,
-    pub is_family: bool,
-    pub used_file_count: i64,
-    pub file_limit: i64,
-    pub remaining_file_count: i64,
-    pub used_storage: i64,
-    pub storage_limit: i64,
-    pub remaining_storage: i64,
-}
-
 impl AccountDetails {
     pub fn plan_active(&self) -> bool {
         let now = SystemTime::now()
@@ -111,18 +98,6 @@ impl AccountsClient {
             .api
             .get("/users/details/v2")
             .query(&[("memoryCount", true)])
-            .send()
-            .await?
-            .error_for_code()
-            .await?
-            .json()
-            .await?)
-    }
-
-    pub async fn locker_usage(&self) -> Result<LockerUsage> {
-        Ok(self
-            .api
-            .get("/users/locker-usage")
             .send()
             .await?
             .error_for_code()
@@ -216,7 +191,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn user_details_and_locker_usage_are_fetched_with_the_token() {
+    async fn account_details_are_fetched_with_the_token() {
         let mut server = Server::new_async().await;
         let details = server
             .mock("GET", "/users/details/v2")
@@ -234,20 +209,9 @@ mod tests {
             .expect(1)
             .create_async()
             .await;
-        let usage = server
-            .mock("GET", "/users/locker-usage")
-            .match_header("x-auth-token", "token")
-            .with_body(r#"{"isPaid":false,"isFamily":false,"usedFileCount":92,"fileLimit":100,"remainingFileCount":8,"usedStorage":266830722,"storageLimit":1073741824,"remainingStorage":806911102,"userFileCount":92,"userStorage":266830722}"#)
-            .expect(1)
-            .create_async()
-            .await;
         let client = make_client(server.url());
         client.set_auth_token(Some("token".into()));
         assert_eq!(client.account_details().await.unwrap().total_storage(), GB);
-        let locker = client.locker_usage().await.unwrap();
-        assert_eq!((locker.used_file_count, locker.file_limit), (92, 100));
-        assert_eq!(locker.remaining_storage, 806911102);
         details.assert_async().await;
-        usage.assert_async().await;
     }
 }

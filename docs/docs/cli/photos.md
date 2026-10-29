@@ -108,7 +108,7 @@ Files   339
 Family  none
 ```
 
-Total is the plan plus bonuses such as referrals. Status says whether the plan is active or expired; an expired plan still counts in Total, as in the apps. In a family, Plan, Status and Total describe the family admin's plan, Family lists the members, Family used and Family storage show the shared totals, and Your limit appears when the admin has capped your share; Free is then what is left under that cap. Locker has its own limits; see `ente locker usage` in [Accounts](./accounts.md#check-locker-usage).
+`Total` is the plan plus bonuses such as referrals, `Used` and `Files` are what Photos holds, and `Status` says whether the plan is active or expired. In a family the plan and total are the family admin's, and `Family` lists its members, followed by the shared totals and your own limit when the admin has set one.
 
 ## Read as JSON
 
@@ -119,7 +119,7 @@ Lists return arrays and `view` returns one object. IDs are strings; timestamps a
 | `album list`, `album view` | `id`, `name`, `type` (`album`, `folder`, `favorites`, `uncategorized`, `defaultHidden`, `quicklink`), `visibility` (`visible`, `archived`, `hidden`), `ownerId`, `updatedAt`                                                                                        |
 | `file list`, `file view`   | `id`, `name`, `type` (`image`, `video`, `livephoto`), `ownerId`, `albumIds`, `createdAt`, `updatedAt`; nullable `modifiedAt`, `location` (`latitude`, `longitude`), `caption`, `hash`, `dateTime`, `offsetTime`, `visibility`, `durationSeconds`, `width`, `height` |
 | `file download`            | `id`, `output`, `bytes`                                                                                                                                                                                                                                             |
-| `usage`                    | `email`, `planExpiresAt`, `planActive`, `totalBytes`, `usedBytes`, `freeBytes`, `planBytes`, `bonusBytes`; nullable `files`, `family` (`usedBytes`, `storageBytes`, `members` with `email`, `status`, `admin`, `usedBytes`, `storageLimitBytes`)                    |
+| `usage`                    | `email`, `planExpiresAt`, `planActive`, `totalBytes`, `usedBytes`, `freeBytes`, `planBytes`, `bonusBytes`; nullable `files`, `family` (`usedBytes`, `storageBytes`, `members`: `email`, `status`, `admin`, `usedBytes`, `storageLimitBytes`)                        |
 | `export`                   | See [Automation](./automation.md#export-summary)                                                                                                                                                                                                                    |
 
 ## Read offline
