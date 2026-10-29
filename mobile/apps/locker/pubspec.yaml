@@ -99,6 +99,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   freezed: 3.2.3
+  integration_test:
+    sdk: flutter
 
 flutter:
   # Temporary Flutter 3.47 rollout guards: preserve CocoaPods and existing

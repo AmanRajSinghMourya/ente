@@ -239,6 +239,20 @@ class CollectionApiClient {
       return;
     }
 
+    final userID = _config.getUserID();
+    if (userID == null ||
+        !fromCollection.isOwner(userID) ||
+        !toCollection.isOwner(userID) ||
+        fromCollection.isDeleted ||
+        toCollection.isDeleted) {
+      throw AssertionError(
+        "Can only move files between active collections owned by you",
+      );
+    }
+    if (files.any((file) => file.ownerID != userID)) {
+      throw AssertionError("Can only move files owned by you");
+    }
+
     final params = <String, dynamic>{};
     params["fromCollectionID"] = fromCollection.id;
     params["toCollectionID"] = toCollection.id;

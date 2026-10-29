@@ -170,7 +170,9 @@ class FavoritesService {
 
         Collection? targetCollection;
         for (final col in currentCollections) {
-          if (col.id != favCollection.id) {
+          if (col.id != favCollection.id &&
+              col.isOwner(currentUserID) &&
+              !col.isDeleted) {
             targetCollection = col;
             break;
           }
@@ -221,7 +223,9 @@ class FavoritesService {
 
       Collection? targetCollection;
       for (final col in currentCollections) {
-        if (col.id != favCollection.id) {
+        if (col.id != favCollection.id &&
+            col.isOwner(_config.getUserID()!) &&
+            !col.isDeleted) {
           targetCollection = col;
           break;
         }
