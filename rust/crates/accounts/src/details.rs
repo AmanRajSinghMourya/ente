@@ -78,9 +78,10 @@ impl AccountDetails {
     }
 
     pub fn free_storage(&self) -> i64 {
+        let free = self.total_storage() - self.family().map_or(self.usage, FamilyData::usage);
         match self.family_member().and_then(|member| member.storage_limit) {
-            Some(limit) => limit - self.usage,
-            None => self.total_storage() - self.family().map_or(self.usage, FamilyData::usage),
+            Some(limit) => free.min(limit - self.usage),
+            None => free,
         }
         .max(0)
     }

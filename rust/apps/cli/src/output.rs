@@ -374,7 +374,7 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
         let family = details.family().map(|family| {
             json_value!({
                 "usedBytes": family.usage(),
-                "storageBytes": family.storage,
+                "storageBytes": details.total_storage(),
                 "members": family.members.iter().map(|member| json_value!({
                     "email": member.email, "status": member.status, "admin": member.is_admin,
                     "usedBytes": member.usage, "storageLimitBytes": member.storage_limit,
@@ -430,7 +430,7 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
             fields.extend([
                 ("Family", members.join(", ")),
                 ("Family used", size(family.usage())),
-                ("Family storage", size(family.storage)),
+                ("Family storage", size(details.total_storage())),
             ]);
             if let Some(limit) = details.family_member().and_then(|m| m.storage_limit) {
                 fields.push(("Your limit", size(limit)));

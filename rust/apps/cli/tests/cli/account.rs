@@ -743,7 +743,7 @@ fn family_usage_reports_the_admin_plan_and_the_member_limit() {
     assert_eq!(usage["totalBytes"], 210 * GB);
     assert_eq!(usage["freeBytes"], 2 * GB);
     assert_eq!(usage["family"]["usedBytes"], 53 * GB);
-    assert_eq!(usage["family"]["storageBytes"], 200 * GB);
+    assert_eq!(usage["family"]["storageBytes"], 210 * GB);
     assert_eq!(
         usage["family"]["members"][2],
         json!({"email": "new@example.org", "status": "INVITED", "admin": false, "usedBytes": 0, "storageLimitBytes": null})
@@ -755,12 +755,53 @@ fn family_usage_reports_the_admin_plan_and_the_member_limit() {
     );
     assert!(plain.contains(
         "Family          admin@example.org (admin), fixture@example.org, new@example.org (invited)\n\
-         Family used     53 GB\nFamily storage  200 GB\n\
+         Family used     53 GB\nFamily storage  210 GB\n\
          Your limit      5 GB\n"
     ));
     assert!(!plain.contains("Shared"));
     assert!(usage.get("sharedAlbums").is_none());
     details.assert();
+}
+
+#[test]
+fn family_usage_free_space_respects_both_quotas() {
+    for (family_used, member_limit, free, free_text) in [
+        (53, Some(5), 2, "2 GB"),
+        (209, Some(5), 1, "1 GB"),
+        (210, Some(5), 0, "0 bytes"),
+        (211, Some(5), 0, "0 bytes"),
+        (53, Some(3), 0, "0 bytes"),
+        (53, Some(2), 0, "0 bytes"),
+        (209, None, 1, "1 GB"),
+    ] {
+        let mut server = mockito::Server::new();
+        let home = TestHome::new();
+        home.seed(&server.url());
+        let family = json!({"storage": 200 * GB, "expiryTime": 4942020944746699i64, "members": [
+            {"email": "admin@example.org", "status": "ACCEPTED", "usage": (family_used - 3) * GB, "isAdmin": true},
+            {"email": "fixture@example.org", "status": "ACCEPTED", "usage": 3 * GB,
+                "storageLimit": member_limit.map(|limit| limit * GB)}
+        ]});
+        let details = server
+            .mock("GET", "/users/details/v2")
+            .match_query(Matcher::Any)
+            .with_body(details_body(family))
+            .expect(2)
+            .create();
+        let usage = home.json(&["photos", "usage"]);
+        assert_eq!(
+            usage["freeBytes"],
+            free * GB,
+            "family used: {family_used} GB; member limit: {member_limit:?} GB"
+        );
+        let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout).unwrap();
+        let free_line = plain
+            .lines()
+            .find(|line| line.starts_with("Free "))
+            .unwrap();
+        assert_eq!(free_line.strip_prefix("Free").unwrap().trim(), free_text);
+        details.assert();
+    }
 }
 
 #[test]
