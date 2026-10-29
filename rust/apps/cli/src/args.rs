@@ -380,7 +380,7 @@ Examples:
         after_long_help = "Reads your account details from the server; requires network access.
 In a family, the plan and total are the family admin's, and a member limit set by the admin caps your free space.
 JSON fields: email, planExpiresAt (UTC), planActive, totalBytes, usedBytes, freeBytes, planBytes, bonusBytes, files, family.
-planActive is false once the plan has expired; the plan still counts in totalBytes, as in the apps.
+planActive is false once the plan has expired; an expired personal plan still counts in totalBytes, as in the apps.
 files is null when the server has no count.
 family is null outside a family; otherwise it contains usedBytes, storageBytes and members.
 Each member has email, status, admin, usedBytes and storageLimitBytes (null without a cap)."
