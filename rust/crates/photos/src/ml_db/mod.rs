@@ -13,6 +13,7 @@ pub use queries::clip::{
     ClipRow, EmbeddingVector,
 };
 pub use queries::clusters::{ClusterCentroidRow, ClusterSummary};
+pub(crate) use queries::faces::try_file_id_from_face_id;
 pub use queries::faces::{
     FACE_ML_VERSION, FaceDbInfoForClustering, FaceForClustering, FaceRow, FaceWithoutEmbedding,
 };

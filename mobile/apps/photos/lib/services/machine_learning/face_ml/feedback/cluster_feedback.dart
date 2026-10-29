@@ -18,6 +18,7 @@ import "package:photos/models/base/id.dart";
 import "package:photos/models/file/file.dart";
 import "package:photos/models/ml/face/person.dart";
 import "package:photos/service_locator.dart";
+import "package:photos/services/machine_learning/face_ml/face_clustering/face_clustering.dart";
 import "package:photos/services/machine_learning/face_ml/face_clustering/face_clustering_service.dart";
 import "package:photos/services/machine_learning/face_ml/face_filtering/face_filtering_constants.dart";
 import "package:photos/services/machine_learning/face_ml/person/person_service.dart";
@@ -209,30 +210,19 @@ class ClusterFeedbackService<T> {
         return;
       }
 
-      final embeddings = await mlDataDB.getFaceEmbeddingMapForFaces(faceIDs);
-      if (embeddings.isEmpty) {
+      final fileIDToCreationTime = await FilesDB.instance
+          .getFileIDToCreationTime();
+
+      final newFaceIdToClusterID = await FaceClustering.instance.reclusterFaces(
+        faceIDs,
+        fileIDToCreationTime: fileIDToCreationTime,
+        distanceThreshold: 0.20,
+      );
+      if (newFaceIdToClusterID.isEmpty) {
         _logger.severe('No embeddings found for faces $faceIDs');
         Bus.instance.fire(PeopleChangedEvent());
         return;
       }
-
-      final fileIDToCreationTime = await FilesDB.instance
-          .getFileIDToCreationTime();
-
-      final clusterResult = await FaceClusteringService.instance
-          .predictWithinClusterComputer(
-            embeddings,
-            fileIDToCreationTime: fileIDToCreationTime,
-            distanceThreshold: 0.20,
-          );
-      if (clusterResult.isEmpty) {
-        _logger.severe('No clusters found or something went wrong');
-        return;
-      }
-      final newFaceIdToClusterID = clusterResult.newFaceIdToCluster;
-
-      await mlDataDB.forceUpdateClusterIds(newFaceIdToClusterID);
-      await mlDataDB.clusterSummaryUpdate(clusterResult.newClusterSummaries);
 
       // Record rejection so removed faces are not suggested again.
       final notClusterIdToPersonId = <String, String>{};
@@ -305,32 +295,20 @@ class ClusterFeedbackService<T> {
         final fileID = getFileIdFromFaceId<int>(faceID);
         return files.any((file) => file.uploadedFileID == fileID);
       });
-      final embeddings = await mlDataDB.getFaceEmbeddingMapForFaces(faceIDs);
+      final fileIDToCreationTime = await FilesDB.instance
+          .getFileIDToCreationTime();
 
-      if (faceIDs.isEmpty || embeddings.isEmpty) {
+      final newFaceIdToClusterID = await FaceClustering.instance.reclusterFaces(
+        faceIDs,
+        fileIDToCreationTime: fileIDToCreationTime,
+        distanceThreshold: 0.20,
+      );
+      if (newFaceIdToClusterID.isEmpty) {
         _logger.severe(
           'No faces or embeddings found for cluster $clusterID that match the given files',
         );
         return;
       }
-
-      final fileIDToCreationTime = await FilesDB.instance
-          .getFileIDToCreationTime();
-
-      final clusterResult = await FaceClusteringService.instance
-          .predictWithinClusterComputer(
-            embeddings,
-            fileIDToCreationTime: fileIDToCreationTime,
-            distanceThreshold: 0.20,
-          );
-      if (clusterResult.isEmpty) {
-        _logger.severe('No clusters found or something went wrong');
-        return;
-      }
-      final newFaceIdToClusterID = clusterResult.newFaceIdToCluster;
-
-      await mlDataDB.forceUpdateClusterIds(newFaceIdToClusterID);
-      await mlDataDB.clusterSummaryUpdate(clusterResult.newClusterSummaries);
 
       Bus.instance.fire(
         PeopleChangedEvent(
@@ -1430,6 +1408,32 @@ class ClusterFeedbackService<T> {
       _logger.info('[CheckMixedClusters] No mixed clusters found');
     }
     return susClusters;
+  }
+
+  Future<Map<String, List<String>>> splitCluster(String clusterID) async {
+    final faceIDs = await mlDataDB.getFaceIDsForCluster(clusterID);
+    final fileIDToCreationTime = await FilesDB.instance
+        .getFileIDToCreationTime();
+    final newFaceIdToClusterID = await FaceClustering.instance.reclusterFaces(
+      faceIDs.toList(),
+      fileIDToCreationTime: fileIDToCreationTime,
+      distanceThreshold: 0.22,
+    );
+    if (newFaceIdToClusterID.isEmpty) {
+      _logger.warning('No embeddings found for cluster $clusterID');
+      return {};
+    }
+    await mlDataDB.deleteClusterSummary(clusterID);
+
+    final newClusterIDToFaceIDs = <String, List<String>>{};
+    for (final MapEntry(key: faceID, value: newClusterID)
+        in newFaceIdToClusterID.entries) {
+      newClusterIDToFaceIDs.putIfAbsent(newClusterID, () => []).add(faceID);
+    }
+    _logger.info(
+      'Split cluster $clusterID into ${newClusterIDToFaceIDs.length} clusters',
+    );
+    return newClusterIDToFaceIDs;
   }
 
   Future<ClusteringResult> breakUpCluster(

@@ -93,6 +93,7 @@ pub struct FileView {
     duration_seconds: Option<u64>,
     width: Option<u32>,
     height: Option<u32>,
+    size_bytes: Option<u64>,
     visibility: Option<&'static str>,
 }
 
@@ -124,6 +125,7 @@ impl FileView {
             duration_seconds: file.duration_seconds,
             width: file.width,
             height: file.height,
+            size_bytes: file.size,
             visibility: file.visibility.map(Visibility::name),
         })
     }
@@ -264,7 +266,7 @@ pub fn files(
         files,
         args,
         as_json,
-        ["ID", "NAME", "TYPE", "CREATED", "ALBUMS"],
+        ["ID", "NAME", "TYPE", "CREATED", "SIZE", "ALBUMS"],
         "No files.",
         |file| {
             [
@@ -272,6 +274,9 @@ pub fn files(
                 escape_controls(&file.name),
                 type_label(file.kind).to_owned(),
                 file.created_at,
+                file.size_bytes
+                    .map(|bytes| bytes.to_string())
+                    .unwrap_or_default(),
                 file.album_ids.join(","),
             ]
         },
@@ -309,6 +314,12 @@ pub fn file(file: &FileView) -> Result<()> {
         ("Duration", file.duration_seconds.map(|s| format!("{s} s"))),
         ("Width", file.width.map(|w| w.to_string())),
         ("Height", file.height.map(|h| h.to_string())),
+        (
+            "Size",
+            file.size_bytes
+                .and_then(|bytes| i64::try_from(bytes).ok())
+                .map(file_size),
+        ),
         ("Hash", file.hash.as_deref().map(escape_controls)),
     ] {
         if let Some(value) = value {
@@ -431,11 +442,29 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
 }
 
 pub fn storage_size(bytes: i64) -> String {
-    for (unit, divisor) in [
-        ("TB", 1024_i64.pow(4)),
-        ("GB", 1024_i64.pow(3)),
-        ("MB", 1024_i64.pow(2)),
-    ] {
+    scaled_size(
+        bytes,
+        &[
+            ("TB", 1024_i64.pow(4)),
+            ("GB", 1024_i64.pow(3)),
+            ("MB", 1024_i64.pow(2)),
+        ],
+    )
+}
+
+fn file_size(bytes: i64) -> String {
+    scaled_size(
+        bytes,
+        &[
+            ("GB", 1024_i64.pow(3)),
+            ("MB", 1024_i64.pow(2)),
+            ("KB", 1024_i64),
+        ],
+    )
+}
+
+fn scaled_size(bytes: i64, units: &[(&str, i64)]) -> String {
+    for &(unit, divisor) in units {
         if bytes >= divisor {
             let size = format!("{:.2}", bytes as f64 / divisor as f64);
             return format!(

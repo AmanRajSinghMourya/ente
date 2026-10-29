@@ -4,6 +4,7 @@ import "package:photos/db/ml/rust_db.dart";
 import "package:photos/events/people_changed_event.dart";
 import "package:photos/services/machine_learning/face_ml/face_clustering/face_clustering.dart";
 import "package:photos/services/machine_learning/face_ml/face_clustering/face_clustering_service.dart";
+import "package:photos/services/machine_learning/ml_result.dart";
 import "package:photos/services/machine_learning/ml_run_control.dart";
 import "package:photos/src/rust/api/ml_db_api.dart" as rust;
 
@@ -69,5 +70,21 @@ class StoreFaceClustering implements FaceClustering {
     } finally {
       run.dispose();
     }
+  }
+
+  @override
+  Future<Map<String, String>> reclusterFaces(
+    List<String> faceIDs, {
+    required Map<int, int> fileIDToCreationTime,
+    required double distanceThreshold,
+  }) async {
+    final fileIDs = faceIDs.map(getFileIdFromFaceId<int>).toSet();
+    return (await _mlDataDB.store).reclusterFaces(
+      faceIds: faceIDs,
+      fileCreationTimes: {
+        for (final fileID in fileIDs) fileID: ?fileIDToCreationTime[fileID],
+      },
+      distanceThreshold: distanceThreshold,
+    );
   }
 }

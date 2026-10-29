@@ -9,8 +9,6 @@ import 'package:logging/logging.dart';
 import 'package:photos/core/configuration.dart';
 import 'package:photos/core/event_bus.dart';
 import "package:photos/db/files_db.dart";
-import 'package:photos/db/ml/base.dart';
-import "package:photos/db/ml/db.dart";
 import "package:photos/events/people_changed_event.dart";
 import 'package:photos/events/subscription_purchased_event.dart';
 import "package:photos/models/file/file.dart";
@@ -112,7 +110,6 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
   final GlobalKey shareButtonKey = GlobalKey();
   bool isQuickLink = false;
   late GalleryType galleryType;
-  late final IMLDataDB mlDataDB = MLDataDB.instance;
 
   @override
   void initState() {
@@ -328,18 +325,8 @@ class _AppBarWidgetState extends State<ClusterAppBar> {
       firstButtonLabel: context.strings.confirm,
       firstButtonOnTap: () async {
         try {
-          final breakupResult = await ClusterFeedbackService.instance
-              .breakUpCluster(widget.clusterID);
-          final Map<String, List<String>> newClusterIDToFaceIDs =
-              breakupResult.newClusterIdToFaceIds;
-          final Map<String, String> newFaceIdToClusterID =
-              breakupResult.newFaceIdToCluster;
-
-          await mlDataDB.deleteClusterSummary(widget.clusterID);
-          await MLDataDB.instance.clusterSummaryUpdate(
-            breakupResult.newClusterSummaries,
-          );
-          await mlDataDB.updateFaceIdToClusterId(newFaceIdToClusterID);
+          final newClusterIDToFaceIDs = await ClusterFeedbackService.instance
+              .splitCluster(widget.clusterID);
 
           biggestClusterID = '';
           int biggestClusterSize = 0;

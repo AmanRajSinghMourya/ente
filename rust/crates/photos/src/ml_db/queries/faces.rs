@@ -604,7 +604,7 @@ pub(super) fn file_id_from_face_id(face_id: &str) -> Result<i64> {
         .ok_or_else(|| Error::Invalid(format!("Error parsing faceId: {face_id}")))
 }
 
-fn try_file_id_from_face_id(face_id: &str) -> Option<i64> {
+pub(crate) fn try_file_id_from_face_id(face_id: &str) -> Option<i64> {
     face_id
         .split_once('_')
         .and_then(|(file_id, _)| file_id.parse().ok())

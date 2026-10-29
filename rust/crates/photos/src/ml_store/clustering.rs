@@ -4,9 +4,11 @@ use std::ops::Range;
 
 use super::fill::decode_centroid;
 use super::{CLUSTER_CENTROID_DIMENSIONS, Error, MlStore, Result};
-use crate::face_clustering::{ClusterMean, Face, IncrementalFace, cluster_incrementally};
-use crate::ml_db::ClusterSummary;
-use crate::ml_db::vector_encoding::encode_evector;
+use crate::face_clustering::{
+    ClusterMean, Face, IncrementalFace, cluster_incrementally, new_cluster_id, recluster,
+};
+use crate::ml_db::vector_encoding::{decode_evector, encode_evector};
+use crate::ml_db::{ClusterSummary, try_file_id_from_face_id};
 
 const BUCKET_SIZE: usize = 10_000;
 const BUCKET_STEP: usize = 7_500;
@@ -74,12 +76,7 @@ impl MlStore {
         &self,
         mut request: FaceClusteringRequest,
     ) -> Result<FaceClusteringRun> {
-        if !request.distance_threshold.is_finite() {
-            return Err(Error::InvalidArgument(format!(
-                "face clustering distance threshold {} is not finite",
-                request.distance_threshold
-            )));
-        }
+        check_distance_threshold(request.distance_threshold)?;
         let mut faces = Vec::new();
         let mut missing_files = HashSet::new();
         let mut invalid_faces = 0;
@@ -150,12 +147,8 @@ impl MlStore {
             run.distance_threshold,
             &run.cluster_means,
         );
-        let summary: HashMap<String, ClusterSummary> = clustering
-            .means
-            .iter()
-            .map(|(cluster_id, mean)| (cluster_id.clone(), cluster_summary(mean)))
-            .collect();
-        let written = self.assign_face_clusters(&clustering.assignments, &summary);
+        let written =
+            self.assign_face_clusters(&clustering.assignments, &summaries(&clustering.means));
         if let Ok(()) | Err(Error::Index(_)) = written {
             run.record(bucket.clone(), &clustering.assignments);
             run.cluster_means.extend(clustering.means);
@@ -166,6 +159,46 @@ impl MlStore {
                 processed_faces: bucket.end,
             })
         })
+    }
+
+    pub fn recluster_faces(
+        &self,
+        face_ids: &[String],
+        file_creation_times: &HashMap<i64, i64>,
+        distance_threshold: f64,
+    ) -> Result<HashMap<String, String>> {
+        check_distance_threshold(distance_threshold)?;
+        let mut faces = Vec::new();
+        let mut unclusterable_face_ids = Vec::new();
+        for (face_id, embedding) in self.db.get_face_embedding_rows_for_faces(face_ids)? {
+            let embedding = decode_evector(&embedding)
+                .ok()
+                .map(|values| values.into_iter().map(|value| value as f32).collect())
+                .filter(|embedding: &Vec<f32>| is_clusterable(embedding));
+            match embedding {
+                Some(embedding) => faces.push(Face {
+                    creation_time: try_file_id_from_face_id(&face_id)
+                        .and_then(|file_id| file_creation_times.get(&file_id).copied()),
+                    face_id,
+                    embedding,
+                }),
+                None => unclusterable_face_ids.push(face_id),
+            }
+        }
+        let mut clustering = recluster(faces, distance_threshold);
+        clustering.assignments.extend(
+            unclusterable_face_ids
+                .into_iter()
+                .map(|face_id| (face_id, new_cluster_id())),
+        );
+        match self.assign_face_clusters(&clustering.assignments, &summaries(&clustering.means)) {
+            Ok(()) => {}
+            Err(Error::Index(error)) => {
+                log::warn!("cluster centroid index write failed while reclustering faces: {error}");
+            }
+            Err(error) => return Err(error),
+        }
+        Ok(clustering.assignments)
     }
 
     fn cluster_means(&self) -> Result<HashMap<String, ClusterMean>> {
@@ -182,17 +215,33 @@ impl MlStore {
     }
 }
 
+fn check_distance_threshold(distance_threshold: f64) -> Result<()> {
+    if distance_threshold.is_finite() {
+        Ok(())
+    } else {
+        Err(Error::InvalidArgument(format!(
+            "face clustering distance threshold {distance_threshold} is not finite"
+        )))
+    }
+}
+
 fn is_clusterable(embedding: &[f32]) -> bool {
     embedding.len() == CLUSTER_CENTROID_DIMENSIONS
         && embedding.iter().all(|value| value.is_finite())
 }
 
-fn cluster_summary(mean: &ClusterMean) -> ClusterSummary {
-    let values: Vec<f64> = mean.mean.iter().copied().map(f64::from).collect();
-    ClusterSummary {
-        avg: encode_evector(&values),
-        count: mean.count as i64,
-    }
+fn summaries(means: &HashMap<String, ClusterMean>) -> HashMap<String, ClusterSummary> {
+    means
+        .iter()
+        .map(|(cluster_id, mean)| {
+            let values: Vec<f64> = mean.mean.iter().copied().map(f64::from).collect();
+            let summary = ClusterSummary {
+                avg: encode_evector(&values),
+                count: mean.count as i64,
+            };
+            (cluster_id.clone(), summary)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -502,6 +551,113 @@ mod tests {
         assert_eq!(groups(&store), [face_ids(1..=7)]);
     }
 
+    fn times(file_ids: impl IntoIterator<Item = i64>) -> HashMap<i64, i64> {
+        file_ids
+            .into_iter()
+            .map(|file_id| (file_id, file_id))
+            .collect()
+    }
+
+    fn face_id_list(file_ids: impl IntoIterator<Item = i64>) -> Vec<String> {
+        file_ids
+            .into_iter()
+            .map(|file_id| format!("{file_id}_0"))
+            .collect()
+    }
+
+    #[test]
+    fn reclustering_moves_the_given_faces_into_new_clusters() {
+        let (_directory, store) = open();
+        store.fill_cluster_centroid_index(false).unwrap();
+        seed(
+            &store,
+            &[(1, 0.0), (2, 2.0), (3, 0.0), (4, 90.0), (5, 92.0), (6, 0.0)],
+        );
+        assign(
+            &store,
+            &[(1, "p"), (2, "p"), (3, "p"), (4, "p"), (5, "p"), (6, "p")],
+        );
+
+        let assignments = store
+            .recluster_faces(&face_id_list(1..=5), &times(1..=4), THRESHOLD)
+            .unwrap();
+
+        assert_eq!(assignments.len(), 5);
+        assert!(assignments.values().all(|cluster_id| cluster_id != "p"));
+        assert_eq!(
+            groups(&store),
+            [face_ids([1, 2, 3]), face_ids([4, 5]), face_ids([6])]
+        );
+        for (file_id, members) in [(1, 3), (4, 2)] {
+            let cluster_id = cluster_of(&store, file_id).unwrap();
+            assert_eq!(assignments[&format!("{file_id}_0")], cluster_id);
+            assert_eq!(summary_of(&store, &cluster_id).1, members);
+            assert!(store.contains(Index::ClusterCentroid, &cluster_id).unwrap());
+        }
+    }
+
+    #[test]
+    fn reclustering_moves_faces_without_a_valid_embedding_into_their_own_clusters() {
+        let (_directory, store) = open();
+        store.fill_cluster_centroid_index(false).unwrap();
+        seed(&store, &[(1, 0.0), (2, 0.0)]);
+        let mut invalid = face(3, 0.0);
+        invalid.embedding[5] = f64::NAN;
+        let mut short = face(4, 0.0);
+        short.embedding.truncate(3);
+        store.db().bulk_insert_faces(&[invalid, short]).unwrap();
+        assign(&store, &[(1, "p"), (2, "p"), (3, "p"), (4, "p")]);
+
+        let assignments = store
+            .recluster_faces(&face_id_list(1..=5), &times(1..=5), THRESHOLD)
+            .unwrap();
+
+        let mut moved: Vec<&String> = assignments.keys().collect();
+        moved.sort();
+        assert_eq!(moved, face_ids(1..=4).iter().collect::<Vec<_>>());
+        assert_eq!(
+            groups(&store),
+            [face_ids([1, 2]), face_ids([3]), face_ids([4])]
+        );
+        assert!(store.db().get_face_ids_for_cluster("p").unwrap().is_empty());
+        for file_id in [3, 4] {
+            let cluster_id = cluster_of(&store, file_id).unwrap();
+            assert!(
+                store
+                    .db()
+                    .get_cluster_to_cluster_summary(std::slice::from_ref(&cluster_id))
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(!store.contains(Index::ClusterCentroid, &cluster_id).unwrap());
+        }
+        assert!(
+            store
+                .recluster_faces(&face_id_list([9]), &times([9]), THRESHOLD)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn reclustering_keeps_its_assignments_when_the_centroid_write_fails() {
+        let (directory, store) = open();
+        fs::create_dir(index_path(&directory, Index::ClusterCentroid)).unwrap();
+        store
+            .db()
+            .set_meta("cluster_centroid.fill", "filled")
+            .unwrap();
+        seed(&store, &[(1, 0.0), (2, 0.0)]);
+
+        let assignments = store
+            .recluster_faces(&face_id_list([1, 2]), &times([1, 2]), THRESHOLD)
+            .unwrap();
+
+        assert_eq!(assignments.len(), 2);
+        assert_eq!(groups(&store), [face_ids([1, 2])]);
+        assert_eq!(meta(&store, "cluster_centroid.fill"), None);
+    }
+
     #[test]
     fn non_finite_thresholds_are_rejected() {
         let (_directory, store) = open();
@@ -509,6 +665,10 @@ mod tests {
         invalid.distance_threshold = f64::NAN;
         assert!(matches!(
             store.start_face_clustering(invalid),
+            Err(Error::InvalidArgument(_))
+        ));
+        assert!(matches!(
+            store.recluster_faces(&[], &HashMap::new(), f64::INFINITY),
             Err(Error::InvalidArgument(_))
         ));
     }

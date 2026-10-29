@@ -155,4 +155,24 @@ class DartFaceClustering implements FaceClustering {
       bucket++;
     }
   }
+
+  @override
+  Future<Map<String, String>> reclusterFaces(
+    List<String> faceIDs, {
+    required Map<int, int> fileIDToCreationTime,
+    required double distanceThreshold,
+  }) async {
+    final embeddings = await _mlDataDB.getFaceEmbeddingMapForFaces(faceIDs);
+    if (embeddings.isEmpty) return {};
+    final clusterResult = await FaceClusteringService.instance
+        .predictWithinClusterComputer(
+          embeddings,
+          fileIDToCreationTime: fileIDToCreationTime,
+          distanceThreshold: distanceThreshold,
+        );
+    if (clusterResult.isEmpty) return {};
+    await _mlDataDB.forceUpdateClusterIds(clusterResult.newFaceIdToCluster);
+    await _mlDataDB.clusterSummaryUpdate(clusterResult.newClusterSummaries);
+    return clusterResult.newFaceIdToCluster;
+  }
 }

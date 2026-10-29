@@ -16,4 +16,10 @@ abstract class FaceClustering {
     required Map<String, List<String>> rejectedClusterIDsByFaceID,
     required MlRunControl control,
   });
+
+  Future<Map<String, String>> reclusterFaces(
+    List<String> faceIDs, {
+    required Map<int, int> fileIDToCreationTime,
+    required double distanceThreshold,
+  });
 }

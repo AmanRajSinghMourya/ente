@@ -303,6 +303,17 @@ impl MlStore {
             .map(Into::into))
     }
 
+    pub fn recluster_faces(
+        &self,
+        face_ids: Vec<String>,
+        file_creation_times: HashMap<i64, i64>,
+        distance_threshold: f64,
+    ) -> Result<HashMap<String, String>, MlDbError> {
+        Ok(self
+            .inner
+            .recluster_faces(&face_ids, &file_creation_times, distance_threshold)?)
+    }
+
     pub fn clear_all(&self) -> Result<(), MlDbError> {
         Ok(self.inner.clear_all()?)
     }

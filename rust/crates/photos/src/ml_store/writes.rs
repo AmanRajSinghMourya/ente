@@ -78,6 +78,9 @@ impl MlStore {
         face_id_to_cluster_id: &HashMap<String, String>,
         summary: &HashMap<String, ClusterSummary>,
     ) -> Result<()> {
+        if face_id_to_cluster_id.is_empty() {
+            return Ok(());
+        }
         let _mutations = self.lock_mutations();
         self.upsert(Index::ClusterCentroid, &centroid_batch(summary), || {
             self.db

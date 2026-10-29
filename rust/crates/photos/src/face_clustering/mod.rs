@@ -94,7 +94,7 @@ fn newest_first(creation_time: Option<i64>) -> (bool, Reverse<Option<i64>>) {
     (creation_time.is_some(), Reverse(creation_time))
 }
 
-fn new_cluster_id() -> String {
+pub(crate) fn new_cluster_id() -> String {
     let suffix: String = iter::repeat_with(|| random_bytes(CLUSTER_ID_LENGTH * 2))
         .flatten()
         .filter_map(|byte| CLUSTER_ID_ALPHABET.get(usize::from(byte & CLUSTER_ID_MASK)))
