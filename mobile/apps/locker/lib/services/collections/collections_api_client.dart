@@ -239,19 +239,7 @@ class CollectionApiClient {
       return;
     }
 
-    final userID = _config.getUserID();
-    if (userID == null ||
-        !fromCollection.isOwner(userID) ||
-        !toCollection.isOwner(userID) ||
-        fromCollection.isDeleted ||
-        toCollection.isDeleted) {
-      throw AssertionError(
-        "Can only move files between active collections owned by you",
-      );
-    }
-    if (files.any((file) => file.ownerID != userID)) {
-      throw AssertionError("Can only move files owned by you");
-    }
+    _validateMoveRequest(files, fromCollection, toCollection);
 
     final params = <String, dynamic>{};
     params["fromCollectionID"] = fromCollection.id;
@@ -304,6 +292,34 @@ class CollectionApiClient {
         );
       }
       await _enteDio.post("/collections/move-files", data: params);
+    }
+  }
+
+  void _validateMoveRequest(
+    List<EnteFile> files,
+    Collection fromCollection,
+    Collection toCollection,
+  ) {
+    final userID = _config.getUserID();
+    if (userID == null) {
+      throw AssertionError("Must be signed in to move files");
+    }
+    if (!toCollection.isOwner(userID)) {
+      throw AssertionError("Can't move to a collection you don't own");
+    }
+    if (!fromCollection.isOwner(userID)) {
+      throw AssertionError("Can't move from a collection you don't own");
+    }
+    if (toCollection.isDeleted) {
+      throw AssertionError("Can't move to a deleted collection");
+    }
+    if (fromCollection.isDeleted) {
+      throw AssertionError("Can't move from a deleted collection");
+    }
+    for (final file in files) {
+      if (file.ownerID != userID) {
+        throw AssertionError("Can only move files owned by you");
+      }
     }
   }
 
