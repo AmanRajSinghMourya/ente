@@ -1116,10 +1116,6 @@ impl TestHome {
     }
 
     fn seed(&self, origin: &str) {
-        self.seed_sessions(origin, json!({"photos": {"token": [0xfb, 0xef]}}));
-    }
-
-    fn seed_sessions(&self, origin: &str, sessions: Value) {
         let id = "e6b355f0-5d4d-4fc3-b32c-a6c8f52b8210";
         self.write_vault(&json!({
             "selected": id,
@@ -1130,7 +1126,7 @@ impl TestHome {
                     "master_key": vec![0u8; 32], "recovery_key": vec![0u8; 32],
                     "secret_key": vec![0u8; 32]
                 },
-                "sessions": sessions
+                "sessions": {"photos": {"token": [0xfb, 0xef]}}
             }]
         }));
     }
@@ -1179,8 +1175,6 @@ fn failure(output: &Output) -> String {
     assert!(!output.status.success(), "command unexpectedly succeeded");
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
-
-const GB: i64 = 1 << 30;
 
 mod account;
 

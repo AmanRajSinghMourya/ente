@@ -661,6 +661,21 @@ fn interactive_creation_password_retry_and_enrollment() -> ente_test_support::Te
     })
 }
 
+const GB: i64 = 1 << 30;
+
+fn seed_sessions(home: &TestHome, origin: &str, sessions: Value) {
+    let id = "e6b355f0-5d4d-4fc3-b32c-a6c8f52b8210";
+    home.write_vault(&json!({
+        "selected": id,
+        "accounts": [{
+            "storage_id": id, "db_key": vec![42u8; 32], "name": "fixture", "email": "fixture@example.org",
+            "origin": origin, "user_id": 9007199254740993i64,
+            "identity": {"master_key": vec![0u8; 32], "recovery_key": vec![0u8; 32], "secret_key": vec![0u8; 32]},
+            "sessions": sessions
+        }]
+    }));
+}
+
 fn details_body(family: Value) -> String {
     json!({
         "email": "fixture@example.org", "usage": 3 * GB, "fileCount": 339, "sharedCollectionsCount": 2,
@@ -754,7 +769,8 @@ fn locker_usage_needs_a_locker_login() {
     let home = TestHome::new();
     home.seed(&server.url());
     assert!(failure(&home.run(&["locker", "usage"])).contains("not logged into Ente Locker"));
-    home.seed_sessions(
+    seed_sessions(
+        &home,
         &server.url(),
         json!({"photos": {"token": [0xfb, 0xef]}, "locker": {"token": [0x01, 0x02]}}),
     );
@@ -792,7 +808,7 @@ fn usage_counts_photos_files_and_needs_a_photos_login() {
         .expect(2)
         .create();
     for (app, token) in [("locker", [1u8, 2]), ("auth", [3, 4])] {
-        home.seed_sessions(&server.url(), json!({app: {"token": token}}));
+        seed_sessions(&home, &server.url(), json!({app: {"token": token}}));
         let error = failure(&home.run(&["photos", "usage"]));
         assert!(error.contains("not logged into Ente Photos"), "{error}");
         assert!(
@@ -800,13 +816,18 @@ fn usage_counts_photos_files_and_needs_a_photos_login() {
             "{error}"
         );
     }
-    home.seed_sessions(
+    seed_sessions(
+        &home,
         &server.url(),
         json!({"locker": {"token": [1, 2]}, "photos": {"token": [0xfb, 0xef]}}),
     );
     let with_locker = home.json(&["photos", "usage"]);
     assert_eq!(with_locker["files"], 339);
-    home.seed_sessions(&server.url(), json!({"photos": {"token": [0xfb, 0xef]}}));
+    seed_sessions(
+        &home,
+        &server.url(),
+        json!({"photos": {"token": [0xfb, 0xef]}}),
+    );
     assert_eq!(home.json(&["photos", "usage"]), with_locker);
     details.assert();
 }
@@ -817,7 +838,8 @@ fn usage_commands_report_server_errors_and_refuse_offline_or_missing_accounts() 
     let home = TestHome::new();
     assert!(failure(&home.run(&["photos", "usage"])).contains("no accounts"));
     assert!(failure(&home.run(&["locker", "usage"])).contains("no accounts"));
-    home.seed_sessions(
+    seed_sessions(
+        &home,
         &server.url(),
         json!({"photos": {"token": [0xfb, 0xef]}, "locker": {"token": [1, 2]}}),
     );

@@ -72,7 +72,7 @@ Paid           no
 Family         none
 ```
 
-With `--json`, returns one object: `usedFiles`, `fileLimit`, `remainingFiles`, `usedBytes`, `storageLimitBytes`, `remainingBytes` (integers); `paid`, `family` (booleans).
+With `--json` the result is one object with `usedFiles`, `fileLimit`, `remainingFiles`, `usedBytes`, `storageLimitBytes`, `remainingBytes`, `paid` and `family`.
 
 ## Create an account
 

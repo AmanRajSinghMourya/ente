@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use super::*;
 
+const GB: i64 = 1 << 30;
 const PASSWORD: &str = "disposable-cli-integration-password";
 
 #[test]

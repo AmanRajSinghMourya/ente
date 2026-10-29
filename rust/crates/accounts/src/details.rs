@@ -63,7 +63,6 @@ impl AccountDetails {
         self.plan_expiry_time() >= now_micros
     }
 
-    // A family member's own subscription is irrelevant while the family plan applies.
     pub fn plan_storage(&self) -> i64 {
         self.family()
             .map_or(self.subscription.storage, |family| family.storage)
@@ -87,7 +86,6 @@ impl AccountDetails {
             .find(|member| member.email.trim() == self.email.trim())
     }
 
-    // Plan storage plus bonuses; the family admin's plan when part of a family.
     pub fn total_storage(&self) -> i64 {
         self.plan_storage() + self.storage_bonus
     }

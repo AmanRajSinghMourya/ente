@@ -377,10 +377,9 @@ Examples:
     Export(PhotosExportArgs),
     #[command(
         about = "Show storage usage and file count",
-        after_long_help = "Requires network access.
-Total is the plan plus bonuses, or the family admin's plan in a family; Free honours a member limit when the admin set one.
-With --json, returns one object.
-In a family, Plan and Status describe the family plan. Status is active or expired; an expired plan still counts in Total, as in the apps.
+        after_long_help = "Requires network access. With --json, returns one object.
+Total is the plan plus bonuses, or the family plan in a family; Free honours a member limit when the admin set one.
+Status is active or expired; an expired plan still counts in Total, as in the apps.
 Fields: email, planExpiresAt (strings); planActive (boolean); totalBytes, usedBytes, freeBytes, planBytes, bonusBytes (integers).
 Nullable fields: files (integer); family ({usedBytes, storageBytes (integers); members: [{email, status (strings); admin (boolean); usedBytes (integer); storageLimitBytes (integer, nullable)}]})."
     )]
@@ -455,7 +454,7 @@ pub enum LockerCommand {
     #[command(about = "Make an authenticated API request", after_help = API_HELP)]
     Api(ApiArgs),
     #[command(
-        about = "Show Locker usage against its file and storage limits",
+        about = "Show storage usage and file count against the Locker limits",
         after_long_help = "Requires network access. With --json, returns one object.
 Fields: usedFiles, fileLimit, remainingFiles, usedBytes, storageLimitBytes, remainingBytes (integers); paid, family (booleans)."
     )]
