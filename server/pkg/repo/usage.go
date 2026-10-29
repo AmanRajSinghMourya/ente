@@ -43,6 +43,39 @@ func (repo *UsageRepository) GetUsage(userID int64) (int64, error) {
 	return usage, stacktrace.Propagate(err, "")
 }
 
+func (repo *UsageRepository) GetPhotosUsage(ctx context.Context, userIDs []int64) (map[int64]int64, error) {
+	rows, err := repo.DB.QueryContext(ctx, `WITH locker_usage AS (
+		SELECT locker_files.owner_id, COALESCE(SUM(ok.size), 0) AS total_size
+		FROM (
+			SELECT DISTINCT c.owner_id, cf.file_id
+			FROM collections c
+			JOIN collection_files cf ON c.collection_id = cf.collection_id
+			WHERE c.app = 'locker' AND c.owner_id = ANY($1) AND cf.f_owner_id = c.owner_id
+		) AS locker_files
+		JOIN files f ON f.file_id = locker_files.file_id
+		LEFT JOIN object_keys ok ON ok.file_id = f.file_id AND ok.is_deleted = false
+		WHERE f.app IS NULL OR f.app = 'locker'
+		GROUP BY locker_files.owner_id
+	)
+		SELECT requested.user_id, COALESCE(u.storage_consumed, 0) - COALESCE(l.total_size, 0)
+		FROM unnest($1::bigint[]) AS requested(user_id)
+		LEFT JOIN usage u ON u.user_id = requested.user_id
+		LEFT JOIN locker_usage l ON l.owner_id = requested.user_id`, pq.Array(userIDs))
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to fetch Photos usage")
+	}
+	defer rows.Close()
+	usage := make(map[int64]int64, len(userIDs))
+	for rows.Next() {
+		var userID, bytes int64
+		if err := rows.Scan(&userID, &bytes); err != nil {
+			return nil, stacktrace.Propagate(err, "")
+		}
+		usage[userID] = bytes
+	}
+	return usage, stacktrace.Propagate(rows.Err(), "")
+}
+
 func (repo *UsageRepository) GetStoredFileCounts(ctx context.Context, userID int64) (int64, int64, int64, error) {
 	var photos, locker sql.NullInt64
 	var storageConsumed int64

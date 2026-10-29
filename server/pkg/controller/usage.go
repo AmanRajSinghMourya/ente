@@ -185,10 +185,11 @@ func (c *UsageController) canUploadFile(ctx context.Context, userID int64, size 
 	}
 
 	if subscriptionAdminID != userID && memberStorageLimit != nil {
-		memberUsage, memberUsageErr := c.UsageRepo.GetUsage(userID)
+		photosUsage, memberUsageErr := c.UsageRepo.GetPhotosUsage(ctx, []int64{userID})
 		if memberUsageErr != nil {
 			return stacktrace.Propagate(memberUsageErr, "Couldn't get Members Usage")
 		}
+		memberUsage := photosUsage[userID]
 		if size != nil {
 			memberUsage += *size
 		}

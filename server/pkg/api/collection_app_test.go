@@ -1,6 +1,9 @@
 package api
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -38,14 +41,16 @@ func TestCollectionAppIsolation(t *testing.T) {
 				testutil.ResetTables(t, db)
 			})
 			ownerID := testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "owner@ente.com", CreationTime: 1})
+			testutil.InsertUsage(t, db, ownerID, 0)
 			otherID := testutil.InsertUser(t, db, testutil.UserFixture{UserID: 2, Email: "other@ente.com", CreationTime: 1})
 			linkRepo := publicrepo.NewCollectionLinkRepository(db, "")
 			collectionRepo := &repo.CollectionRepository{
 				DB: db, CollectionLinkRepo: linkRepo, QueueRepo: &repo.QueueRepository{DB: db},
 				SecretEncryptionKey: testutil.SecretEncryptionKey(),
+				TrashRepo:           &repo.TrashRepository{DB: db},
 			}
 			castRepo := &castrepo.Repository{DB: db}
-			accessCtrl := access.NewAccessController(collectionRepo, nil)
+			accessCtrl := access.NewAccessController(collectionRepo, &repo.FileRepository{DB: db})
 			owned := make(map[ente.App]int64)
 			shared := make(map[ente.App]int64)
 			for _, collectionApp := range []ente.App{ente.Photos, ente.Locker} {
@@ -76,6 +81,7 @@ func TestCollectionAppIsolation(t *testing.T) {
 			authMiddleware := &middleware.AuthMiddleware{UserAuthRepo: userAuthRepo, Cache: cache.New(time.Minute, time.Minute)}
 			collectionHandler := &CollectionHandler{Controller: &collections.CollectionController{
 				AccessCtrl: accessCtrl, CollectionRepo: collectionRepo, CastRepo: castRepo,
+				FileRepo:           &repo.FileRepository{DB: db},
 				CollectionLinkCtrl: &public.CollectionLinkController{CollectionLinkRepo: linkRepo},
 			}}
 			gin.SetMode(gin.TestMode)
@@ -83,6 +89,8 @@ func TestCollectionAppIsolation(t *testing.T) {
 			storage := router.Group("/", authMiddleware.TokenAuthMiddleware(nil), middleware.RejectAuthApp())
 			storage.GET("/collections/:collectionID", collectionHandler.GetCollectionByID)
 			storage.DELETE("/collections/v3/:collectionID", collectionHandler.TrashV3)
+			storage.POST("/collections/add-files", collectionHandler.AddFiles)
+			storage.POST("/collections/restore-files", collectionHandler.RestoreFiles)
 			request := func(method, path string, clientApp ente.App) *httptest.ResponseRecorder {
 				req := httptest.NewRequest(method, path, nil)
 				req.Header.Set("X-Auth-Token", token)
@@ -94,6 +102,79 @@ func TestCollectionAppIsolation(t *testing.T) {
 			otherApp := ente.Photos
 			if app == ente.Photos {
 				otherApp = ente.Locker
+			}
+			for _, operation := range []string{"add-files", "restore-files"} {
+				t.Run(operation, func(t *testing.T) {
+					for _, sourceApp := range []ente.App{app, otherApp} {
+						for _, state := range []string{"modern", "legacy", "legacy-mixed", "legacy-shared"} {
+							if (state == "legacy-mixed" || state == "legacy-shared") && sourceApp == app {
+								continue
+							}
+							t.Run(fmt.Sprintf("%s_%s", sourceApp, state), func(t *testing.T) {
+								source, err := collectionRepo.Create(ente.Collection{
+									Owner: ente.CollectionUser{ID: ownerID}, App: string(sourceApp), Type: "album",
+									EncryptedKey: "key", KeyDecryptionNonce: "nonce", Name: "source", UpdationTime: 1,
+								})
+								require.NoError(t, err)
+								if state == "legacy-shared" {
+									source.ID, source.Owner.ID = shared[sourceApp], otherID
+								}
+								var fileApp any = string(sourceApp)
+								if state != "modern" {
+									fileApp = nil
+								}
+								var fileID int64
+								require.NoError(t, db.QueryRow(`INSERT INTO files(owner_id, app, file_decryption_header,
+								thumbnail_decryption_header, metadata_decryption_header, encrypted_metadata, updation_time, info)
+								VALUES ($1, $2, 'header', 'header', 'header', 'metadata', 1, '{}') RETURNING file_id`, ownerID, fileApp).Scan(&fileID))
+								_, err = db.Exec(`INSERT INTO collection_files(collection_id, file_id, encrypted_key,
+								key_decryption_nonce, is_deleted, updation_time, c_owner_id, f_owner_id)
+								VALUES ($1, $2, 'key', 'nonce', false, 1, $3, $4)`, source.ID, fileID, source.Owner.ID, ownerID)
+								require.NoError(t, err)
+								if state == "legacy-mixed" {
+									_, err = db.Exec(`INSERT INTO collection_files(collection_id, file_id, encrypted_key,
+										key_decryption_nonce, is_deleted, updation_time, c_owner_id, f_owner_id)
+										VALUES ($1, $2, 'key', 'nonce', true, 1, $3, $3)`, owned[app], fileID, ownerID)
+									require.NoError(t, err)
+								}
+								_, err = db.Exec(`INSERT INTO object_keys(file_id, o_type, object_key, size, datacenters)
+								VALUES ($1, 'file', $2, 1073741824, ARRAY['b2-eu-cen']::s3region[])`, fileID, fmt.Sprintf("isolation-%d", fileID))
+								require.NoError(t, err)
+								_, err = db.Exec("UPDATE usage SET storage_consumed=storage_consumed+1073741824 WHERE user_id=$1", ownerID)
+								require.NoError(t, err)
+								if operation == "restore-files" {
+									_, err = db.Exec("UPDATE collection_files SET is_deleted=true WHERE file_id=$1", fileID)
+									require.NoError(t, err)
+									_, err = db.Exec(`INSERT INTO trash(file_id, collection_id, user_id, delete_by, updated_at)
+									VALUES ($1, $2, $3, $4, 1)`, fileID, source.ID, ownerID, time.Now().Add(time.Hour).UnixMicro())
+									require.NoError(t, err)
+								}
+								usageRepo := &repo.UsageRepository{DB: db}
+								before, err := usageRepo.GetLockerStorageUsage(t.Context(), []int64{ownerID})
+								require.NoError(t, err)
+								body, err := json.Marshal(ente.AddFilesRequest{CollectionID: owned[app], Files: []ente.CollectionFileItem{{
+									ID: fileID, EncryptedKey: base64.StdEncoding.EncodeToString(make([]byte, 48)),
+									KeyDecryptionNonce: base64.StdEncoding.EncodeToString(make([]byte, 24)),
+								}}})
+								require.NoError(t, err)
+								request := httptest.NewRequest(http.MethodPost, "/collections/"+operation, bytes.NewReader(body))
+								request.Header.Set("Content-Type", "application/json")
+								request.Header.Set("X-Auth-Token", token)
+								request.Header.Set("X-Client-Package", "io.ente."+string(app))
+								response := httptest.NewRecorder()
+								router.ServeHTTP(response, request)
+								wantStatus := http.StatusOK
+								if sourceApp != app && state != "legacy-mixed" {
+									wantStatus = http.StatusForbidden
+								}
+								after, err := usageRepo.GetLockerStorageUsage(t.Context(), []int64{ownerID})
+								require.NoError(t, err)
+								require.Equal(t, wantStatus, response.Code, response.Body.String())
+								require.Equal(t, before.TotalUsage, after.TotalUsage, "adding an existing file must not reclassify its bytes")
+							})
+						}
+					}
+				})
 			}
 			t.Run("point_access", func(t *testing.T) {
 				for _, ids := range []map[ente.App]int64{owned, shared} {

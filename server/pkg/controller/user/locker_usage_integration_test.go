@@ -141,7 +141,7 @@ func TestGetDetailsV2DiscountsOnlyRequesterLockerUsageInFamily(t *testing.T) {
 	for _, member := range photosDetails.FamilyData.Members {
 		familyUsage[member.MemberUserID] = member.Usage
 	}
-	wantFamilyUsage := map[int64]int64{adminID: 1000 + 101, acceptedMemberID: 50 + 201, invitedMemberID: 0}
+	wantFamilyUsage := map[int64]int64{adminID: 1000, acceptedMemberID: 50, invitedMemberID: 0}
 	if len(familyUsage) != len(wantFamilyUsage) {
 		t.Fatalf("unexpected family member count: got %d want %d", len(familyUsage), len(wantFamilyUsage))
 	}
@@ -204,6 +204,7 @@ func setupLockerUsageControllerTest(t *testing.T) (*UserController, *sql.DB, *gi
 		},
 		FamilyController: &family.Controller{
 			UserRepo:      userRepo,
+			UsageRepo:     usageRepo,
 			FamilyRepo:    &repo.FamilyRepository{DB: db},
 			UserCacheCtrl: userCacheCtrl,
 		},

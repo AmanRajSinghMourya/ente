@@ -48,14 +48,22 @@ func (c *Controller) FetchMembersForAdminID(ctx context.Context, familyAdminID i
 		return ente.FamilyMemberResponse{}, stacktrace.Propagate(err, "")
 	}
 	memberUserIDs := make([]int64, 0)
+	activeMemberIDs := make([]int64, 0)
 	for _, familyMember := range familyMembers {
 		memberUserIDs = append(memberUserIDs, familyMember.MemberUserID)
+		if familyMember.Status == ente.ACCEPTED || familyMember.Status == ente.SELF {
+			activeMemberIDs = append(activeMemberIDs, familyMember.MemberUserID)
+		}
 	}
 	if len(memberUserIDs) == 0 {
 		return ente.FamilyMemberResponse{}, stacktrace.Propagate(errors.New("member could can not be zero"), "")
 	}
 
 	usersUsageWithSubData, err := c.UserRepo.GetUserUsageWithSubData(ctx, memberUserIDs)
+	if err != nil {
+		return ente.FamilyMemberResponse{}, err
+	}
+	photosUsage, err := c.UsageRepo.GetPhotosUsage(ctx, activeMemberIDs)
 	if err != nil {
 		return ente.FamilyMemberResponse{}, err
 	}
@@ -69,7 +77,7 @@ func (c *Controller) FetchMembersForAdminID(ctx context.Context, familyAdminID i
 			if member.MemberUserID == userUsageData.UserID {
 				member.Email = *userUsageData.Email
 				if member.Status == ente.ACCEPTED || member.Status == ente.SELF {
-					member.Usage = userUsageData.StorageConsumed
+					member.Usage = photosUsage[member.MemberUserID]
 				}
 				if member.IsAdmin {
 					adminSubStorage = userUsageData.Storage

@@ -858,6 +858,30 @@ func upsertCollectionFiles(
 		keyDecryptionNonces = append(keyDecryptionNonces, file.KeyDecryptionNonce)
 	}
 
+	var appMismatch bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM files f
+		JOIN collections destination ON destination.collection_id = $1
+		WHERE f.file_id = ANY($2) AND (
+			f.app <> destination.app OR (f.app IS NULL AND EXISTS (
+				SELECT 1 FROM collection_files cf
+				JOIN collections source ON source.collection_id = cf.collection_id
+				WHERE cf.file_id = f.file_id
+					AND source.app <> destination.app
+			) AND NOT EXISTS (
+				SELECT 1 FROM collection_files cf
+				JOIN collections source ON source.collection_id = cf.collection_id
+				WHERE cf.file_id = f.file_id
+					AND source.app = destination.app
+			))
+		)
+	)`, collectionID, pq.Array(fileIDs)).Scan(&appMismatch); err != nil {
+		return stacktrace.Propagate(err, "failed to verify file apps")
+	}
+	if appMismatch {
+		return stacktrace.Propagate(ente.ErrPermissionDenied, "files cannot be added across apps")
+	}
+
 	_, err := tx.ExecContext(ctx, `INSERT INTO collection_files
 			(collection_id, file_id, encrypted_key, key_decryption_nonce, is_deleted, updation_time, c_owner_id, f_owner_id)
 		SELECT $1, input.file_id, input.encrypted_key, input.key_decryption_nonce, FALSE, $2, $3, $4

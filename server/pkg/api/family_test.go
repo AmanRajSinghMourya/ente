@@ -65,6 +65,7 @@ func TestFetchFamilyMembersReturnsUserIDOnlyForJoinedMembers(t *testing.T) {
 
 	handler := &FamilyHandler{Controller: &familycontroller.Controller{
 		UserRepo:   userRepo,
+		UsageRepo:  &repo.UsageRepository{DB: db},
 		FamilyRepo: familyRepo,
 		UserCacheCtrl: &usercache.Controller{
 			StoreBonusRepo: &storagebonusrepo.Repository{DB: db},

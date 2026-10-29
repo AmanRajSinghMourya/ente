@@ -219,12 +219,12 @@ func (c *Controller) ModifyMemberStorage(ctx context.Context, actorUserID int64,
 			return stacktrace.Propagate(ente.ErrStorageLimitExceeded, "potential storage limit is more than subscription storage")
 		}
 
-		memberUsage, memUsageErr := c.UsageRepo.GetUsage(member.MemberUserID)
+		photosUsage, memUsageErr := c.UsageRepo.GetPhotosUsage(ctx, []int64{member.MemberUserID})
 		if memUsageErr != nil {
 			return stacktrace.Propagate(memUsageErr, "Couldn't find members storage usage")
 		}
 
-		if memberUsage > *storageLimit {
+		if photosUsage[member.MemberUserID] > *storageLimit {
 			return stacktrace.Propagate(ente.NewBadRequestWithMessage("Failed to reduce storage"), "User's current usage is more")
 		}
 	}
