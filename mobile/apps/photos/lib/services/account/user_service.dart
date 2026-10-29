@@ -3,8 +3,8 @@ import "dart:convert";
 import "dart:io";
 import "dart:math";
 
-import 'package:bip39/bip39.dart' as bip39;
 import 'package:dio/dio.dart';
+import "package:ente_base/models/two_factor.dart";
 import 'package:ente_crypto/ente_crypto.dart';
 import "package:ente_pure_utils/ente_pure_utils.dart";
 import "package:ente_strings/ente_strings.dart";
@@ -12,7 +12,6 @@ import "package:flutter/foundation.dart";
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:photos/core/configuration.dart';
-import 'package:photos/core/constants.dart';
 import 'package:photos/core/event_bus.dart';
 import "package:photos/events/account_configured_event.dart";
 import 'package:photos/events/signed_in_event.dart';
@@ -25,12 +24,13 @@ import 'package:photos/gateways/users/models/set_keys_request.dart';
 import 'package:photos/gateways/users/models/set_recovery_key_request.dart';
 import "package:photos/gateways/users/models/srp.dart";
 import "package:photos/gateways/users/users_gateway.dart";
-import "package:photos/models/account/two_factor.dart";
 import "package:photos/models/api/collection/user.dart";
 import 'package:photos/models/user_details.dart';
 import "package:photos/service_locator.dart";
 import "package:photos/services/collections_service.dart";
 import "package:photos/services/machine_learning/face_ml/person/person_service.dart";
+import 'package:photos/src/rust/third_party/ente_frb_lib/accounts.dart'
+    as accounts;
 import 'package:photos/ui/account/login_page.dart';
 import 'package:photos/ui/account/ott_verification_page.dart';
 import "package:photos/ui/account/passkey_page.dart";
@@ -68,6 +68,8 @@ class UserService {
   final _logger = Logger((UserService).toString());
   final _config = Configuration.instance;
   late SharedPreferences _preferences;
+  AccountsClient? _accountsClient;
+  String? _accountsClientOrigin;
   StreamSubscription<UserLoggedOutEvent>? _loggedOutEventSubscription;
   StreamSubscription<SignedInEvent>? _signedInEventSubscription;
 
@@ -874,6 +876,26 @@ class UserService {
     }
   }
 
+  AccountsClient _getAccountsClient() {
+    final origin = endpointConfig.endpoint;
+    if (_accountsClient == null || _accountsClientOrigin != origin) {
+      final services = ServiceLocator.instance;
+      final client = accounts.createAccountsClient(
+        config: AccountsClientConfig(
+          origin: origin,
+          clientPackage: services.packageInfo.packageName,
+          clientVersion: services.packageInfo.version,
+          userAgent:
+              services.enteDio.options.headers[HttpHeaders.userAgentHeader]
+                  as String,
+        ),
+      );
+      _accountsClient = client;
+      _accountsClientOrigin = origin;
+    }
+    return _accountsClient!;
+  }
+
   Future<void> recoverTwoFactor(
     BuildContext context,
     String sessionID,
@@ -883,34 +905,28 @@ class UserService {
     await dialog.show();
     try {
       _logger.info("recovering two factor");
-      final responseData = await _gateway.recoverTwoFactor(
-        sessionID: sessionID,
-        twoFactorType: twoFactorTypeToString(type),
+      final client = _getAccountsClient();
+      final response = await client.getTwoFactorRecovery(
+        sessionId: sessionID,
+        twoFactorType: type,
       );
-
       await dialog.hide();
       if (!context.mounted) return;
       // ignore: unawaited_futures
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (BuildContext context) {
-            return TwoFactorRecoveryPage(
-              type,
-              sessionID,
-              responseData["encryptedSecret"],
-              responseData["secretDecryptionNonce"],
-            );
+            return TwoFactorRecoveryPage(client, type, sessionID, response);
           },
         ),
         (route) => route.isFirst,
       );
-    } on DioException catch (e) {
+    } catch (e) {
       await dialog.hide();
       _logger.severe('error while recovery 2fa', e);
-      if (e.response != null && e.response!.statusCode == 404) {
-        if (!context.mounted) return;
+      if (!context.mounted) return;
+      if (e == const AccountsError.sessionExpired()) {
         showToast(context, context.strings.sessionExpired);
-        if (!context.mounted) return;
         // ignore: unawaited_futures
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
@@ -921,7 +937,6 @@ class UserService {
           (route) => route.isFirst,
         );
       } else {
-        if (!context.mounted) return;
         // ignore: unawaited_futures
         showAlertBottomSheet(
           context,
@@ -930,18 +945,6 @@ class UserService {
           assetPath: 'assets/warning-grey.png',
         );
       }
-    } catch (e) {
-      _logger.severe('unexpected error while recovery 2fa', e);
-      await dialog.hide();
-      _logger.severe(e);
-      if (!context.mounted) return;
-      // ignore: unawaited_futures
-      showAlertBottomSheet(
-        context,
-        title: context.strings.oops,
-        message: context.strings.somethingWentWrongPleaseTryAgain,
-        assetPath: 'assets/warning-grey.png',
-      );
     } finally {
       await dialog.hide();
     }
@@ -949,49 +952,28 @@ class UserService {
 
   Future<void> removeTwoFactor(
     BuildContext context,
+    AccountsClient client,
     TwoFactorType type,
     String sessionID,
     String recoveryKey,
-    String encryptedSecret,
-    String secretDecryptionNonce,
+    TwoFactorRecoveryResponse recoveryResponse,
   ) async {
     final dialog = createProgressDialog(context, context.strings.pleaseWait);
     await dialog.show();
-    String secret;
     try {
-      if (recoveryKey.contains(' ')) {
-        if (recoveryKey.split(' ').length != mnemonicKeyWordCount) {
-          throw AssertionError(
-            'recovery code should have $mnemonicKeyWordCount words',
-          );
-        }
-        recoveryKey = bip39.mnemonicToEntropy(recoveryKey);
+      if (client != _getAccountsClient()) {
+        throw const AccountsError.sessionExpired();
       }
-      secret = CryptoUtil.bin2base64(
-        await CryptoUtil.decrypt(
-          CryptoUtil.base642bin(encryptedSecret),
-          CryptoUtil.hex2bin(recoveryKey.trim()),
-          CryptoUtil.base642bin(secretDecryptionNonce),
-        ),
+      final response = await client.recoverTwoFactor(
+        twoFactorType: type,
+        sessionId: sessionID,
+        recoveryResponse: recoveryResponse,
+        recoveryKey: recoveryKey,
       );
-    } catch (e) {
-      await dialog.hide();
-      if (!context.mounted) return;
-      await showAlertBottomSheet(
-        context,
-        title: context.strings.incorrectRecoveryKey,
-        message: context.strings.theRecoveryKeyYouEnteredIsIncorrect,
-        assetPath: 'assets/warning-grey.png',
-      );
-      return;
-    }
-    try {
-      final responseData = await _gateway.removeTwoFactor(
-        sessionID: sessionID,
-        secret: secret,
-        twoFactorType: twoFactorTypeToString(type),
-      );
-      await _saveConfiguration(responseData);
+      if (client != _getAccountsClient()) {
+        throw const AccountsError.sessionExpired();
+      }
+      await _saveConfiguration(response.toMap());
       await dialog.hide();
       if (context.mounted) {
         showShortToast(
@@ -1008,13 +990,19 @@ class UserService {
           (route) => route.isFirst,
         );
       }
-    } on DioException catch (e) {
+    } catch (e) {
       await dialog.hide();
       _logger.severe("error during recovery", e);
-      if (e.response != null && e.response!.statusCode == 404) {
-        if (!context.mounted) return;
+      if (!context.mounted) return;
+      if (e == const AccountsError.incorrectRecoveryKey()) {
+        await showAlertBottomSheet(
+          context,
+          title: context.strings.incorrectRecoveryKey,
+          message: context.strings.theRecoveryKeyYouEnteredIsIncorrect,
+          assetPath: 'assets/warning-grey.png',
+        );
+      } else if (e == const AccountsError.sessionExpired()) {
         showToast(context, context.strings.sessionExpired);
-        if (!context.mounted) return;
         // ignore: unawaited_futures
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
@@ -1025,7 +1013,6 @@ class UserService {
           (route) => route.isFirst,
         );
       } else {
-        if (!context.mounted) return;
         // ignore: unawaited_futures
         showAlertBottomSheet(
           context,
@@ -1034,18 +1021,6 @@ class UserService {
           assetPath: 'assets/warning-grey.png',
         );
       }
-    } catch (e) {
-      await dialog.hide();
-      _logger.severe('unexpcted error during recovery', e);
-
-      if (!context.mounted) return;
-      // ignore: unawaited_futures
-      showAlertBottomSheet(
-        context,
-        title: context.strings.oops,
-        message: context.strings.somethingWentWrongPleaseTryAgain,
-        assetPath: 'assets/warning-grey.png',
-      );
     } finally {
       await dialog.hide();
     }

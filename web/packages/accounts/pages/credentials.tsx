@@ -244,13 +244,13 @@ const Page: React.FC = () => {
                 saveIsFirstLogin();
 
                 if (passkeySessionID) {
-                    await stashKeyEncryptionKeyInSessionStore(kek);
-                    updateSavedLocalUser({ passkeySessionID });
-                    stashRedirect("/");
                     const url = passkeyVerificationRedirectURL(
                         accountsUrl!,
                         passkeySessionID,
                     );
+                    await stashKeyEncryptionKeyInSessionStore(kek);
+                    updateSavedLocalUser({ passkeySessionID });
+                    stashRedirect("/");
                     setPasskeyVerificationData({ passkeySessionID, url });
                     openPasskeyVerificationURL({ passkeySessionID, url });
                     return "redirecting-second-factor";

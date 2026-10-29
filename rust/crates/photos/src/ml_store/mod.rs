@@ -1,3 +1,4 @@
+mod clustering;
 mod fill;
 mod index;
 mod lock;
@@ -11,6 +12,9 @@ use ente_vecdb::{VecDb, VecDbError};
 
 use crate::ml_db::MlDb;
 
+pub use clustering::{
+    ClusteredBucket, FaceClusteringPlan, FaceClusteringRequest, FaceClusteringRun,
+};
 pub use ente_vecdb::{KeyMatches, Match, SearchParams, Stats};
 pub use fill::{FillOutcome, FillReport};
 pub use index::{CLUSTER_CENTROID_DIMENSIONS, Index};

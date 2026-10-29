@@ -5,18 +5,29 @@ use serde_wasm_bindgen as swb;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
+#[cfg(feature = "prelogin")]
+mod client;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
     Accounts(#[from] ente_accounts::Error),
     #[error(transparent)]
     Serde(#[from] swb::Error),
+    #[error(transparent)]
+    Input(#[from] tsify::Error),
 }
 
 impl Error {
     fn name(&self) -> Option<&'static str> {
         match self {
             Self::Accounts(ente_accounts::Error::InsufficientMemory) => Some("insufficient_memory"),
+            Self::Accounts(ente_accounts::Error::IncorrectRecoveryKey) => {
+                Some("incorrect_recovery_key")
+            }
+            Self::Accounts(ente_accounts::Error::Http(http)) if http.status_code() == Some(404) => {
+                Some("session_expired")
+            }
             _ => None,
         }
     }
@@ -24,7 +35,13 @@ impl Error {
 
 impl From<Error> for JsValue {
     fn from(error: Error) -> Self {
-        crate::js_error(&error, error.name())
+        let value = crate::js_error(&error, error.name());
+        if let Error::Accounts(ente_accounts::Error::Http(http)) = &error
+            && let Some(status) = http.status_code()
+        {
+            let _ = js_sys::Reflect::set(&value, &"status".into(), &status.into());
+        }
+        value
     }
 }
 

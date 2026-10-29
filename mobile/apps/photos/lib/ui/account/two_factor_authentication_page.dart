@@ -1,8 +1,8 @@
+import "package:ente_base/models/two_factor.dart";
 import 'package:ente_components/ente_components.dart';
 import "package:ente_strings/ente_strings.dart";
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import "package:photos/models/account/two_factor.dart";
 import 'package:photos/services/account/user_service.dart';
 import "package:photos/ui/account/onboarding_page_scaffold.dart";
 import 'package:photos/ui/lifecycle_event_handler.dart';

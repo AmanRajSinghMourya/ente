@@ -326,7 +326,7 @@ pub struct TwoFactorStatusResponse {
     pub status: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TwoFactorType {
     Totp,
@@ -343,6 +343,7 @@ pub struct TwoFactorRecoveryResponse {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveTwoFactorRequest {
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     pub secret: String,
     pub two_factor_type: TwoFactorType,

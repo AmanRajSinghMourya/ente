@@ -16,6 +16,7 @@ import {
     toB64URLSafe,
 } from "ente-accounts/services/crypto";
 import { generateInteractiveKeyAttributes } from "ente-accounts/services/key-attributes";
+import { namedError } from "ente-base/error";
 import {
     authenticatedRequestHeaders,
     ensureOk,
@@ -27,10 +28,15 @@ import {
     saveAuthToken,
     savedAuthToken,
 } from "ente-base/token";
+import {
+    getTwoFactorRecovery,
+    recoverTwoFactor,
+    type AccountsClient,
+} from "ente-prelogin-wasm";
 import { nullToUndefined } from "ente-utils/transform";
 import { z } from "zod";
+import { getAccountsClient } from "./accounts-client";
 import { clearInflightPasskeySessionID } from "./passkey";
-import { recoveryKeyFromMnemonic } from "./recovery-key";
 
 export interface LocalUser {
     id: number;
@@ -415,39 +421,45 @@ const TwoFactorRecoveryResponse = z.object({
     secretDecryptionNonce: z.string(),
 });
 
-export type TwoFactorRecoveryResponse = z.infer<
-    typeof TwoFactorRecoveryResponse
->;
+export interface TwoFactorRecovery {
+    client: AccountsClient;
+    response: z.infer<typeof TwoFactorRecoveryResponse>;
+}
 
 export const getRecoverTwoFactor = async (
     twoFactorType: TwoFactorType,
     sessionID: string,
-): Promise<TwoFactorRecoveryResponse> => {
-    const res = await fetch(
-        await apiURL("/users/two-factor/recover", { twoFactorType, sessionID }),
-        { headers: publicRequestHeaders() },
+): Promise<TwoFactorRecovery> => {
+    const client = await getAccountsClient();
+    const response = TwoFactorRecoveryResponse.parse(
+        await getTwoFactorRecovery(client, twoFactorType, sessionID),
     );
-    ensureOk(res);
-    return TwoFactorRecoveryResponse.parse(await res.json());
+    return { client, response };
 };
 
 export const recoverTwoFactorFinish = async (
     twoFactorType: TwoFactorType,
     sessionID: string,
-    recoveryResponse: TwoFactorRecoveryResponse,
+    recovery: TwoFactorRecovery,
     recoveryKeyMnemonic: string,
 ) => {
-    const { encryptedSecret: encryptedData, secretDecryptionNonce: nonce } =
-        recoveryResponse;
-    const twoFactorSecret = await decryptBox(
-        { encryptedData, nonce },
-        await recoveryKeyFromMnemonic(recoveryKeyMnemonic),
-    );
-    const { id, keyAttributes, encryptedToken } = await removeTwoFactor(
-        twoFactorType,
-        sessionID,
-        twoFactorSecret,
-    );
+    const { client, response } = recovery;
+    if (client !== (await getAccountsClient())) {
+        throw namedError("session_expired", "Server endpoint changed");
+    }
+    const { id, keyAttributes, encryptedToken } =
+        TwoFactorAuthorizationResponse.parse(
+            await recoverTwoFactor(
+                client,
+                twoFactorType,
+                sessionID,
+                response,
+                recoveryKeyMnemonic,
+            ),
+        );
+    if (client !== (await getAccountsClient())) {
+        throw namedError("session_expired", "Server endpoint changed");
+    }
     await resetSavedLocalUserTokens(id, encryptedToken);
     updateSavedLocalUser({
         isTwoFactorEnabled: undefined,
@@ -456,18 +468,4 @@ export const recoverTwoFactorFinish = async (
     });
     if (twoFactorType == "passkey") clearInflightPasskeySessionID();
     saveKeyAttributes(keyAttributes);
-};
-
-const removeTwoFactor = async (
-    twoFactorType: TwoFactorType,
-    sessionID: string,
-    secret: string,
-): Promise<TwoFactorAuthorizationResponse> => {
-    const res = await fetch(await apiURL("/users/two-factor/remove"), {
-        method: "POST",
-        headers: publicRequestHeaders(),
-        body: JSON.stringify({ twoFactorType, sessionID, secret }),
-    });
-    ensureOk(res);
-    return TwoFactorAuthorizationResponse.parse(await res.json());
 };

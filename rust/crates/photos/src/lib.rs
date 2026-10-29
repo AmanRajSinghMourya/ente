@@ -3,6 +3,7 @@ pub mod db;
 pub mod face_clustering;
 pub mod files;
 pub mod location;
+pub mod memories;
 pub mod metadata;
 pub mod ml_db;
 pub mod ml_store;

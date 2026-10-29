@@ -104,12 +104,12 @@ const Page: React.FC = () => {
             );
 
             if (passkeySessionID) {
-                updateSavedLocalUser({ passkeySessionID });
-                saveIsFirstLogin();
                 const url = passkeyVerificationRedirectURL(
                     accountsUrl!,
                     passkeySessionID,
                 );
+                updateSavedLocalUser({ passkeySessionID });
+                saveIsFirstLogin();
                 setPasskeyVerificationData({ passkeySessionID, url });
                 openPasskeyVerificationURL({ passkeySessionID, url });
             } else if (twoFactorSessionID) {

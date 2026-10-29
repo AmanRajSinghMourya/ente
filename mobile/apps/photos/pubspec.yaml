@@ -38,6 +38,8 @@ dependencies:
     path: ../../packages/account_deletion
   ente_background_manager:
     path: plugins/ente_background_manager
+  ente_base:
+    path: ../../packages/base
   ente_cast:
     path: plugins/ente_cast
   ente_components:

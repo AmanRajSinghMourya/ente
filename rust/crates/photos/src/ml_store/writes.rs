@@ -73,6 +73,18 @@ impl MlStore {
         })
     }
 
+    pub(super) fn assign_face_clusters(
+        &self,
+        face_id_to_cluster_id: &HashMap<String, String>,
+        summary: &HashMap<String, ClusterSummary>,
+    ) -> Result<()> {
+        let _mutations = self.lock_mutations();
+        self.upsert(Index::ClusterCentroid, &centroid_batch(summary), || {
+            self.db
+                .update_face_clusters_and_summaries(face_id_to_cluster_id, summary)
+        })
+    }
+
     pub fn delete_cluster_summary(&self, cluster_id: &str) -> Result<()> {
         let _mutations = self.lock_mutations();
         self.db.delete_cluster_summary_row(cluster_id)?;

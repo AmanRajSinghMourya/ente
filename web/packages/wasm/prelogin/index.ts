@@ -1,8 +1,15 @@
-import type { SrpSession } from "./pkg/ente_prelogin_wasm";
+import type {
+    AccountsClient,
+    AccountsClientConfig,
+    SrpSession,
+} from "./pkg/ente_prelogin_wasm";
 
 export type EncryptedBoxB64 = Awaited<ReturnType<typeof encryptBox>>;
 export type KeyPair = Awaited<ReturnType<typeof generateKeyPair>>;
-export type { GeneratedKek as DerivedKey } from "./pkg/ente_prelogin_wasm";
+export type {
+    AccountsClient,
+    GeneratedKek as DerivedKey,
+} from "./pkg/ente_prelogin_wasm";
 
 const wasm = () => import("./pkg/ente_prelogin_wasm");
 
@@ -32,6 +39,34 @@ export const deriveSRPLoginKey = async (kekB64: string) =>
 
 export const generateSRPSetup = async (kekB64: string, srpUserID: string) =>
     (await wasm()).authGenerateSrpSetup(kekB64, srpUserID);
+
+export const createAccountsClient = async (config: AccountsClientConfig) =>
+    (await wasm()).createAccountsClient(config);
+
+export const getTwoFactorRecovery = async (
+    client: AccountsClient,
+    twoFactorType: "totp" | "passkey",
+    sessionID: string,
+): Promise<unknown> =>
+    (await wasm()).getTwoFactorRecovery(client, twoFactorType, sessionID);
+
+export const recoverTwoFactor = async (
+    client: AccountsClient,
+    twoFactorType: "totp" | "passkey",
+    sessionID: string,
+    recoveryResponse: {
+        encryptedSecret: string;
+        secretDecryptionNonce: string;
+    },
+    recoveryKey: string,
+): Promise<unknown> =>
+    (await wasm()).recoverTwoFactor(
+        client,
+        twoFactorType,
+        sessionID,
+        recoveryResponse,
+        recoveryKey,
+    );
 
 export const recoveryKeyFromMnemonicOrHex = async (value: string) =>
     (await wasm()).authRecoveryKeyFromMnemonicOrHex(value);

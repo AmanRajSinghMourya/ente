@@ -3,14 +3,12 @@ import "dart:convert";
 import "dart:io";
 import "dart:math";
 
-import 'package:bip39/bip39.dart' as bip39;
 import 'package:dio/dio.dart';
 import 'package:ente_accounts/models/errors.dart';
 import 'package:ente_accounts/models/sessions.dart';
 import 'package:ente_accounts/models/set_keys_request.dart';
 import 'package:ente_accounts/models/set_recovery_key_request.dart';
 import 'package:ente_accounts/models/srp.dart';
-import 'package:ente_accounts/models/two_factor.dart';
 import 'package:ente_accounts/models/user_details.dart';
 import 'package:ente_accounts/pages/login_page.dart';
 import 'package:ente_accounts/pages/ott_verification_page.dart';
@@ -23,8 +21,8 @@ import 'package:ente_accounts/pages/two_factor_recovery_page.dart';
 import 'package:ente_accounts/services/install_source_handler.dart';
 import 'package:ente_base/models/key_attributes.dart';
 import 'package:ente_base/models/key_gen_result.dart';
+import 'package:ente_base/models/two_factor.dart';
 import 'package:ente_configuration/base_configuration.dart';
-import 'package:ente_configuration/constants.dart';
 import 'package:ente_crypto_api/ente_crypto_api.dart';
 import 'package:ente_events/event_bus.dart';
 import 'package:ente_events/models/user_details_changed_event.dart';
@@ -60,6 +58,9 @@ class UserService {
   late ValueNotifier<String?> emailValueNotifier;
   late BaseConfiguration _config;
   late BaseHomePage _homePage;
+  late CreateAccountsClient _createAccountsClient;
+  AccountsClient? _accountsClient;
+  String? _accountsClientOrigin;
   InstallSourceHandler? _installSourceHandler;
 
   UserService._privateConstructor();
@@ -69,10 +70,13 @@ class UserService {
   Future<void> init(
     BaseConfiguration config,
     BaseHomePage homePage, {
+    required CreateAccountsClient createAccountsClient,
     InstallSourceHandler? installSourceHandler,
   }) async {
     _config = config;
     _homePage = homePage;
+    _createAccountsClient = createAccountsClient;
+    _accountsClient = null;
     _installSourceHandler = installSourceHandler;
     emailValueNotifier = ValueNotifier<String?>(config.getEmail());
     _preferences = await SharedPreferences.getInstance();
@@ -938,6 +942,24 @@ class UserService {
     }
   }
 
+  AccountsClient _getAccountsClient() {
+    final origin = _config.getHttpEndpoint();
+    if (_accountsClient == null || _accountsClientOrigin != origin) {
+      final headers = _enteDio.options.headers;
+      final client = _createAccountsClient(
+        config: AccountsClientConfig(
+          origin: origin,
+          clientPackage: headers['X-Client-Package'] as String,
+          clientVersion: headers['X-Client-Version'] as String,
+          userAgent: headers[HttpHeaders.userAgentHeader] as String,
+        ),
+      );
+      _accountsClient = client;
+      _accountsClientOrigin = origin;
+    }
+    return _accountsClient!;
+  }
+
   Future<void> recoverTwoFactor(
     BuildContext context,
     String sessionID,
@@ -946,39 +968,30 @@ class UserService {
     final dialog = createProgressDialog(context, context.strings.pleaseWait);
     await dialog.show();
     try {
-      final response = await _dio.get(
-        "${_config.getHttpEndpoint()}/users/two-factor/recover",
-        queryParameters: {
-          "sessionID": sessionID,
-          "twoFactorType": twoFactorTypeToString(type),
-        },
+      final client = _getAccountsClient();
+      final response = await client.getTwoFactorRecovery(
+        sessionId: sessionID,
+        twoFactorType: type,
       );
       await dialog.hide();
-      if (response.statusCode == 200) {
-        if (context.mounted) {
-          // ignore: unawaited_futures
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (BuildContext context) {
-                return TwoFactorRecoveryPage(
-                  type,
-                  sessionID,
-                  response.data["encryptedSecret"],
-                  response.data["secretDecryptionNonce"],
-                );
-              },
-            ),
-            (route) => route.isFirst,
-          );
-        }
+      if (context.mounted) {
+        // ignore: unawaited_futures
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (BuildContext context) {
+              return TwoFactorRecoveryPage(client, type, sessionID, response);
+            },
+          ),
+          (route) => route.isFirst,
+        );
       }
-    } on DioException catch (e) {
+    } catch (e) {
       await dialog.hide();
       _logger.severe(e);
       if (!context.mounted) {
         return;
       }
-      if (e.response != null && e.response!.statusCode == 404) {
+      if (e == const AccountsError.sessionExpired()) {
         showToast(context, context.strings.sessionExpired);
         // ignore: unawaited_futures
         Navigator.of(context).pushAndRemoveUntil(
@@ -998,18 +1011,6 @@ class UserService {
           assetPath: 'assets/warning-grey.png',
         );
       }
-    } catch (e) {
-      await dialog.hide();
-      _logger.severe(e);
-      if (context.mounted) {
-        // ignore: unawaited_futures
-        showAlertBottomSheet(
-          context,
-          title: context.strings.oops,
-          message: context.strings.somethingWentWrongPleaseTryAgain,
-          assetPath: 'assets/warning-grey.png',
-        );
-      }
     } finally {
       await dialog.hide();
     }
@@ -1017,79 +1018,58 @@ class UserService {
 
   Future<void> removeTwoFactor(
     BuildContext context,
+    AccountsClient client,
     TwoFactorType type,
     String sessionID,
     String recoveryKey,
-    String encryptedSecret,
-    String secretDecryptionNonce,
+    TwoFactorRecoveryResponse recoveryResponse,
   ) async {
     final dialog = createProgressDialog(context, context.strings.pleaseWait);
     await dialog.show();
-    String secret;
     try {
-      if (recoveryKey.contains(' ')) {
-        if (recoveryKey.split(' ').length != mnemonicKeyWordCount) {
-          throw AssertionError(
-            'recovery code should have $mnemonicKeyWordCount words',
-          );
-        }
-        recoveryKey = bip39.mnemonicToEntropy(recoveryKey);
+      if (client != _getAccountsClient()) {
+        throw const AccountsError.sessionExpired();
       }
-      secret = CryptoUtil.bin2base64(
-        await CryptoUtil.decrypt(
-          CryptoUtil.base642bin(encryptedSecret),
-          CryptoUtil.hex2bin(recoveryKey.trim()),
-          CryptoUtil.base642bin(secretDecryptionNonce),
-        ),
+      final response = await client.recoverTwoFactor(
+        twoFactorType: type,
+        sessionId: sessionID,
+        recoveryResponse: recoveryResponse,
+        recoveryKey: recoveryKey,
       );
+      if (client != _getAccountsClient()) {
+        throw const AccountsError.sessionExpired();
+      }
+      await _saveConfiguration(response.toMap());
+      await dialog.hide();
+      if (context.mounted) {
+        showShortToast(
+          context,
+          context.strings.twofactorAuthenticationSuccessfullyReset,
+        );
+        // ignore: unawaited_futures
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (BuildContext context) {
+              return PasswordReentryPage(_config, _homePage);
+            },
+          ),
+          (route) => route.isFirst,
+        );
+      }
     } catch (e) {
-      await dialog.hide();
-      if (!context.mounted) {
-        return;
-      }
-      await showAlertBottomSheet(
-        context,
-        title: context.strings.incorrectRecoveryKey,
-        message: context.strings.theRecoveryKeyYouEnteredIsIncorrect,
-        assetPath: 'assets/warning-grey.png',
-      );
-      return;
-    }
-    try {
-      final response = await _dio.post(
-        "${_config.getHttpEndpoint()}/users/two-factor/remove",
-        data: {
-          "sessionID": sessionID,
-          "secret": secret,
-          "twoFactorType": twoFactorTypeToString(type),
-        },
-      );
-      await dialog.hide();
-      if (response.statusCode == 200) {
-        await _saveConfiguration(response);
-        if (context.mounted) {
-          showShortToast(
-            context,
-            context.strings.twofactorAuthenticationSuccessfullyReset,
-          );
-          // ignore: unawaited_futures
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (BuildContext context) {
-                return PasswordReentryPage(_config, _homePage);
-              },
-            ),
-            (route) => route.isFirst,
-          );
-        }
-      }
-    } on DioException catch (e) {
       await dialog.hide();
       _logger.severe(e);
       if (!context.mounted) {
         return;
       }
-      if (e.response != null && e.response!.statusCode == 404) {
+      if (e == const AccountsError.incorrectRecoveryKey()) {
+        await showAlertBottomSheet(
+          context,
+          title: context.strings.incorrectRecoveryKey,
+          message: context.strings.theRecoveryKeyYouEnteredIsIncorrect,
+          assetPath: 'assets/warning-grey.png',
+        );
+      } else if (e == const AccountsError.sessionExpired()) {
         showToast(context, "Session expired");
         // ignore: unawaited_futures
         Navigator.of(context).pushAndRemoveUntil(
@@ -1101,18 +1081,6 @@ class UserService {
           (route) => route.isFirst,
         );
       } else {
-        // ignore: unawaited_futures
-        showAlertBottomSheet(
-          context,
-          title: context.strings.oops,
-          message: context.strings.somethingWentWrongPleaseTryAgain,
-          assetPath: 'assets/warning-grey.png',
-        );
-      }
-    } catch (e) {
-      await dialog.hide();
-      _logger.severe(e);
-      if (context.mounted) {
         // ignore: unawaited_futures
         showAlertBottomSheet(
           context,

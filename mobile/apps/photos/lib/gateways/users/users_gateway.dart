@@ -257,33 +257,6 @@ class UsersGateway {
     return response.data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> recoverTwoFactor({
-    required String sessionID,
-    required String twoFactorType,
-  }) async {
-    final response = await _publicDio.get(
-      "$_endpoint/users/two-factor/recover",
-      queryParameters: {"sessionID": sessionID, "twoFactorType": twoFactorType},
-    );
-    return response.data as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> removeTwoFactor({
-    required String sessionID,
-    required String secret,
-    required String twoFactorType,
-  }) async {
-    final response = await _publicDio.post(
-      "$_endpoint/users/two-factor/remove",
-      data: {
-        "sessionID": sessionID,
-        "secret": secret,
-        "twoFactorType": twoFactorType,
-      },
-    );
-    return response.data as Map<String, dynamic>;
-  }
-
   Future<Map<String, dynamic>> getTokenForPasskeySession(
     String sessionID,
   ) async {

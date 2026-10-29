@@ -13,7 +13,9 @@ pub use queries::clip::{
     ClipRow, EmbeddingVector,
 };
 pub use queries::clusters::{ClusterCentroidRow, ClusterSummary};
-pub use queries::faces::{FACE_ML_VERSION, FaceDbInfoForClustering, FaceRow, FaceWithoutEmbedding};
+pub use queries::faces::{
+    FACE_ML_VERSION, FaceDbInfoForClustering, FaceForClustering, FaceRow, FaceWithoutEmbedding,
+};
 pub use queries::filedata::{FdStatus, PreviewInfo};
 pub use queries::persons::PersonToClusterIdToFaceIds;
 pub use queries::pets::PET_ML_VERSION;

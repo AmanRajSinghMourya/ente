@@ -2,6 +2,7 @@ import "dart:async";
 import 'dart:convert';
 
 import "package:app_links/app_links.dart";
+import "package:ente_base/models/two_factor.dart";
 import "package:ente_components/ente_components.dart";
 import "package:ente_pure_utils/ente_pure_utils.dart";
 import "package:ente_strings/ente_strings.dart";
@@ -9,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:photos/core/configuration.dart';
 import "package:photos/core/errors.dart";
-import "package:photos/models/account/two_factor.dart";
 import 'package:photos/services/account/user_service.dart';
 import "package:photos/ui/account/onboarding_page_scaffold.dart";
 import "package:photos/ui/account/two_factor_authentication_page.dart";

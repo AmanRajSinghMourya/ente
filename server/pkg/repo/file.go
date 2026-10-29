@@ -14,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ente/museum/ente"
+	"github.com/ente/museum/pkg/utils/dbmetrics"
 	"github.com/ente/museum/pkg/utils/s3config"
 	"github.com/ente/museum/pkg/utils/time"
 	"github.com/lib/pq"
@@ -43,12 +44,15 @@ func (repo *FileRepository) Create(
 	}
 
 	ctx := context.Background()
+	finishPhase := dbmetrics.Start(dbmetrics.FileCreate, "begin_with_checkout")
 	tx, err := repo.DB.BeginTx(ctx, nil)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
 	defer tx.Rollback()
 	var fileID int64
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "insert_file")
 	err = tx.QueryRowContext(ctx, `INSERT INTO files
 			(owner_id, app, encrypted_metadata,
 			file_decryption_header, thumbnail_decryption_header, metadata_decryption_header,
@@ -58,32 +62,41 @@ func (repo *FileRepository) Create(
 		file.Thumbnail.DecryptionHeader, file.Metadata.DecryptionHeader,
 		file.MagicMetadata, file.PublicMagicMetadata, file.Info,
 		file.UpdationTime).Scan(&fileID)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
 	file.ID = fileID
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "insert_membership")
 	_, err = tx.ExecContext(ctx, `INSERT INTO collection_files
 			(collection_id, file_id, encrypted_key, key_decryption_nonce, is_deleted, updation_time, c_owner_id, f_owner_id)
 			VALUES($1, $2, $3, $4, $5, $6, $7, $8)`, file.CollectionID, file.ID,
 		file.EncryptedKey, file.KeyDecryptionNonce, false, file.UpdationTime, file.OwnerID, collectionOwnerID)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "update_collection")
 	_, err = tx.ExecContext(ctx, `UPDATE collections SET updation_time = $1
 			WHERE collection_id = $2`, file.UpdationTime, file.CollectionID)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "insert_original_object")
 	_, err = tx.ExecContext(ctx, `INSERT INTO object_keys(file_id, o_type, object_key, size, datacenters)
 			VALUES($1, $2, $3, $4, $5)`, fileID, ente.FILE, file.File.ObjectKey, fileSize, dcsForNewEntry)
+	finishPhase(err)
 	if err != nil {
 		if err.Error() == "pq: duplicate key value violates unique constraint \"object_keys_object_key_key\"" {
 			return file, -1, ente.ErrDuplicateFileObjectFound
 		}
 		return file, -1, stacktrace.Propagate(err, "")
 	}
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "insert_thumbnail_object")
 	_, err = tx.ExecContext(ctx, `INSERT INTO object_keys(file_id, o_type, object_key, size, datacenters)
 			VALUES($1, $2, $3, $4, $5)`, fileID, ente.THUMBNAIL, file.Thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry)
+	finishPhase(err)
 	if err != nil {
 		if err.Error() == "pq: duplicate key value violates unique constraint \"object_keys_object_key_key\"" {
 			return file, -1, ente.ErrDuplicateThumbnailObjectFound
@@ -91,25 +104,35 @@ func (repo *FileRepository) Create(
 		return file, -1, stacktrace.Propagate(err, "")
 	}
 
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "consume_original_upload")
 	err = repo.ObjectCleanupRepo.ConsumeFileUpload(ctx, tx, file.File.ObjectKey, file.OwnerID, app)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "consume_thumbnail_upload")
 	err = repo.ObjectCleanupRepo.ConsumeFileUpload(ctx, tx, file.Thumbnail.ObjectKey, file.OwnerID, app)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "update_usage")
 	usage, err := repo.updateUsageForFileCreation(ctx, tx, file.OwnerID, usageDiff, app)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
 
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "mark_replication")
 	err = repo.markAsNeedingReplication(ctx, tx, file, hotDC)
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
 
+	finishPhase = dbmetrics.Start(dbmetrics.FileCreate, "commit")
 	err = tx.Commit()
+	finishPhase(err)
 	if err != nil {
 		return file, -1, stacktrace.Propagate(err, "")
 	}
