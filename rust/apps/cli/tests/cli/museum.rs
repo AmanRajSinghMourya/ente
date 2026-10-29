@@ -124,7 +124,6 @@ fn auth_login_refresh_and_offline_export_across_processes() -> TestResult {
     })
 }
 
-#[cfg(unix)]
 #[test]
 fn usage_reports_server_figures_and_plan_expiry() -> TestResult {
     Museum::run(|museum| {
@@ -189,6 +188,7 @@ fn usage_reports_server_figures_and_plan_expiry() -> TestResult {
     })
 }
 
+#[cfg(unix)]
 #[test]
 fn login_save_failures_follow_the_vault_replacement() -> TestResult {
     use std::os::unix::fs::PermissionsExt;
