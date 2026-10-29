@@ -459,12 +459,20 @@ pub fn locker_usage(usage: &LockerUsage, as_json: bool) -> Result<()> {
 }
 
 pub fn storage_size(bytes: i64) -> String {
-    let size = size(bytes);
-    if bytes < 1024_i64.pow(2) {
-        size
-    } else {
-        format!("{size} ({bytes} bytes)")
+    for (unit, divisor) in [
+        ("TB", 1024_i64.pow(4)),
+        ("GB", 1024_i64.pow(3)),
+        ("MB", 1024_i64.pow(2)),
+    ] {
+        if bytes >= divisor {
+            let size = format!("{:.2}", bytes as f64 / divisor as f64);
+            return format!(
+                "{} {unit} ({bytes} bytes)",
+                size.trim_end_matches('0').trim_end_matches('.')
+            );
+        }
     }
+    format!("{bytes} bytes")
 }
 
 fn size(bytes: i64) -> String {

@@ -85,12 +85,6 @@ pub async fn logout_session(origin: &str, app: App, token: &[u8]) -> Result<()> 
     }
 }
 
-pub fn authenticated_client(account: &Account, app: App) -> Result<AccountsClient> {
-    let client = accounts_client(&account.origin, app)?;
-    client.set_auth_token(Some(b64::encode_url_safe(account.token(app)?)));
-    Ok(client)
-}
-
 pub fn session(account: &Account, app: App) -> Result<Session> {
     let mut config = ApiConfig::new(account.origin.clone());
     config.client_package = Some(app.client_package().into());

@@ -49,7 +49,8 @@ pub async fn run(
     let state = State::load()?;
     let account = &state.accounts[state.resolve(selected)?];
     let app = account.app(app)?;
-    let client = api::authenticated_client(account, app)?;
+    let client = api::accounts_client(&account.origin, app)?;
+    client.set_auth_token(Some(ente_core::b64::encode_url_safe(account.token(app)?)));
     execute(command, &client, account, options).await.map_err(|error| {
         if matches!(error.downcast_ref::<ente_accounts::Error>(),
             Some(ente_accounts::Error::Http(ente_core::http::Error::Api { status: 400, message: Some(message), .. }))
