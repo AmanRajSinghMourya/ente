@@ -98,12 +98,12 @@ ente photos usage
 
 ```
 Email   alice@example.com
-Total   20 GB (21474836480 bytes)
-Used    3.61 GB (3873026520 bytes)
-Free    16.39 GB (17601809960 bytes)
-Plan    10 GB (10737418240 bytes)
+Total   20 GB
+Used    3.61 GB
+Free    16.39 GB
+Plan    10 GB
 Status  active
-Bonus   10 GB (10737418240 bytes)
+Bonus   10 GB
 Files   339
 Family  none
 ```

@@ -385,15 +385,15 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
     }
     let mut fields = vec![
         ("Email", escape_controls(&details.email)),
-        ("Total", storage_size(details.total_storage())),
-        ("Used", storage_size(details.usage)),
-        ("Free", storage_size(details.free_storage())),
-        ("Plan", storage_size(details.plan_storage())),
+        ("Total", size(details.total_storage())),
+        ("Used", size(details.usage)),
+        ("Free", size(details.free_storage())),
+        ("Plan", size(details.plan_storage())),
         (
             "Status",
             if active { "active" } else { "expired" }.to_owned(),
         ),
-        ("Bonus", storage_size(details.storage_bonus)),
+        ("Bonus", size(details.storage_bonus)),
         (
             "Files",
             details
@@ -418,11 +418,11 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
                 .collect::<Vec<_>>();
             fields.extend([
                 ("Family", members.join(", ")),
-                ("Family used", storage_size(family.usage())),
-                ("Family storage", storage_size(family.storage)),
+                ("Family used", size(family.usage())),
+                ("Family storage", size(family.storage)),
             ]);
             if let Some(limit) = details.family_member().and_then(|m| m.storage_limit) {
-                fields.push(("Your limit", storage_size(limit)));
+                fields.push(("Your limit", size(limit)));
             }
         }
         None => fields.push(("Family", "none".to_owned())),
@@ -447,9 +447,9 @@ pub fn locker_usage(usage: &LockerUsage, as_json: bool) -> Result<()> {
         ("Files", usage.used_file_count.to_string()),
         ("File limit", usage.file_limit.to_string()),
         ("Files left", usage.remaining_file_count.to_string()),
-        ("Storage", storage_size(usage.used_storage)),
-        ("Storage limit", storage_size(usage.storage_limit)),
-        ("Storage left", storage_size(usage.remaining_storage)),
+        ("Storage", size(usage.used_storage)),
+        ("Storage limit", size(usage.storage_limit)),
+        ("Storage left", size(usage.remaining_storage)),
         ("Paid", if usage.is_paid { "yes" } else { "no" }.to_owned()),
         (
             "Family",
@@ -459,6 +459,15 @@ pub fn locker_usage(usage: &LockerUsage, as_json: bool) -> Result<()> {
 }
 
 pub fn storage_size(bytes: i64) -> String {
+    let size = size(bytes);
+    if bytes < 1024_i64.pow(2) {
+        size
+    } else {
+        format!("{size} ({bytes} bytes)")
+    }
+}
+
+fn size(bytes: i64) -> String {
     for (unit, divisor) in [
         ("TB", 1024_i64.pow(4)),
         ("GB", 1024_i64.pow(3)),
@@ -467,7 +476,7 @@ pub fn storage_size(bytes: i64) -> String {
         if bytes >= divisor {
             let size = format!("{:.2}", bytes as f64 / divisor as f64);
             return format!(
-                "{} {unit} ({bytes} bytes)",
+                "{} {unit}",
                 size.trim_end_matches('0').trim_end_matches('.')
             );
         }

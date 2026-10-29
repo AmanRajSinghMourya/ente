@@ -65,14 +65,14 @@ ente locker usage
 Files          92
 File limit     100
 Files left     8
-Storage        254.47 MB (266830722 bytes)
-Storage limit  1 GB (1073741824 bytes)
-Storage left   769.53 MB (806911102 bytes)
+Storage        254.47 MB
+Storage limit  1 GB
+Storage left   769.53 MB
 Paid           no
 Family         none
 ```
 
-With `--json` the result is one object with `usedFiles`, `fileLimit`, `remainingFiles`, `usedBytes`, `storageLimitBytes`, `remainingBytes`, `paid` and `family`.
+With `--json`, returns one object: `usedFiles`, `fileLimit`, `remainingFiles`, `usedBytes`, `storageLimitBytes`, `remainingBytes` (integers); `paid`, `family` (booleans).
 
 ## Create an account
 

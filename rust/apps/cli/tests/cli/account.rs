@@ -694,10 +694,10 @@ fn usage_reads_account_details_with_the_saved_login() {
     let plain = success(home.run(&["photos", "usage"]));
     assert_eq!(
         String::from_utf8_lossy(&plain.stdout),
-        "Email   fixture@example.org\nTotal   20 GB (21474836480 bytes)\n\
-         Used    3 GB (3221225472 bytes)\nFree    17 GB (18253611008 bytes)\n\
-         Plan    10 GB (10737418240 bytes)\nStatus  active\n\
-         Bonus   10 GB (10737418240 bytes)\nFiles   339\nFamily  none\n"
+        "Email   fixture@example.org\nTotal   20 GB\n\
+         Used    3 GB\nFree    17 GB\n\
+         Plan    10 GB\nStatus  active\n\
+         Bonus   10 GB\nFiles   339\nFamily  none\n"
     );
     details.assert();
 }
@@ -735,13 +735,13 @@ fn family_usage_reports_the_admin_plan_and_the_member_limit() {
     );
     let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout).unwrap();
     assert!(
-        plain.contains("Plan            200 GB (214748364800 bytes)\nStatus          active\n"),
+        plain.contains("Plan            200 GB\nStatus          active\n"),
         "{plain}"
     );
     assert!(plain.contains(
         "Family          admin@example.org (admin), fixture@example.org, new@example.org (invited)\n\
-         Family used     53 GB (56908316672 bytes)\nFamily storage  200 GB (214748364800 bytes)\n\
-         Your limit      5 GB (5368709120 bytes)\n"
+         Family used     53 GB\nFamily storage  200 GB\n\
+         Your limit      5 GB\n"
     ));
     assert!(!plain.contains("Shared"));
     assert!(usage.get("sharedAlbums").is_none());
@@ -773,8 +773,8 @@ fn locker_usage_needs_a_locker_login() {
     let plain = success(home.run(&["locker", "usage"]));
     assert_eq!(
         String::from_utf8_lossy(&plain.stdout),
-        "Files          92\nFile limit     100\nFiles left     8\nStorage        254.47 MB (266830722 bytes)\n\
-         Storage limit  1 GB (1073741824 bytes)\nStorage left   769.53 MB (806911102 bytes)\nPaid           no\nFamily         none\n"
+        "Files          92\nFile limit     100\nFiles left     8\nStorage        254.47 MB\n\
+         Storage limit  1 GB\nStorage left   769.53 MB\nPaid           no\nFamily         none\n"
     );
     usage.assert();
 }
@@ -869,7 +869,7 @@ fn usage_marks_an_expired_plan() {
     assert_eq!(usage["totalBytes"], 60 * GB);
     let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout).unwrap();
     assert!(
-        plain.contains("Plan    50 GB (53687091200 bytes)\nStatus  expired\n"),
+        plain.contains("Plan    50 GB\nStatus  expired\n"),
         "{plain}"
     );
     details.assert();
