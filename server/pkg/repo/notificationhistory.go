@@ -35,10 +35,11 @@ func (repo *NotificationHistoryRepository) GetLockerIntroCandidates(rolloutTime,
 			AND usage.locker_file_count = 0
 			AND NOT EXISTS (
 				SELECT 1 FROM notification_history nh
-				WHERE nh.user_id = u.user_id AND nh.template_id = $3
+				WHERE nh.user_id = u.user_id AND nh.template_id = ANY($3)
 			)
 		ORDER BY u.creation_time, u.user_id
-		LIMIT 500`, rolloutTime, now-72*time.MicroSecondsInOneHour, templateID)
+		LIMIT 500`, rolloutTime, now-72*time.MicroSecondsInOneHour,
+		pq.Array(append(StorageWarningScheduledDeletionTemplateIDs(), templateID)))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to fetch Locker intro candidates")
 	}
