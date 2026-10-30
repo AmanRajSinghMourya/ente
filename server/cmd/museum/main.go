@@ -1429,6 +1429,10 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 		spaceDripController.ProcessSpaceDrips()
 	})
 
+	scheduleAndRun(c, "@every 24h", func() {
+		emailNotificationCtrl.SendPhotosNoUploadMails()
+	})
+
 	schedule(c, "@every 1m", func() {
 		pushController.SendPushes()
 	})

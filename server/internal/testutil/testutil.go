@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"os"
@@ -257,6 +258,25 @@ func InsertUsage(t *testing.T, db *sql.DB, userID int64, storageConsumed int64) 
 	_, err := db.Exec(`INSERT INTO usage(user_id, storage_consumed) VALUES($1, $2)`, userID, storageConsumed)
 	if err != nil {
 		t.Fatalf("failed to insert usage for user %d: %v", userID, err)
+	}
+}
+
+func InsertUsageWithFileCounts(t *testing.T, db *sql.DB, userID int64, photosFileCount int64) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO usage(user_id, storage_consumed, photos_file_count, locker_file_count) VALUES($1, 0, $2, 0)`,
+		userID, photosFileCount)
+	if err != nil {
+		t.Fatalf("failed to insert usage for user %d: %v", userID, err)
+	}
+}
+
+func InsertToken(t *testing.T, db *sql.DB, userID int64, app string, creationTime int64) {
+	t.Helper()
+	tokenHash := sha256.Sum256([]byte(fmt.Sprintf("token-%d-%s", userID, app)))
+	_, err := db.Exec(`INSERT INTO tokens(user_id, app, token_hash, creation_time) VALUES($1, $2, $3, $4)`,
+		userID, app, tokenHash[:], creationTime)
+	if err != nil {
+		t.Fatalf("failed to insert token for user %d: %v", userID, err)
 	}
 }
 

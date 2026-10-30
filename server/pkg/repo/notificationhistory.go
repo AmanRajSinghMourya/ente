@@ -21,6 +21,7 @@ const (
 	StorageWarningLoginGraceNotificationGroup              = "storage_warning_login_grace"
 	StorageWarningLoginGraceDays                           = 7
 	StorageWarningLoginGraceDurationMicroseconds           = StorageWarningLoginGraceDays * 24 * time.MicroSecondsInOneHour
+	PhotosNoUploadTemplateID                               = "photos_no_upload"
 )
 
 func (repo *NotificationHistoryRepository) GetLastNotificationTime(userID int64, templateID string) (int64, error) {
@@ -254,4 +255,43 @@ func (repo *NotificationHistoryRepository) GrantStorageWarningLoginGrace(userID 
 		return 0, false, stacktrace.Propagate(err, "failed to commit storage warning grace transaction")
 	}
 	return now + StorageWarningLoginGraceDurationMicroseconds, true, nil
+}
+
+func (repo *NotificationHistoryRepository) GetPhotosNoUploadCandidates(ctx context.Context, createdAfter int64, createdBefore int64, limit int) ([]int64, error) {
+	rows, err := repo.DB.QueryContext(ctx, `
+		SELECT u.user_id
+		FROM users u
+		JOIN usage us ON us.user_id = u.user_id
+		WHERE u.creation_time >= $1
+		  AND u.creation_time <= $2
+		  AND u.encrypted_email IS NOT NULL
+		  AND us.photos_file_count = 0
+		  AND EXISTS (
+		      SELECT 1 FROM tokens t
+		      WHERE t.user_id = u.user_id AND t.app = 'photos'
+		  )
+		  AND NOT EXISTS (
+		      SELECT 1 FROM notification_history nh
+		      WHERE nh.user_id = u.user_id AND nh.template_id = $3
+		  )
+		ORDER BY u.creation_time, u.user_id
+		LIMIT $4`,
+		createdAfter, createdBefore, PhotosNoUploadTemplateID, limit)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to fetch photos no upload candidates")
+	}
+	defer rows.Close()
+
+	userIDs := make([]int64, 0)
+	for rows.Next() {
+		var userID int64
+		if err := rows.Scan(&userID); err != nil {
+			return nil, stacktrace.Propagate(err, "failed to scan photos no upload candidate")
+		}
+		userIDs = append(userIDs, userID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, stacktrace.Propagate(err, "failed to iterate photos no upload candidates")
+	}
+	return userIDs, nil
 }
