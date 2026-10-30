@@ -275,6 +275,7 @@ func main() {
 	mailingListsController := controller.NewMailingListsController(discordController)
 
 	storageBonusCtrl := &storagebonus.Controller{
+		PushCtrl:                    pushController,
 		UserRepo:                    userRepo,
 		StorageBonus:                storagBonusRepo,
 		LockController:              lockController,

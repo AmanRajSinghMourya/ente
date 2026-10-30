@@ -35,6 +35,7 @@ class NotificationService {
   final _logger = Logger("NotificationService");
   void Function(NotificationResponse notificationResponse)?
   _onNotificationTapped;
+  NotificationResponse? _pendingResponse;
   bool _pluginInitialized = false;
   bool _launchDetailsHandled = false;
 
@@ -75,6 +76,8 @@ class NotificationService {
     if (event['eventType'] == 'album_shared') {
       _logger.info('Received encrypted album-share push');
       await onSync();
+    } else if (event['eventType'] == 'referral') {
+      await showReferralNotification();
     }
   }
 
@@ -87,6 +90,9 @@ class NotificationService {
     _onNotificationTapped = onNotificationTapped;
     await _ensurePluginInitialized();
     await _handleLaunchDetailsIfNeeded();
+    final pendingResponse = _pendingResponse;
+    _pendingResponse = null;
+    if (pendingResponse != null) _handleNotificationResponse(pendingResponse);
   }
 
   Future<void> initializeForBackground() async {
@@ -120,9 +126,8 @@ class NotificationService {
       _onNotificationTapped!(response);
       return;
     }
-    _logger.warning(
-      "Notification response received before handler was set; ignoring.",
-    );
+    // A remote notification can launch the app before HomeWidget initializes.
+    _pendingResponse = response;
   }
 
   Future<void> _handleLaunchDetailsIfNeeded() async {
@@ -307,6 +312,40 @@ class NotificationService {
       ).invokeMethod<void>('sharePreferences');
     } on PlatformException catch (e, s) {
       _logger.warning('Could not share notification preferences', e, s);
+    }
+  }
+
+  Future<void> handlePushNotificationTap(Map<String, dynamic> data) async {
+    if (!data.containsKey('notificationCiphertext')) return;
+    try {
+      final event = await NotificationKeyService.decrypt(data);
+      if (event?['eventType'] == 'referral') {
+        _handleNotificationResponse(
+          const NotificationResponse(
+            notificationResponseType:
+                NotificationResponseType.selectedNotification,
+            payload: "ente://referral",
+          ),
+        );
+      }
+    } catch (e, s) {
+      _logger.warning("Could not open referral notification", e, s);
+    }
+  }
+
+  Future<void> showReferralNotification() async {
+    try {
+      if (!await hasGrantedPermissions()) return;
+      final strings = await LanguageService.locals;
+      await showNotification(
+        strings.referralBonusNotificationTitle,
+        strings.referralBonusNotificationBody,
+        channelID: "io.ente.photos.referrals",
+        channelName: strings.referrals,
+        payload: "ente://referral",
+      );
+    } catch (e, s) {
+      _logger.warning("Could not show referral notification", e, s);
     }
   }
 

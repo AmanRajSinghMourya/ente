@@ -3473,6 +3473,11 @@
       "storageAmountInGB": {}
     }
   },
+  "referralBonusNotificationTitle": "Congratulations! 🎉",
+  "@referralBonusNotificationTitle": {
+    "description": "Notification title when a referral storage reward is credited"
+  },
+  "referralBonusNotificationBody": "You earned a 10 GB referral bonus!",
   "referralStorageInfo": "Referrals from paid subscribers earn bonus storage.\n\nYou can use storage up to your plan limit. Upgrade to use the rest of your earned storage.",
   "rejectRecovery": "Reject recovery",
   "rejectSuggestions": "Reject suggestions",
