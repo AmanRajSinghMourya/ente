@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	BaseTemplate           string = "base.html"
+	BaseTemplate           string = "base_v2.html"
 	InviteTemplate         string = "legacy/legacy_invite.html"
 	AcceptedTemplate       string = "legacy/legacy_invite_accepted.html"
 	RejectedInviteTemplate string = "legacy/legacy_invite_rejected.html"
