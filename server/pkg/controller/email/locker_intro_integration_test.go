@@ -39,7 +39,7 @@ func TestSendLockerIntroMailsDeliveryAndRepeatSuppression(t *testing.T) {
 			t.Fatalf("sender = %v, %v", from, err)
 		}
 		subject, err := (&mime.WordDecoder{}).DecodeHeader(message.Header.Get("Subject"))
-		if err != nil || subject != "Meet Ente Locker" {
+		if err != nil || subject != "Let Ente take care of your documents" {
 			t.Fatalf("subject = %q, %v", subject, err)
 		}
 		if message.Header.Get("List-Unsubscribe") != "" {
@@ -58,10 +58,13 @@ func TestSendLockerIntroMailsDeliveryAndRepeatSuppression(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, link := range []string{"https://ente.com/locker/get", "https://ente.com/blog/locker/", "mailto:support@ente.com"} {
+		for _, link := range []string{"https://ente.com/locker", "https://ente.com/blog/locker/", "mailto:support@ente.com"} {
 			if !bytes.Contains(body, []byte(`href="`+link+`"`)) {
 				t.Errorf("missing link %s", link)
 			}
+		}
+		if !bytes.Contains(body, []byte("Ente Locker is included in your plan.")) {
+			t.Fatal("missing inbox preview text")
 		}
 		if !bytes.Contains(body, []byte(`src="https://email-assets.ente.com/locker-intro.png"`)) {
 			t.Fatal("missing hosted illustration")

@@ -60,7 +60,7 @@ const (
 
 	LockerIntroMailLock   = "locker_intro_mail"
 	LockerIntroTemplate   = "locker_intro.html"
-	LockerIntroSubject    = "Meet Ente Locker"
+	LockerIntroSubject    = "Let Ente take care of your documents"
 	LockerIntroTemplateID = "locker_intro"
 )
 
