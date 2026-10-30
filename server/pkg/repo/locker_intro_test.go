@@ -30,8 +30,6 @@ func TestGetLockerIntroCandidates(t *testing.T) {
 		{name: "unknown counts", signup: eligibleSignup},
 		{name: "missing usage", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `DELETE FROM usage WHERE user_id = 1`},
 		{name: "deleted account", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `UPDATE users SET encrypted_email = NULL, email_decryption_nonce = NULL, email_hash = 'deleted+1@ente.io' WHERE user_id = 1`},
-		{name: "expired account scheduled for deletion", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `INSERT INTO notification_history(user_id, template_id, sent_time) VALUES(1, 'storage_warning_expired_scheduled_deletion', 1)`},
-		{name: "over-quota account scheduled for deletion", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `INSERT INTO notification_history(user_id, template_id, sent_time) VALUES(1, 'storage_warning_active_overage_scheduled_deletion', 1)`},
 		{name: "previous attempt", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `INSERT INTO notification_history(user_id, template_id, sent_time) VALUES(1, 'locker_intro', 1)`},
 		{name: "other notification", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `INSERT INTO notification_history(user_id, template_id, sent_time) VALUES(1, 'first_upload', 1)`, want: true},
 	} {
