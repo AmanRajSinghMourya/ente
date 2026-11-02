@@ -818,9 +818,13 @@ func (repo *FileRepository) updateUsageForFileCreation(ctx context.Context, tx *
 	if !ok {
 		return -1, stacktrace.Propagate(ente.ErrInvalidApp, "")
 	}
-	return applyUsageChange(ctx, tx, userID, usageChange{
+	change := usageChange{
 		StorageDelta:    storageDiff,
 		PhotosFileDelta: photosFileCountDiff,
 		LockerFileDelta: lockerFileCountDiff,
-	})
+	}
+	if app == ente.Locker {
+		change.LockerStorageDelta = storageDiff
+	}
+	return applyUsageChange(ctx, tx, userID, change)
 }

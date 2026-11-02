@@ -13,6 +13,7 @@ import (
 
 type usageChange struct {
 	StorageDelta         int64
+	LockerStorageDelta   int64
 	PhotosFileDelta      int64
 	LockerFileDelta      int64
 	InvalidateFileCounts bool
