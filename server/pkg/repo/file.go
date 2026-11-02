@@ -324,23 +324,25 @@ func (repo *FileRepository) Update(file ente.File, fileSize int64, thumbnailSize
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE object_keys 
+	err = tx.QueryRowContext(ctx, `UPDATE object_keys
 			SET object_key = $1, size = $2,
 				datacenters = CASE WHEN object_key = $1 THEN datacenters ELSE $3 END
-			WHERE file_id = $4 AND o_type = $5`,
-		file.File.ObjectKey, fileSize, dcsForNewEntry, file.ID, ente.FILE)
+			WHERE file_id = $4 AND o_type = $5 AND is_deleted = FALSE
+			RETURNING file_id`,
+		file.File.ObjectKey, fileSize, dcsForNewEntry, file.ID, ente.FILE).Scan(&file.ID)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE object_keys 
+	err = tx.QueryRowContext(ctx, `UPDATE object_keys
 			SET object_key = $1, size = $2,
 				datacenters = CASE WHEN object_key = $1 THEN datacenters ELSE $3 END
-			WHERE file_id = $4 AND o_type = $5`,
-		file.Thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, file.ID, ente.THUMBNAIL)
+			WHERE file_id = $4 AND o_type = $5 AND is_deleted = FALSE
+			RETURNING file_id`,
+		file.Thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, file.ID, ente.THUMBNAIL).Scan(&file.ID)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	_, err = applyUsageChange(ctx, tx, file.OwnerID, usageChange{StorageDelta: usageDiff})
+	_, err = applyFileStorageChange(ctx, tx, file.OwnerID, file.ID, usageDiff)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
@@ -471,13 +473,15 @@ func (repo *FileRepository) UpdateThumbnail(ctx context.Context, fileID int64, u
 			return stacktrace.Propagate(err, "")
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE object_keys 
-			SET object_key = $1, size = $2, datacenters = $3 WHERE file_id = $4 AND o_type = $5`,
-		thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, fileID, ente.THUMBNAIL)
+	err = tx.QueryRowContext(ctx, `UPDATE object_keys
+			SET object_key = $1, size = $2, datacenters = $3
+			WHERE file_id = $4 AND o_type = $5 AND is_deleted = FALSE
+			RETURNING file_id`,
+		thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, fileID, ente.THUMBNAIL).Scan(&fileID)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	_, err = applyUsageChange(ctx, tx, userID, usageChange{StorageDelta: usageDiff})
+	_, err = applyFileStorageChange(ctx, tx, userID, fileID, usageDiff)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
@@ -798,7 +802,10 @@ func convertRowsToFiles(rows *sql.Rows) ([]ente.File, error) {
 }
 
 func (repo *FileRepository) scheduleDeletion(ctx context.Context, tx *sql.Tx, fileIDs []int64, userID int64) error {
-	diff := int64(0)
+	lockerBytes, err := lockerStorageForFiles(ctx, tx, userID, fileIDs)
+	if err != nil {
+		return err
+	}
 
 	objectsToBeDeleted, err := repo.ObjectRepo.MarkObjectsAsDeletedForFileIDs(ctx, tx, fileIDs)
 	if err != nil {
@@ -808,8 +815,9 @@ func (repo *FileRepository) scheduleDeletion(ctx context.Context, tx *sql.Tx, fi
 	for _, object := range objectsToBeDeleted {
 		totalObjectSize += object.FileSize
 	}
-	diff = diff - (totalObjectSize)
-	_, err = applyUsageChange(ctx, tx, userID, usageChange{StorageDelta: diff})
+	_, err = applyUsageChange(ctx, tx, userID, usageChange{
+		StorageDelta: -totalObjectSize, LockerStorageDelta: -lockerBytes,
+	})
 	return stacktrace.Propagate(err, "")
 }
 
