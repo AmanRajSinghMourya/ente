@@ -1,6 +1,7 @@
 package user
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/ente/museum/internal/testutil"
@@ -32,6 +33,13 @@ func TestCreateUserInitializesFileCounts(t *testing.T) {
 	}
 	if photos != 0 || locker != 0 || version != 0 {
 		t.Fatalf("file count state = (%d, %d, %d), want (0, 0, 0)", photos, locker, version)
+	}
+	var lockerUsage sql.NullInt64
+	if err := db.QueryRow(`SELECT locker_usage FROM usage WHERE user_id = $1`, userID).Scan(&lockerUsage); err != nil {
+		t.Fatal(err)
+	}
+	if !lockerUsage.Valid || lockerUsage.Int64 != 0 {
+		t.Fatalf("new user Locker usage = %v, want 0", lockerUsage)
 	}
 }
 
