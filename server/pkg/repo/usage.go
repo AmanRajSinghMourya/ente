@@ -10,9 +10,10 @@ import (
 )
 
 type UsageRepository struct {
-	DB                           *sql.DB
-	UserRepo                     *UserRepository
-	QueueFileCountInitialization func(int64)
+	DB                             *sql.DB
+	UserRepo                       *UserRepository
+	QueueFileCountInitialization   func(int64)
+	QueueLockerUsageInitialization func(int64)
 }
 
 type LockerUsage struct {
