@@ -193,19 +193,28 @@ func (repo *UsageRepository) getLockerUsage(ctx context.Context, userIDs []int64
 	}
 
 	sizeQuery := `
-      SELECT 
-         unique_files.owner_id,
-         COALESCE(SUM(ok.size), 0) AS total_size
-      FROM (
-         SELECT DISTINCT c.owner_id, cf.file_id
-         FROM collections c
-         JOIN collection_files cf ON c.collection_id = cf.collection_id
-         WHERE c.app = 'locker'
-            AND c.owner_id = ANY($1)
-            AND cf.f_owner_id = c.owner_id
-      ) AS unique_files
-      LEFT JOIN object_keys ok ON ok.file_id = unique_files.file_id AND ok.is_deleted = false
-      GROUP BY unique_files.owner_id;
+      WITH stored_usage AS (
+         SELECT requested.user_id, u.locker_usage
+         FROM unnest($1::bigint[]) AS requested(user_id)
+         LEFT JOIN usage u ON u.user_id = requested.user_id
+      ), locker_storage AS (
+         SELECT
+            unique_files.owner_id,
+            COALESCE(SUM(ok.size), 0) AS total_size
+         FROM (
+            SELECT DISTINCT c.owner_id, cf.file_id
+            FROM collections c
+            JOIN collection_files cf ON c.collection_id = cf.collection_id
+            WHERE c.app = 'locker'
+               AND c.owner_id IN (SELECT user_id FROM stored_usage WHERE locker_usage IS NULL)
+               AND cf.f_owner_id = c.owner_id
+         ) AS unique_files
+         LEFT JOIN object_keys ok ON ok.file_id = unique_files.file_id AND ok.is_deleted = false
+         GROUP BY unique_files.owner_id
+      )
+      SELECT s.user_id, COALESCE(s.locker_usage, l.total_size, 0), s.locker_usage IS NULL
+      FROM stored_usage s
+      LEFT JOIN locker_storage l ON l.owner_id = s.user_id;
    `
 
 	rows, err := repo.DB.QueryContext(ctx, sizeQuery, pq.Array(userIDs))
@@ -214,13 +223,18 @@ func (repo *UsageRepository) getLockerUsage(ctx context.Context, userIDs []int64
 	}
 	defer rows.Close()
 
+	var uninitializedStorageUserIDs []int64
 	for rows.Next() {
 		var ownerID, totalSize int64
-		if scanErr := rows.Scan(&ownerID, &totalSize); scanErr != nil {
+		var uninitialized bool
+		if scanErr := rows.Scan(&ownerID, &totalSize, &uninitialized); scanErr != nil {
 			return nil, stacktrace.Propagate(scanErr, "")
 		}
 		if user, exists := userMap[ownerID]; exists {
 			user.Usage = totalSize
+		}
+		if uninitialized {
+			uninitializedStorageUserIDs = append(uninitializedStorageUserIDs, ownerID)
 		}
 	}
 
@@ -233,6 +247,11 @@ func (repo *UsageRepository) getLockerUsage(ctx context.Context, userIDs []int64
 
 	if err := rows.Err(); err != nil {
 		return nil, stacktrace.Propagate(err, "")
+	}
+	if repo.QueueLockerUsageInitialization != nil {
+		for _, userID := range uninitializedStorageUserIDs {
+			repo.QueueLockerUsageInitialization(userID)
+		}
 	}
 
 	return usage, nil
