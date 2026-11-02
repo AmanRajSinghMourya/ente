@@ -324,21 +324,19 @@ func (repo *FileRepository) Update(file ente.File, fileSize int64, thumbnailSize
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	err = tx.QueryRowContext(ctx, `UPDATE object_keys
+	_, err = tx.ExecContext(ctx, `UPDATE object_keys 
 			SET object_key = $1, size = $2,
 				datacenters = CASE WHEN object_key = $1 THEN datacenters ELSE $3 END
-			WHERE file_id = $4 AND o_type = $5 AND is_deleted = FALSE
-			RETURNING file_id`,
-		file.File.ObjectKey, fileSize, dcsForNewEntry, file.ID, ente.FILE).Scan(&file.ID)
+			WHERE file_id = $4 AND o_type = $5`,
+		file.File.ObjectKey, fileSize, dcsForNewEntry, file.ID, ente.FILE)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	err = tx.QueryRowContext(ctx, `UPDATE object_keys
+	_, err = tx.ExecContext(ctx, `UPDATE object_keys 
 			SET object_key = $1, size = $2,
 				datacenters = CASE WHEN object_key = $1 THEN datacenters ELSE $3 END
-			WHERE file_id = $4 AND o_type = $5 AND is_deleted = FALSE
-			RETURNING file_id`,
-		file.Thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, file.ID, ente.THUMBNAIL).Scan(&file.ID)
+			WHERE file_id = $4 AND o_type = $5`,
+		file.Thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, file.ID, ente.THUMBNAIL)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
@@ -473,11 +471,9 @@ func (repo *FileRepository) UpdateThumbnail(ctx context.Context, fileID int64, u
 			return stacktrace.Propagate(err, "")
 		}
 	}
-	err = tx.QueryRowContext(ctx, `UPDATE object_keys
-			SET object_key = $1, size = $2, datacenters = $3
-			WHERE file_id = $4 AND o_type = $5 AND is_deleted = FALSE
-			RETURNING file_id`,
-		thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, fileID, ente.THUMBNAIL).Scan(&fileID)
+	_, err = tx.ExecContext(ctx, `UPDATE object_keys 
+			SET object_key = $1, size = $2, datacenters = $3 WHERE file_id = $4 AND o_type = $5`,
+		thumbnail.ObjectKey, thumbnailSize, dcsForNewEntry, fileID, ente.THUMBNAIL)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
