@@ -21,13 +21,17 @@ type usageChange struct {
 
 func applyUsageChange(ctx context.Context, tx *sql.Tx, userID int64, change usageChange) (int64, error) {
 	row := tx.QueryRowContext(ctx, `WITH current_usage AS (
-			SELECT user_id, storage_consumed, photos_file_count, locker_file_count, file_count_source_version
+			SELECT user_id, storage_consumed, locker_usage, photos_file_count, locker_file_count, file_count_source_version
 			FROM usage
 			WHERE user_id = $1
 			FOR UPDATE
 		)
 		UPDATE usage AS target
 		SET storage_consumed = current_usage.storage_consumed + $2,
+			locker_usage = CASE
+				WHEN current_usage.locker_usage + $6 < 0 THEN NULL
+				ELSE current_usage.locker_usage + $6
+			END,
 			photos_file_count = CASE
 				WHEN $5
 					OR current_usage.photos_file_count IS NULL
@@ -47,22 +51,25 @@ func applyUsageChange(ctx context.Context, tx *sql.Tx, userID int64, change usag
 				ELSE current_usage.locker_file_count + $4
 			END,
 			file_count_source_version = current_usage.file_count_source_version
-				+ CASE WHEN $3 <> 0 OR $4 <> 0 OR $5 THEN 1 ELSE 0 END
+				+ CASE WHEN $2 <> 0 OR $3 <> 0 OR $4 <> 0 OR $5 OR $6 <> 0 THEN 1 ELSE 0 END
 		FROM current_usage
 		WHERE target.user_id = current_usage.user_id
 		RETURNING target.storage_consumed,
 			current_usage.photos_file_count IS NOT NULL
 			AND current_usage.locker_file_count IS NOT NULL
-			AND ($5 OR current_usage.photos_file_count + $3 < 0 OR current_usage.locker_file_count + $4 < 0)`,
+			AND ($5 OR current_usage.photos_file_count + $3 < 0 OR current_usage.locker_file_count + $4 < 0),
+			current_usage.locker_usage IS NOT NULL AND target.locker_usage IS NULL`,
 		userID,
 		change.StorageDelta,
 		change.PhotosFileDelta,
 		change.LockerFileDelta,
 		change.InvalidateFileCounts,
+		change.LockerStorageDelta,
 	)
 	var storageConsumed int64
 	var fileCountsInvalidated bool
-	if err := row.Scan(&storageConsumed, &fileCountsInvalidated); err != nil {
+	var lockerUsageInvalidated bool
+	if err := row.Scan(&storageConsumed, &fileCountsInvalidated, &lockerUsageInvalidated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return -1, stacktrace.NewError("missing usage row for user %d", userID)
 		}
@@ -74,6 +81,9 @@ func applyUsageChange(ctx context.Context, tx *sql.Tx, userID int64, change usag
 			"photos_file_delta": change.PhotosFileDelta,
 			"locker_file_delta": change.LockerFileDelta,
 		}).Error("invalidated file counts")
+	}
+	if lockerUsageInvalidated {
+		logrus.WithField("user_id", userID).Error("invalidated Locker storage usage")
 	}
 	return storageConsumed, nil
 }
