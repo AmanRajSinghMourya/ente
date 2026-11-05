@@ -153,6 +153,65 @@ func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int6
 	c.pruneTokens(unregisteredTokens)
 }
 
+func (c *PushController) NotifyReferral(ctx context.Context, userID int64) {
+	if viper.GetBool("internal.silent") || c.fcm == nil {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*gotime.Second)
+	tokens, err := c.PushRepo.GetInternalPushTokens(lookupCtx, []int64{userID})
+	cancel()
+	if err != nil {
+		log.WithError(err).Warn("push token lookup failed")
+		return
+	}
+	var unregisteredTokens []string
+	for _, token := range tokens {
+		if len(token.NotificationPublicKey) == 0 {
+			continue
+		}
+		publicKey, err := hpke.MLKEM768X25519().NewPublicKey(token.NotificationPublicKey)
+		if err != nil {
+			log.WithError(err).Warn("invalid referral notification public key")
+			continue
+		}
+		ciphertext, err := hpke.Seal(publicKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(),
+			[]byte("ente-push"), []byte(`{"eventType":"referral"}`))
+		if err != nil {
+			log.WithError(err).Warn("referral notification encryption failed")
+			continue
+		}
+		message := map[string]any{
+			"token": token.FCMToken,
+			"data":  map[string]string{"notificationCiphertext": base64.StdEncoding.EncodeToString(ciphertext)},
+		}
+		if token.Platform == "ios" {
+			message["apns"] = map[string]any{
+				"headers": map[string]string{
+					"apns-push-type":  "alert",
+					"apns-priority":   "10",
+					"apns-expiration": strconv.FormatInt(gotime.Now().Add(24*gotime.Hour).Unix(), 10),
+				},
+				"payload": map[string]any{"aps": map[string]any{
+					"alert":           map[string]string{"title": "Ente", "body": "New activity"},
+					"mutable-content": 1,
+					"sound":           "default",
+				}},
+			}
+		} else {
+			message["android"] = map[string]string{"priority": "high", "ttl": "86400s"}
+		}
+		err = c.fcm.sendMessage(ctx, message)
+		if err != nil {
+			log.WithError(err).Warn("push failed")
+			if errors.Is(err, errUnregisteredToken) {
+				unregisteredTokens = append(unregisteredTokens, token.FCMToken)
+			}
+		}
+	}
+	c.pruneTokens(unregisteredTokens)
+}
+
 func (c *PushController) RemoveTokensForUser(userID int64) error {
 	return stacktrace.Propagate(c.PushRepo.RemoveTokensForUser(userID), "")
 }

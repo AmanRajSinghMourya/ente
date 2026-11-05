@@ -19,6 +19,7 @@ type PushToken struct {
 	CreatedAt             int64  `json:"createdAt"`
 	LastNotifiedAt        int64  `json:"lastNotifiedAt"`
 	NotificationPublicKey []byte `json:"-"`
+	Platform              string `json:"-"`
 }
 
 func (pt *PushToken) MarshalJSON() ([]byte, error) {
