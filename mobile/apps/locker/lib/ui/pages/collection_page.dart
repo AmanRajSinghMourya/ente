@@ -53,6 +53,7 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
   bool isFavorite = false;
 
   final _selectedFiles = SelectedFiles();
+  final _selectionBarHeight = ValueNotifier<double>(0);
   final _scrollController = ScrollController();
   final _keyboardFocusNode = FocusNode();
 
@@ -75,9 +76,6 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
   List<EnteFile> get allFiles => _files;
 
   @override
-  Map<int, List<EnteFile>> get filesByCollection => const {};
-
-  @override
   Collection get selectedCollection => _collection;
 
   @override
@@ -88,10 +86,12 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
     setState(() {
       _filteredFiles = files;
     });
+    _selectedFiles.retainSelection(files);
   }
 
   @override
   void onSearchStateChanged(bool isActive) {
+    onSearchFilterChanged();
     if (!isActive) {
       setState(() {
         _filteredFiles = _files;
@@ -100,11 +100,17 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
   }
 
   @override
+  void onSearchFilterChanged() {
+    if (_selectedFiles.hasSelections) _selectedFiles.clearAll();
+  }
+
+  @override
   void dispose() {
     _collectionUpdateSubscription.cancel();
     _keyboardFocusNode.dispose();
     _scrollController.dispose();
     _selectedFiles.dispose();
+    _selectionBarHeight.dispose();
     super.dispose();
   }
 
@@ -216,6 +222,7 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
               selectedFiles: _selectedFiles,
               collectionViewType: collectionViewType,
               scrollController: _scrollController,
+              onHeightChanged: (height) => _selectionBarHeight.value = height,
             ),
           ],
         ),
@@ -264,6 +271,9 @@ class _CollectionPageState extends UploaderPageState<CollectionPage>
             files: _filteredFiles,
             searchQuery: searchQuery,
             isHomePage: false,
+            selectedFiles: _selectedFiles,
+            selectionBarHeight: _selectionBarHeight,
+            selectionEnabled: _isSelectionEnabled,
             onSearchEverywhere: _searchEverywhere,
           ),
         ),

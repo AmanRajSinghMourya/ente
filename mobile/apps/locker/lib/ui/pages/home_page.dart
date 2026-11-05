@@ -15,6 +15,7 @@ import "package:hugeicons/hugeicons.dart";
 import 'package:listen_sharing_intent/listen_sharing_intent.dart';
 import 'package:locker/events/collections_updated_event.dart';
 import 'package:locker/events/opened_settings_event.dart';
+import 'package:locker/models/selected_collections.dart';
 import 'package:locker/models/selected_files.dart';
 import 'package:locker/services/collections/collections_service.dart';
 import 'package:locker/services/collections/models/collection.dart';
@@ -34,6 +35,7 @@ import 'package:locker/ui/mixins/search_mixin.dart';
 import 'package:locker/ui/pages/save_page.dart';
 import 'package:locker/ui/pages/uploader_page.dart';
 import "package:locker/ui/utils/legacy_utils.dart";
+import 'package:locker/ui/viewer/actions/collection_selection_overlay_bar.dart';
 import "package:locker/ui/viewer/actions/file_selection_overlay_bar.dart";
 import "package:locker/utils/bottom_sheet_illustration.dart";
 import 'package:locker/utils/collection_sort_util.dart';
@@ -160,6 +162,8 @@ class _HomePageState extends UploaderPageState<HomePage>
   );
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final _selectedFiles = SelectedFiles();
+  final _selectedCollections = SelectedCollections();
+  final _selectionBarHeight = ValueNotifier<double>(0);
   final _scrollController = ScrollController();
   final _keyboardFocusNode = FocusNode();
   bool _isLoading = true;
@@ -171,7 +175,6 @@ class _HomePageState extends UploaderPageState<HomePage>
   List<Collection> _collections = [];
   List<Collection> _filteredCollections = [];
   List<EnteFile> _recentFiles = [];
-  Map<int, List<EnteFile>> _filesByCollection = {};
   List<EnteFile> _filteredFiles = [];
   final ValueNotifier<List<EnteFile>> _displayedFilesNotifier = ValueNotifier(
     [],
@@ -200,9 +203,6 @@ class _HomePageState extends UploaderPageState<HomePage>
   List<EnteFile> get allFiles => _recentFiles;
 
   @override
-  Map<int, List<EnteFile>> get filesByCollection => _filesByCollection;
-
-  @override
   void onSearchResultsChanged(
     List<Collection> collections,
     List<EnteFile> files,
@@ -212,17 +212,31 @@ class _HomePageState extends UploaderPageState<HomePage>
         _filteredCollections = _filterOutUncategorized(collections);
         _filteredFiles = files;
       });
+      _selectedFiles.retainSelection(files);
+      _selectedCollections.retainSelection(collections);
     }
   }
 
   @override
   void onSearchStateChanged(bool isActive) {
+    onSearchFilterChanged();
     if (!isActive && mounted) {
       setState(() {
         _filteredCollections = _filterOutUncategorized(_collections);
         _filteredFiles = _recentFiles;
       });
     }
+  }
+
+  @override
+  void onSearchFilterChanged() {
+    if (_selectedFiles.hasSelections) _selectedFiles.clearAll();
+    _selectedCollections.clearAll();
+  }
+
+  void _startSearchSelection(SearchScope scope) {
+    searchFocusNode.unfocus();
+    updateSearchScope(scope);
   }
 
   List<Collection> _filterOutUncategorized(List<Collection> collections) {
@@ -315,6 +329,8 @@ class _HomePageState extends UploaderPageState<HomePage>
     _scrollController.dispose();
     _displayedFilesNotifier.dispose();
     _selectedFiles.dispose();
+    _selectedCollections.dispose();
+    _selectionBarHeight.dispose();
     _deepLinkSubscription?.cancel();
     _triggerLogoutSubscription?.cancel();
     _collectionsUpdatedSubscription?.cancel();
@@ -584,13 +600,11 @@ class _HomePageState extends UploaderPageState<HomePage>
 
   Future<void> _loadRecentFiles(List<Collection> collections) async {
     final allFiles = <EnteFile>[];
-    final filesByCollection = <int, List<EnteFile>>{};
 
     for (final collection in collections) {
       final files = await CollectionService.instance.getFilesInCollection(
         collection,
       );
-      filesByCollection[collection.id] = files;
       allFiles.addAll(files);
     }
 
@@ -622,7 +636,6 @@ class _HomePageState extends UploaderPageState<HomePage>
     });
 
     _recentFiles = uniqueFiles;
-    _filesByCollection = filesByCollection;
   }
 
   void _handleSearchChange(String query) {
@@ -641,9 +654,11 @@ class _HomePageState extends UploaderPageState<HomePage>
     final colors = context.componentColors;
     return UserDetailsStateWidget(
       child: ListenableBuilder(
-        listenable: _selectedFiles,
+        listenable: Listenable.merge([_selectedFiles, _selectedCollections]),
         builder: (context, _) {
-          final hasSelection = _selectedFiles.files.isNotEmpty;
+          final hasSelection =
+              _selectedFiles.hasSelections ||
+              _selectedCollections.hasSelections;
           return PopScope(
             canPop: !isSearchActive && !_isSettingsOpen && !hasSelection,
             onPopInvokedWithResult: (didPop, result) async {
@@ -652,7 +667,7 @@ class _HomePageState extends UploaderPageState<HomePage>
               }
 
               if (hasSelection) {
-                _selectedFiles.clearAll();
+                onSearchFilterChanged();
                 return;
               }
 
@@ -699,18 +714,31 @@ class _HomePageState extends UploaderPageState<HomePage>
                       },
                       child: _buildHomeContent(),
                     ),
-                    ValueListenableBuilder<List<EnteFile>>(
-                      valueListenable: _displayedFilesNotifier,
-                      builder: (context, displayedFiles, _) {
-                        return FileSelectionOverlayBar(
-                          selectedFiles: _selectedFiles,
-                          files: displayedFiles.isNotEmpty
-                              ? displayedFiles
-                              : _recentFiles,
-                          scrollController: _scrollController,
-                        );
-                      },
-                    ),
+                    if (isSearchActive &&
+                        searchScope == SearchScope.collections)
+                      CollectionSelectionOverlayBar(
+                        selectedCollections: _selectedCollections,
+                        collections: _filteredCollections,
+                        onHeightChanged: (height) =>
+                            _selectionBarHeight.value = height,
+                      )
+                    else
+                      ValueListenableBuilder<List<EnteFile>>(
+                        valueListenable: _displayedFilesNotifier,
+                        builder: (context, displayedFiles, _) {
+                          return FileSelectionOverlayBar(
+                            selectedFiles: _selectedFiles,
+                            files: isSearchActive
+                                ? _filteredFiles
+                                : displayedFiles.isNotEmpty
+                                ? displayedFiles
+                                : _recentFiles,
+                            scrollController: _scrollController,
+                            onHeightChanged: (height) =>
+                                _selectionBarHeight.value = height,
+                          );
+                        },
+                      ),
                   ],
                 ),
                 floatingActionButton: isSearchActive || _isHomeEmptyState
@@ -778,13 +806,22 @@ class _HomePageState extends UploaderPageState<HomePage>
 
     if (isSearchActive) {
       return SingleChildScrollView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 24.0),
         child: SearchResultView(
           collections: _filteredCollections,
           files: _filteredFiles,
           searchQuery: searchQuery,
           isHomePage: true,
+          selectedFiles: _selectedFiles,
+          selectedCollections: _selectedCollections,
+          onFileSelectionStarted: () =>
+              _startSearchSelection(SearchScope.items),
+          onCollectionSelectionStarted: () =>
+              _startSearchSelection(SearchScope.collections),
+          selectionBarHeight: _selectionBarHeight,
+          searchScope: searchScope,
+          onScopeChanged: updateSearchScope,
         ),
       );
     }
@@ -869,11 +906,11 @@ class _HomePageState extends UploaderPageState<HomePage>
         isSearchActive || searchController.text.trim().isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.only(
+      padding: EdgeInsets.only(
         left: Spacing.lg,
         top: Spacing.lg,
         right: Spacing.lg,
-        bottom: Spacing.xl,
+        bottom: isSearchActive ? Spacing.xxl : Spacing.xl,
       ),
       child: Listener(
         behavior: HitTestBehavior.translucent,
