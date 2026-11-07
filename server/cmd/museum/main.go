@@ -1410,6 +1410,10 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 	})
 
 	scheduleAndRun(c, "@every 24h", func() {
+		emailNotificationCtrl.SendPhotosNoUploadMails(timeUtil.Microseconds())
+	})
+
+	scheduleAndRun(c, "@every 24h", func() {
 		emailNotificationCtrl.NudgePaidSubscriberForFamily()
 	})
 
