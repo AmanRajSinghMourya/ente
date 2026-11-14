@@ -801,6 +801,7 @@ func (repo *CollectionRepository) AddFiles(
 	collectionOwnerID int64,
 	files []ente.CollectionFileItem,
 	fileOwnerID int64,
+	app ente.App,
 ) error {
 	finishPhase := dbmetrics.Start(dbmetrics.CollectionAddFiles, "begin_with_checkout")
 	tx, err := repo.DB.BeginTx(ctx, nil)
@@ -831,7 +832,7 @@ func (repo *CollectionRepository) AddFiles(
 		return stacktrace.Propagate(&ente.ErrFileInTrash, "")
 	}
 	finishPhase = dbmetrics.Start(dbmetrics.CollectionAddFiles, "upsert_memberships")
-	err = upsertCollectionFiles(ctx, tx, collectionID, collectionOwnerID, files, fileOwnerID, updationTime)
+	lockerBytes, err := upsertCollectionFiles(ctx, tx, collectionID, collectionOwnerID, files, fileOwnerID, updationTime, app)
 	finishPhase(err)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
@@ -842,6 +843,11 @@ func (repo *CollectionRepository) AddFiles(
 	finishPhase(err)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
+	}
+	if lockerBytes != 0 {
+		if _, err := applyUsageChange(ctx, tx, fileOwnerID, usageChange{LockerStorageDelta: lockerBytes}); err != nil {
+			return err
+		}
 	}
 	finishPhase = dbmetrics.Start(dbmetrics.CollectionAddFiles, "commit")
 	err = tx.Commit()
@@ -857,9 +863,10 @@ func upsertCollectionFiles(
 	files []ente.CollectionFileItem,
 	fileOwnerID int64,
 	updationTime int64,
-) error {
+	app ente.App,
+) (int64, error) {
 	if len(files) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	fileIDs := make([]int64, 0, len(files))
@@ -876,6 +883,14 @@ func upsertCollectionFiles(
 		keyDecryptionNonces = append(keyDecryptionNonces, file.KeyDecryptionNonce)
 	}
 
+	var lockerBytes int64
+	if app == ente.Locker && collectionOwnerID == fileOwnerID {
+		var err error
+		lockerBytes, err = newLockerMembershipBytes(ctx, tx, fileOwnerID, collectionID, fileIDs)
+		if err != nil {
+			return 0, err
+		}
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO collection_files
 			(collection_id, file_id, encrypted_key, key_decryption_nonce, is_deleted, updation_time, c_owner_id, f_owner_id)
 		SELECT $1, input.file_id, input.encrypted_key, input.key_decryption_nonce, FALSE, $2, $3, $4
@@ -901,10 +916,10 @@ func upsertCollectionFiles(
 		pq.Array(encryptedKeys),
 		pq.Array(keyDecryptionNonces),
 	)
-	return stacktrace.Propagate(err, "")
+	return lockerBytes, stacktrace.Propagate(err, "")
 }
 
-func (repo *CollectionRepository) RestoreFiles(ctx context.Context, userID int64, collectionID int64, newCollectionFiles []ente.CollectionFileItem) error {
+func (repo *CollectionRepository) RestoreFiles(ctx context.Context, userID int64, collectionID int64, newCollectionFiles []ente.CollectionFileItem, app ente.App) error {
 	fileIDs := make([]int64, 0, len(newCollectionFiles))
 	for _, newFile := range newCollectionFiles {
 		fileIDs = append(fileIDs, newFile.ID)
@@ -931,11 +946,11 @@ func (repo *CollectionRepository) RestoreFiles(ctx context.Context, userID int64
 		return stacktrace.Propagate(err, "failed to calculate file count transition")
 	}
 
-	if err := upsertCollectionFiles(ctx, tx, collectionID, userID, newCollectionFiles, userID, updationTime); err != nil {
+	lockerBytes, err := upsertCollectionFiles(ctx, tx, collectionID, userID, newCollectionFiles, userID, updationTime, app)
+	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
 	// Match SuggestAction's membership-before-collection lock order.
-	var app ente.App
 	if err := tx.QueryRowContext(ctx, `UPDATE collections SET updation_time = $1
 		WHERE collection_id = $2 AND owner_id = $3 AND is_deleted = FALSE
 		RETURNING app`, updationTime, collectionID, userID).Scan(&app); err != nil {
@@ -950,16 +965,17 @@ func (repo *CollectionRepository) RestoreFiles(ctx context.Context, userID int64
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
+	change := usageChange{LockerStorageDelta: lockerBytes}
 	if filesBecomingActive != 0 {
 		photosFileDelta, lockerFileDelta, ok := fileCountDelta(app, filesBecomingActive)
 		if !ok {
 			return stacktrace.Propagate(ente.ErrInvalidApp, "unsupported collection app %s", app)
 		}
-		if _, err := applyUsageChange(ctx, tx, userID, usageChange{
-			PhotosFileDelta: photosFileDelta,
-			LockerFileDelta: lockerFileDelta,
-		}); err != nil {
-			return stacktrace.Propagate(err, "failed to update file counts")
+		change.PhotosFileDelta, change.LockerFileDelta = photosFileDelta, lockerFileDelta
+	}
+	if filesBecomingActive != 0 || lockerBytes != 0 {
+		if _, err := applyUsageChange(ctx, tx, userID, change); err != nil {
+			return stacktrace.Propagate(err, "failed to update usage")
 		}
 	}
 	return stacktrace.Propagate(tx.Commit(), "")
@@ -1024,6 +1040,7 @@ func (repo *CollectionRepository) MoveFiles(ctx context.Context,
 	fileItems []ente.CollectionFileItem,
 	collectionOwner int64,
 	fileOwner int64,
+	app ente.App,
 ) error {
 	if collectionOwner != fileOwner {
 		return fmt.Errorf("move is not supported when collection and file onwer are different")
@@ -1051,7 +1068,8 @@ func (repo *CollectionRepository) MoveFiles(ctx context.Context,
 	if len(trashedOrDeletedFileIDs) > 0 {
 		return stacktrace.Propagate(&ente.ErrFileInTrash, "")
 	}
-	if err := upsertCollectionFiles(ctx, tx, toCollectionID, collectionOwner, fileItems, fileOwner, updationTime); err != nil {
+	lockerBytes, err := upsertCollectionFiles(ctx, tx, toCollectionID, collectionOwner, fileItems, fileOwner, updationTime, app)
+	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE collection_files 
@@ -1064,6 +1082,11 @@ func (repo *CollectionRepository) MoveFiles(ctx context.Context,
 		 WHERE (collection_id = $2 or collection_id = $3 )`, updationTime, toCollectionID, fromCollectionID)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
+	}
+	if lockerBytes != 0 {
+		if _, err := applyUsageChange(ctx, tx, fileOwner, usageChange{LockerStorageDelta: lockerBytes}); err != nil {
+			return err
+		}
 	}
 	return stacktrace.Propagate(tx.Commit(), "")
 }

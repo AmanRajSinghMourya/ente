@@ -25,13 +25,13 @@ func TestCreateUserInitializesFileCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var photos, locker, version int64
-	if err := db.QueryRow(`SELECT photos_file_count, locker_file_count, file_count_source_version
-		FROM usage WHERE user_id = $1`, userID).Scan(&photos, &locker, &version); err != nil {
+	var photos, locker, version, lockerUsage int64
+	if err := db.QueryRow(`SELECT photos_file_count, locker_file_count, file_count_source_version, locker_usage
+		FROM usage WHERE user_id = $1`, userID).Scan(&photos, &locker, &version, &lockerUsage); err != nil {
 		t.Fatal(err)
 	}
-	if photos != 0 || locker != 0 || version != 0 {
-		t.Fatalf("file count state = (%d, %d, %d), want (0, 0, 0)", photos, locker, version)
+	if photos != 0 || locker != 0 || version != 0 || lockerUsage != 0 {
+		t.Fatalf("usage state = (%d, %d, %d, %d), want (0, 0, 0, 0)", photos, locker, version, lockerUsage)
 	}
 }
 

@@ -56,7 +56,7 @@ func TestTrashAndRestoreMaintainReadyLockerCount(t *testing.T) {
 	assertReadyFileCounts(t, db, userID, 0, 0, 1)
 
 	if err := repository.RestoreFiles(t.Context(), userID, firstCollectionID,
-		[]ente.CollectionFileItem{collectionMembershipTestItem(fileID)}); err != nil {
+		[]ente.CollectionFileItem{collectionMembershipTestItem(fileID)}, ente.Locker); err != nil {
 		t.Fatalf("RestoreFiles() error = %v", err)
 	}
 	assertReadyFileCounts(t, db, userID, 0, 1, 2)
