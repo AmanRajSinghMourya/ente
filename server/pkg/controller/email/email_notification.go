@@ -95,10 +95,14 @@ func (c *EmailNotificationController) OnSuccessfulReferral(userID int64) {
 	if err != nil {
 		return
 	}
-	err = email.SendTemplatedEmail([]string{user.Email}, "team@ente.com", "team@ente.com", ReferralSuccessfulSubject, ReferralSuccessfulTemplate, nil, nil)
+	err = sendReferralEmail(user.Email, "team@ente.com", ReferralSuccessfulSubject, ReferralSuccessfulTemplate)
 	if err != nil {
-		log.Error("Error sending first upload email ", err)
+		log.WithError(err).Error("Error sending successful referral email")
 	}
+}
+
+func sendReferralEmail(userEmail, fromName, subject, template string) error {
+	return email.SendTemplatedEmailV2([]string{userEmail}, fromName, "team@ente.com", subject, "legacy/legacy_base.html", template, nil, nil)
 }
 
 func (c *EmailNotificationController) OnLinkJoined(ownerID int64, otherUserID int64, role ente.CollectionParticipantRole) {
