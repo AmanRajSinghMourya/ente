@@ -51,7 +51,7 @@ func applyUsageChange(ctx context.Context, tx *sql.Tx, userID int64, change usag
 				ELSE current_usage.locker_file_count + $4
 			END,
 			file_count_source_version = current_usage.file_count_source_version
-				+ CASE WHEN $2 <> 0 OR $3 <> 0 OR $4 <> 0 OR $5 OR $6 <> 0 THEN 1 ELSE 0 END
+				+ CASE WHEN $3 <> 0 OR $4 <> 0 OR $5 OR $6 <> 0 THEN 1 ELSE 0 END
 		FROM current_usage
 		WHERE target.user_id = current_usage.user_id
 		RETURNING target.storage_consumed,
