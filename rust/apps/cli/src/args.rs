@@ -127,6 +127,21 @@ pub enum Command {
         #[command(subcommand)]
         command: PasteCommand,
     },
+    #[command(
+        about = "Send feedback about the CLI to Ente",
+        after_long_help = "Send MESSAGE, read it from --input PATH, or pipe feedback on stdin.
+--input - explicitly reads stdin. Messages must be nonblank and at most
+2,000 characters.
+
+Sends your message, CLI version and OS to Ente's private feedback inbox.
+Requires network access; no login needed.
+Prints a receipt ID. With --json: {\"id\": \"...\"}.
+
+Examples:
+  ente feedback \"Export restarted after reconnecting\"
+  ente feedback --input feedback.txt --json"
+    )]
+    Feedback(FeedbackArgs),
     #[command(about = "Manage Ente accounts", alias = "accounts")]
     Account {
         #[command(subcommand)]
@@ -168,7 +183,10 @@ Fish loads a saved script on demand. Write it once, and again after upgrading:
 
 Prints the script to stdout, including when --json is set."
     )]
-    Completion { shell: Shell },
+    Completion {
+        #[arg(help = "Shell to generate the script for")]
+        shell: Shell,
+    },
     #[command(about = "Administer an Ente server", after_long_help = ADMIN_HELP)]
     Admin {
         #[command(flatten)]
@@ -243,6 +261,28 @@ With --json: {\"text\": \"...\"}. --raw affects plain terminal output only. Requ
         #[arg(long, help = "Ente API server; defaults to api.ente.com")]
         host: Option<String>,
     },
+}
+
+#[derive(Args)]
+pub struct FeedbackArgs {
+    #[arg(
+        conflicts_with = "input",
+        help = "Feedback text; defaults to piped stdin"
+    )]
+    pub message: Option<String>,
+    #[arg(
+        long,
+        value_name = "PATH|-",
+        help = "Read plain UTF-8 text from a file, or stdin with -"
+    )]
+    pub input: Option<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        default_value = "https://feedback.ente.com",
+        help = "Feedback server"
+    )]
+    pub host: String,
 }
 
 #[derive(Subcommand)]
@@ -386,6 +426,14 @@ family is null outside a family; otherwise it contains usedBytes, storageBytes a
 Each member has email, status, admin, usedBytes and storageLimitBytes (null without a cap)."
     )]
     Usage,
+    #[command(
+        about = "Find and remove exact duplicate photos and videos",
+        visible_alias = "duplicates"
+    )]
+    Duplicate {
+        #[command(subcommand)]
+        command: DuplicateCommand,
+    },
     #[command(about = "Manage albums")]
     Album {
         #[command(subcommand)]
@@ -601,6 +649,49 @@ pub enum FileCommand {
         file: String,
         #[arg(long, value_name = "PATH", help = "Write to this new file")]
         output: PathBuf,
+    },
+}
+
+const DUPLICATES_HELP: &str = "Uses the same duplicate detection and removal rules as Ente Photos.
+Scans files you own in non-hidden albums, including Favorites and archived albums.
+Matches stored hashes; a file in several albums is counted once. Files without a hash or known group size are omitted.
+Group IDs are the smallest file ID in each group, not row numbers.
+Keeps a copy with a caption first, then one with an edited name or date, then the first copy in album-name order.
+The retained copy is added to the other copies' albums before extra copies move to trash.
+List refreshes metadata first; --offline reads a previous sync. Groups are ordered by reclaimable size.
+Remove always refreshes online. Pass group IDs or --all, or omit both to select with space and enter.
+Without --dry-run, removal asks for confirmation; --yes approves it and --no-input only disables prompts.
+List JSON: an array of groups with id, sizeBytes, reclaimableBytes, retainedId and files.
+Each file has id, name and albums (id and name). All IDs are strings; byte counts are integers.
+sizeBytes is the stored encrypted size of one copy; reclaimableBytes is the total for the extra copies in the group.
+Remove JSON: dryRun, groupIds, retainedIds, trashIds and reclaimableBytes.
+Removal reclaimableBytes is the total for all selected groups.
+With --dry-run, trashIds are planned; otherwise they were moved to trash. Preview and progress go to stderr.
+
+Examples:
+  ente photos duplicate list
+  ente photos duplicate remove
+  ente photos duplicate remove 1580559962386999 --dry-run
+  ente photos duplicate remove 1580559962386999 --yes --no-input --json";
+
+#[derive(Subcommand)]
+pub enum DuplicateCommand {
+    #[command(about = "List duplicate groups and the copies to keep or trash", after_long_help = DUPLICATES_HELP)]
+    List(ListArgs),
+    #[command(about = "Select duplicate groups and move extra copies to trash", after_long_help = DUPLICATES_HELP)]
+    Remove {
+        #[arg(
+            value_name = "GROUP",
+            conflicts_with = "all",
+            help = "Group IDs from duplicates list; omit to select interactively"
+        )]
+        groups: Vec<i64>,
+        #[arg(long, help = "Select every current duplicate group")]
+        all: bool,
+        #[arg(long, help = "Show the selected removal plan without changing files")]
+        dry_run: bool,
+        #[arg(long, help = "Approve removal without a confirmation prompt")]
+        yes: bool,
     },
 }
 
@@ -1116,6 +1207,87 @@ impl App {
             Self::Photos => "io.ente.photos",
             Self::Locker => "io.ente.locker",
             Self::Auth => "io.ente.auth",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::command;
+
+    fn commands(command: &clap::Command, path: &str) -> Vec<(String, clap::Command)> {
+        let path = format!("{path} {}", command.get_name()).trim().to_owned();
+        let mut all = vec![(path.clone(), command.clone())];
+        for child in command.get_subcommands() {
+            all.extend(commands(child, &path));
+        }
+        all
+    }
+
+    #[test]
+    fn account_selector() {
+        let mut root = command();
+        root.build();
+        for (path, command) in commands(&root, "") {
+            if command.has_subcommands() || path.contains(" help") {
+                continue;
+            }
+            let selector = command
+                .get_arguments()
+                .any(|arg| arg.get_id() == "account" && arg.is_global_set());
+            let expected = [
+                "ente photos ",
+                "ente locker ",
+                "ente auth ",
+                "ente admin ",
+                "ente account totp ",
+            ]
+            .iter()
+            .any(|group| path.starts_with(group));
+            assert_eq!(selector, expected, "{path}: --account selector");
+        }
+    }
+
+    #[test]
+    fn help_shape() {
+        let mut root = command();
+        root.build();
+        for (path, command) in commands(&root, "") {
+            let about = command
+                .get_about()
+                .map(ToString::to_string)
+                .unwrap_or_default();
+            assert!(
+                !about.is_empty() && !about.ends_with('.'),
+                "{path}: about {about:?}"
+            );
+            for arg in command.get_arguments() {
+                let help = arg
+                    .get_help()
+                    .or(arg.get_long_help())
+                    .map(ToString::to_string);
+                assert!(
+                    help.is_some_and(|help| !help.is_empty()),
+                    "{path}: {} has no help",
+                    arg.get_id()
+                );
+            }
+            let notes = [command.get_after_help(), command.get_after_long_help()]
+                .into_iter()
+                .flatten()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n");
+            let Some(examples) = notes.split("Examples:\n").nth(1) else {
+                continue;
+            };
+            assert!(
+                !command.has_subcommands(),
+                "{path}: group help carries examples"
+            );
+            for line in examples.lines().take_while(|line| !line.is_empty()) {
+                assert!(line.starts_with("  ente "), "{path}: example {line:?}");
+            }
         }
     }
 }
