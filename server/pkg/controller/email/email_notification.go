@@ -61,7 +61,7 @@ const (
 	PhotosNoUploadMailLock   = "photos_no_upload_mail"
 	PhotosNoUploadTemplate   = "photos_no_upload.html"
 	PhotosNoUploadTemplateID = "photos_no_upload"
-	PhotosNoUploadSubject    = "Ready to back up your photos?"
+	PhotosNoUploadSubject    = "Start with a few favourites"
 )
 
 var photosNoUploadRolloutTime = stdtime.Date(2026, stdtime.November, 1, 0, 0, 0, 0, stdtime.UTC).UnixMicro()
