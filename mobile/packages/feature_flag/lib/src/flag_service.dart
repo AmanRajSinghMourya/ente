@@ -20,8 +20,9 @@ class FlagService {
 
   final SharedPreferences _prefs;
   final Dio _enteDio;
+  final String? Function() _getToken;
 
-  FlagService(this._prefs, this._enteDio) {
+  FlagService(this._prefs, this._enteDio, this._getToken) {
     Future.delayed(const Duration(seconds: 5), () {
       _fetch();
     });
@@ -88,6 +89,12 @@ class FlagService {
   // Dart anymore and internal users have soaked it for a while.
   bool get rustMlDb => internalUser;
 
+  bool get rustMemories => internalUser;
+
+  bool get newMemories => internalUser;
+
+  bool get rewind => internalUser;
+
   String get castUrl => flags.castUrl;
 
   String get customDomain => flags.customDomain;
@@ -97,6 +104,8 @@ class FlagService {
   bool get useNativeVideoEditor => true;
 
   bool get videoEditorSpeedEnabled => internalUser;
+
+  bool get memoryVideoExportEnabled => internalUser;
 
   bool get progressiveOriginalVideoPlayback => internalUser;
 
@@ -165,7 +174,7 @@ class FlagService {
   int? _fetchUserID;
 
   Future<void> _fetch() async {
-    final requestToken = _prefs.getString("token");
+    final requestToken = _getToken();
     final requestUserID = _prefs.getInt(_userIdKey);
     if (requestToken == null) {
       log("token not found, skip", name: "FlagService");
@@ -213,7 +222,7 @@ class FlagService {
   }
 
   bool _isCurrentAccount(String token, int? userID) =>
-      _prefs.getString("token") == token && _prefs.getInt(_userIdKey) == userID;
+      _getToken() == token && _prefs.getInt(_userIdKey) == userID;
 
   Future<void> _updateKeyValue(String key, String value) async {
     try {

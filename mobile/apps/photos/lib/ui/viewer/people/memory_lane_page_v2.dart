@@ -4,17 +4,17 @@ import "dart:typed_data";
 import "dart:ui";
 
 import "package:collection/collection.dart";
+import "package:ente_components/hugeicons.dart";
 import "package:ente_pure_utils/ente_pure_utils.dart";
 import "package:ente_strings/ente_strings.dart";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart" show SystemUiOverlayStyle;
-import "package:hugeicons/hugeicons.dart";
 import "package:intl/intl.dart" show DateFormat;
 import "package:logging/logging.dart";
 import "package:photos/db/ml/db.dart";
 import "package:photos/models/file/file.dart";
 import "package:photos/models/memory_lane/memory_lane_models.dart";
-import "package:photos/models/ml/face/face.dart";
+import "package:photos/models/ml/face/face_with_embedding.dart";
 import "package:photos/models/ml/face/person.dart";
 import "package:photos/service_locator.dart";
 import "package:photos/services/memory_lane/memory_lane_cache_service.dart";
@@ -274,9 +274,8 @@ class _MemoryLanePageV2State extends State<MemoryLanePageV2> {
       final mlDataDB = isLocalGalleryMode
           ? MLDataDB.localGalleryInstance
           : MLDataDB.instance;
-      final List<Face>? faces = await mlDataDB.getFacesForGivenFileID(
-        entry.fileId,
-      );
+      final List<FaceWithoutEmbedding>? faces = await mlDataDB
+          .getFacesForGivenFileID(entry.fileId);
       final face = faces?.firstWhereOrNull(
         (face) => face.faceID == entry.faceId,
       );

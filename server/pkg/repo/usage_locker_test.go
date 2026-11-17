@@ -28,6 +28,7 @@ func TestLockerUsageTracksFileLifecycle(t *testing.T) {
 				ObjectCleanupRepo: &ObjectCleanupRepository{DB: db},
 				ObjectCopiesRepo:  &ObjectCopiesRepository{DB: db},
 			}
+			buckets := FileObjectBuckets{File: "b2-eu-cen", Thumbnail: "b2-eu-cen"}
 			repository.TrashRepo.FileRepo = fileRepo
 			repository.TrashRepo.FileLinkRepo = public.NewFileLinkRepo(db)
 			_, err := db.Exec(`UPDATE usage SET locker_usage = 0, photos_file_count = 0, locker_file_count = 0
@@ -44,8 +45,8 @@ func TestLockerUsageTracksFileLifecycle(t *testing.T) {
 				Info:      &ente.FileInfo{FileSize: 100, ThumbnailSize: 10},
 			}
 			stage := func(keys ...string) {
-				_, err := db.Exec(`INSERT INTO temp_objects(object_key, expiration_time)
-					SELECT unnest($1::text[]), 1`, pq.Array(keys))
+				_, err := db.Exec(`INSERT INTO temp_objects(object_key, expiration_time, bucket_id)
+					SELECT unnest($1::text[]), 1, 'b2-eu-cen'`, pq.Array(keys))
 				require.NoError(t, err)
 			}
 			t.Cleanup(func() {
@@ -66,7 +67,7 @@ func TestLockerUsageTracksFileLifecycle(t *testing.T) {
 			}
 
 			stage(file.File.ObjectKey, file.Thumbnail.ObjectKey)
-			file, total, err := fileRepo.Create(file, 100, 10, 110, userID, app)
+			file, total, err := fileRepo.Create(file, 100, 10, 110, userID, app, buckets)
 			require.NoError(t, err)
 			require.Equal(t, int64(110), total)
 			assertUsage(110)
@@ -78,13 +79,13 @@ func TestLockerUsageTracksFileLifecycle(t *testing.T) {
 			file.UpdationTime = 2
 			stage(file.File.ObjectKey, file.Thumbnail.ObjectKey)
 			require.NoError(t, fileRepo.Update(file, 200, 20, 110, oldObjects,
-				[]string{file.File.ObjectKey, file.Thumbnail.ObjectKey}, app))
+				[]string{file.File.ObjectKey, file.Thumbnail.ObjectKey}, app, buckets))
 			assertUsage(220)
 
 			oldThumbnail := file.Thumbnail.ObjectKey
 			thumbnail := ente.FileAttributes{ObjectKey: "locker-usage-new-thumbnail", DecryptionHeader: "header"}
 			stage(thumbnail.ObjectKey)
-			require.NoError(t, fileRepo.UpdateThumbnail(t.Context(), file.ID, userID, thumbnail, 30, 10, &oldThumbnail, app))
+			require.NoError(t, fileRepo.UpdateThumbnail(t.Context(), file.ID, userID, thumbnail, 30, 10, &oldThumbnail, app, buckets.Thumbnail))
 			assertUsage(230)
 
 			items := []ente.CollectionFileItem{collectionMembershipTestItem(file.ID)}

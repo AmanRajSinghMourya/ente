@@ -4,10 +4,10 @@ enum WakeLockFor {
   videoPlayback,
   externalVideoPlayback,
   machineLearningSettingsScreen,
-  rewindViewer,
   largeBackupStandbyScreen,
   albumSlideshow,
   mlProgressBanner,
+  rewindVideoExport,
 }
 
 class EnteWakeLockService {

@@ -413,6 +413,11 @@ fn file_lists_filter_and_sort_server_metadata() -> TestResult {
             (vec!["--search", "beach dinner"], vec![]),
             (vec!["--no-location"], by_id(vec![clip, holiday])),
             (vec!["--album", "Family", "--no-location"], vec![holiday]),
+            (vec!["--near", "1,2.5", "--radius", "60"], vec![beach]),
+            (
+                vec!["--album", "Family", "--near", "1,2.5", "--radius", "60"],
+                vec![],
+            ),
             (vec!["--min-size", "1.5KB"], by_id(vec![clip, holiday])),
             (vec!["--max-size", "1.5KB"], by_id(vec![beach, live])),
             (
@@ -1480,3 +1485,6 @@ async fn set_album_metadata(
 
 #[path = "export.rs"]
 mod export;
+
+#[path = "duplicates_museum.rs"]
+mod duplicates;

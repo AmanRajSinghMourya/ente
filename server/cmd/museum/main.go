@@ -92,7 +92,6 @@ import (
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -296,6 +295,7 @@ func main() {
 		objectRepo,
 		s3Config,
 	)
+	objectCopiesCleanupController := controller.NewObjectCopiesCleanupController(objectCopiesRepo)
 
 	usageController := &controller.UsageController{
 		BillingCtrl:       billingController,
@@ -530,9 +530,7 @@ func main() {
 		server.TrustedPlatform = clientIPHeader
 	}
 
-	p := ginprometheus.NewPrometheus("museum")
-	p.ReqCntURLLabelMappingFn = urlSanitizer
-	server.Use(p.HandlerFunc())
+	server.Use(middleware.RequestMetrics(urlSanitizer))
 
 	server.LoadHTMLGlob("web-templates/*")
 	// note: the recover middleware must be in the last
@@ -556,7 +554,11 @@ func main() {
 	storageAPI.Use(middleware.RejectAuthApp())
 
 	adminAPI := server.Group("/admin")
-	adminAPI.Use(authMiddleware.TokenAuthMiddleware(nil), authMiddleware.AdminAuthMiddleware())
+	adminAPI.Use(
+		authMiddleware.TokenAuthMiddleware(nil),
+		authMiddleware.AdminAuthMiddleware(),
+		rateLimiter.AdminRateLimitMiddleware(urlSanitizer),
+	)
 	paymentJwtAuthAPI := server.Group("/")
 	paymentJwtAuthAPI.Use(authMiddleware.TokenAuthMiddleware(jwt.PAYMENT.Ptr()))
 
@@ -992,6 +994,8 @@ func main() {
 	adminAPI.GET("/users", adminHandler.GetUsers)
 	adminAPI.GET("/user", adminHandler.GetUser)
 	adminAPI.GET("/user/scheduled-deletions", adminHandler.GetScheduledDeletions)
+	adminAPI.POST("/user/suspend", adminHandler.SuspendUser)
+	adminAPI.POST("/user/unsuspend", adminHandler.UnsuspendUser)
 	adminAPI.POST("/user/disable-2fa", adminHandler.DisableTwoFactor)
 	adminAPI.POST("/user/update-referral", adminHandler.UpdateReferral)
 	adminAPI.POST("/user/disable-passkeys", adminHandler.RemovePasskeys)
@@ -1109,7 +1113,7 @@ func main() {
 	publicAPI.POST("/discount/claim", discountCouponHandler.ClaimCoupon)
 	adminAPI.POST("/discount/add-coupons", discountCouponHandler.AddCoupons)
 
-	setupAndStartBackgroundJobs(objectCleanupController, replicationController3, fileDataCtrl, contactController, spaceModule)
+	setupAndStartBackgroundJobs(objectCleanupController, replicationController3, fileDataCtrl, contactController, spaceModule, objectCopiesCleanupController)
 	time.AfterFunc(10*time.Minute, func() {
 		if err := remoteStoreRepository.MigrateCustomDomainCanonicalValues(context.Background()); err != nil {
 			log.WithError(err).Error("Failed to backfill custom domain canonical values")
@@ -1270,6 +1274,7 @@ func setupAndStartBackgroundJobs(
 	fileDataCtrl *filedata.Controller,
 	contactController *contactCtrl.Controller,
 	spaceModule *spacecontroller.Module,
+	objectCopiesCleanupController *controller.ObjectCopiesCleanupController,
 ) {
 	isReplicationEnabled := viper.GetBool("replication.enabled")
 	if isReplicationEnabled {
@@ -1298,6 +1303,7 @@ func setupAndStartBackgroundJobs(
 	contactController.StartDataDeletion()
 	objectCleanupController.StartRemovingUnreportedObjects()
 	spaceModule.Cleanup.StartRemovingUnreportedObjects()
+	objectCopiesCleanupController.StartCleanup()
 }
 
 func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRepo *public.CollectionLinkRepo,
@@ -1321,6 +1327,7 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 	}
 
 	const deletedTokenRetentionDays = 427 // 13-month deletion window (395 days) + 32-day safety buffer
+	const srpSessionCleanupBatchSize = 10_000
 
 	c := cron.New()
 	schedule(c, "@every 1m", func() {
@@ -1412,11 +1419,14 @@ func setupAndStartCrons(userAuthRepo *repo.UserAuthRepository, collectionLinkRep
 
 	scheduleAndRun(c, "@every 24h", func() {
 		emailNotificationCtrl.NudgePaidSubscriberForFamily()
-		deleted, err := userAuthRepo.CleanupOldFakeSessions(context.Background())
+	})
+
+	scheduleAndRun(c, "@every 1m", func() {
+		deleted, err := userAuthRepo.CleanupOldSRPSessions(context.Background(), srpSessionCleanupBatchSize)
 		if err != nil {
-			log.WithError(err).Error("Failed to cleanup old fake SRP sessions")
+			log.WithError(err).Error("Failed to cleanup old SRP sessions")
 		} else if deleted > 0 {
-			log.WithField("count", deleted).Info("Cleaned up old fake SRP sessions")
+			log.WithField("count", deleted).Info("Cleaned up old SRP sessions")
 		}
 	})
 
