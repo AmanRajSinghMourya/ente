@@ -1,6 +1,7 @@
 package storagebonus
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	goaway "github.com/TwiN/go-away"
@@ -26,7 +27,12 @@ const (
 	defaultPlanType            = entity.TenGbOnUpgrade
 )
 
+type PushNotifier interface {
+	NotifyReferral(context.Context, int64)
+}
+
 type Controller struct {
+	PushCtrl                    PushNotifier
 	UserRepo                    *repo.UserRepository
 	StorageBonus                *storagebonus.Repository
 	LockController              *lock.LockController

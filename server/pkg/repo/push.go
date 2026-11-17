@@ -92,6 +92,27 @@ func (repo *PushTokenRepository) GetTokensForAlbumShare(ctx context.Context, use
 	return tokens, stacktrace.Propagate(rows.Err(), "")
 }
 
+func (repo *PushTokenRepository) GetInternalPushTokens(ctx context.Context, userIDs []int64) ([]ente.PushToken, error) {
+	rows, err := repo.DB.QueryContext(ctx, `SELECT p.fcm_token, p.platform, p.notification_public_key FROM push_tokens p
+		JOIN tokens t ON t.token_hash = p.session_token_hash AND t.user_id = p.user_id AND t.is_deleted = false AND t.app = $3
+		JOIN remote_store r ON r.user_id = p.user_id AND r.key_name = $2 AND r.key_value = 'true'
+		WHERE p.user_id = ANY($1) AND p.platform IN ('android', 'ios')`,
+		pq.Array(userIDs), string(ente.IsInternalUser), string(ente.Photos))
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
+	defer rows.Close()
+	var tokens []ente.PushToken
+	for rows.Next() {
+		var token ente.PushToken
+		if err := rows.Scan(&token.FCMToken, &token.Platform, &token.NotificationPublicKey); err != nil {
+			return nil, stacktrace.Propagate(err, "")
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens, stacktrace.Propagate(rows.Err(), "")
+}
+
 func (repo *PushTokenRepository) SetLastNotificationTimeToNow(pushTokens []ente.PushToken) error {
 	fcmTokens := make([]string, 0)
 	for _, pushToken := range pushTokens {

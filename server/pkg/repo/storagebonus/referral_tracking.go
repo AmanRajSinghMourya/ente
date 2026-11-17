@@ -73,7 +73,7 @@ func (r *Repository) TrackUpgradeAndInvitorBonus(ctx context.Context, invitee, i
 		return err
 	}
 	if affected == 0 {
-		return stacktrace.Propagate(err, "failed to update tracking entry for invitee %d, invitor %d", invitee, invitor)
+		return stacktrace.Propagate(ente.ErrBadRequest, "failed to update tracking entry for invitee %d, invitor %d", invitee, invitor)
 	}
 	bonusType := storagebonus.Referral
 	bonusID := fmt.Sprintf("%s-upgrade-%d", bonusType, invitee)

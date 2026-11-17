@@ -30,6 +30,7 @@ class PushService {
 
   late SharedPreferences _prefs;
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+  StreamSubscription<RemoteMessage>? _notificationTapSubscription;
   StreamSubscription<SignedInEvent>? _signedInSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
 
@@ -67,6 +68,22 @@ class PushService {
             _logPushError("Could not refresh push token", error, stack);
           },
         );
+    if (Platform.isIOS) {
+      await _notificationTapSubscription?.cancel();
+      _notificationTapSubscription = FirebaseMessaging.onMessageOpenedApp
+          .listen(
+            (message) => NotificationService.instance.handlePushNotificationTap(
+              message.data,
+            ),
+          );
+      final initialMessage = await FirebaseMessaging.instance
+          .getInitialMessage();
+      if (initialMessage != null) {
+        await NotificationService.instance.handlePushNotificationTap(
+          initialMessage.data,
+        );
+      }
+    }
     await _configurePushToken();
   }
 

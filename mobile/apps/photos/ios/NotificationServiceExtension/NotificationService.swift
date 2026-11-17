@@ -24,9 +24,16 @@ final class NotificationService: UNNotificationServiceExtension {
 
     if let ciphertext = request.content.userInfo["notificationCiphertext"] as? String,
       let recipient = try? NotificationKeyStore.read(),
-      let event = NotificationEvent.decrypt(ciphertext, recipient: recipient),
-      event.eventType == "album_shared" {
-      content.body = "An album was shared with you"
+      let event = NotificationEvent.decrypt(ciphertext, recipient: recipient) {
+      switch event.eventType {
+      case "album_shared":
+        content.body = "An album was shared with you"
+      case "referral":
+        content.title = "Congratulations! 🎉"
+        content.body = "You earned a 10 GB referral bonus!"
+      default:
+        break
+      }
     }
     finish(content)
   }

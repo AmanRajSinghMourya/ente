@@ -253,3 +253,74 @@ func TestAlbumShareTokensRequireRolloutAndActiveSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, tokens)
 }
+
+func TestPushTokensRequireInternalAndActivePhotosSession(t *testing.T) {
+	testutil.WithServerRoot(t)
+	db := testutil.RequireTestDB(t)
+	testutil.ResetTables(t, db)
+	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	var userIDs []int64
+	for id, tc := range []struct {
+		name, platform, flag, session string
+		app                           ente.App
+	}{
+		{"eligible", "android", "true", "active", ente.Photos},
+		{"ios", "ios", "true", "active", ente.Photos},
+		{"non-internal", "android", "false", "active", ente.Photos},
+		{"missing flag", "android", "", "active", ente.Photos},
+		{"legacy", "android", "true", "missing", ente.Photos},
+		{"revoked", "android", "true", "revoked", ente.Photos},
+		{"wrong owner", "android", "true", "wrong owner", ente.Photos},
+		{"other app", "android", "true", "active", ente.Locker},
+	} {
+		userID := int64(id + 1)
+		userIDs = append(userIDs, userID)
+		testutil.InsertUser(t, db, testutil.UserFixture{UserID: userID, Email: fmt.Sprintf("user%d@example.com", userID), CreationTime: 1})
+		hash := sha256.Sum256([]byte(tc.name))
+		var sessionHash []byte
+		if tc.session != "missing" {
+			require.NoError(t, (&UserAuthRepository{DB: db}).AddToken(userID, tc.app, tc.name, "", ""))
+			sessionHash = hash[:]
+		}
+		if tc.session == "revoked" {
+			_, err := db.Exec(`UPDATE tokens SET is_deleted=true WHERE token_hash=$1`, hash[:])
+			require.NoError(t, err)
+		}
+		if tc.session == "wrong owner" {
+			hash = sha256.Sum256([]byte("eligible"))
+			sessionHash = hash[:]
+		}
+		_, err := db.Exec(`INSERT INTO push_tokens(user_id,fcm_token,apns_token,platform,session_token_hash,last_notified_at)
+			VALUES($1,$2,'apns',$3,$4,0)`, userID, tc.name, tc.platform, sessionHash)
+		require.NoError(t, err)
+		if tc.flag != "" {
+			_, err = db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES($1,'internalUser',$2)`, userID, tc.flag)
+			require.NoError(t, err)
+		}
+	}
+	r := &PushTokenRepository{DB: db}
+	tokens, err := r.GetInternalPushTokens(context.Background(), userIDs)
+	require.NoError(t, err)
+	var selected []string
+	for _, token := range tokens {
+		selected = append(selected, token.FCMToken)
+	}
+	require.ElementsMatch(t, []string{"eligible", "ios"}, selected)
+	for _, apnsToken := range []any{"", nil} {
+		_, err := db.Exec(`UPDATE push_tokens SET apns_token=$1 WHERE fcm_token='eligible'`, apnsToken)
+		require.NoError(t, err)
+		tokens, err := r.GetInternalPushTokens(context.Background(), []int64{1})
+		require.NoError(t, err)
+		require.Len(t, tokens, 1)
+		require.Equal(t, "eligible", tokens[0].FCMToken)
+	}
+	tokens, err = r.GetTokensToBeNotified(1, 100)
+	require.NoError(t, err)
+	require.Len(t, tokens, 1)
+	require.Equal(t, "ios", tokens[0].FCMToken)
+	_, err = db.Exec(`UPDATE remote_store SET key_value='false' WHERE user_id=1`)
+	require.NoError(t, err)
+	tokens, err = r.GetInternalPushTokens(context.Background(), []int64{1})
+	require.NoError(t, err)
+	require.Empty(t, tokens)
+}

@@ -8,9 +8,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
@@ -165,6 +167,84 @@ func TestFCMSendDoesNotClassifyInvalidArgumentAsUnregistered(t *testing.T) {
 	require.False(t, errors.Is(err, errUnregisteredToken))
 }
 
+func TestReferralPushEncryptsEventForInternalMobileSessions(t *testing.T) {
+	testutil.WithServerRoot(t)
+	db := testutil.RequireTestDB(t)
+	testutil.ResetTables(t, db)
+	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	// User 8 is in the album-share rollout, but referral pushes still require the internal flag.
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 8, Email: "internal@example.com", CreationTime: 1})
+	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(8,'internalUser','true')`)
+	require.NoError(t, err)
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(8, ente.Photos, "session", "", ""))
+	hash := auth.HashToken("session")
+	controller := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	for _, platform := range []string{"ios", "android"} {
+		require.NoError(t, controller.AddToken(8, hash[:], ente.PushTokenRequest{
+			FCMToken: platform + "-device", Platform: &platform,
+		}))
+	}
+	var messages []map[string]any
+	controller.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		require.NoError(t, request.Context().Err())
+		var envelope struct {
+			Message map[string]any `json:"message"`
+		}
+		require.NoError(t, json.NewDecoder(request.Body).Decode(&envelope))
+		messages = append(messages, envelope.Message)
+		return jsonResponse(http.StatusOK, "{}"), nil
+	})}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	controller.NotifyReferral(ctx, 8)
+	require.Empty(t, messages)
+
+	privateKey, err := hpke.MLKEM768X25519().GenerateKey()
+	require.NoError(t, err)
+	for _, platform := range []string{"ios", "android"} {
+		require.NoError(t, controller.AddToken(8, hash[:], ente.PushTokenRequest{
+			FCMToken: platform + "-device", Platform: &platform,
+			NotificationKey: privateKey.PublicKey().Bytes(),
+		}))
+	}
+	controller.NotifyReferral(ctx, 8)
+	require.Len(t, messages, 2)
+	var recipients []string
+	for _, message := range messages {
+		recipients = append(recipients, message["token"].(string))
+		data := message["data"].(map[string]any)
+		require.Len(t, data, 1)
+		ciphertext, err := base64.StdEncoding.DecodeString(data["notificationCiphertext"].(string))
+		require.NoError(t, err)
+		plaintext, err := hpke.Open(privateKey, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), ciphertext)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"eventType":"referral"}`, string(plaintext))
+		if message["token"] == "ios-device" {
+			require.NotContains(t, message, "android")
+			apns := message["apns"].(map[string]any)
+			headers := apns["headers"].(map[string]any)
+			require.Equal(t, "alert", headers["apns-push-type"])
+			require.Equal(t, "10", headers["apns-priority"])
+			expires, err := strconv.ParseInt(headers["apns-expiration"].(string), 10, 64)
+			require.NoError(t, err)
+			require.WithinDuration(t, time.Now().Add(24*time.Hour), time.Unix(expires, 0), 5*time.Second)
+			require.Equal(t, map[string]any{"aps": map[string]any{
+				"alert":           map[string]any{"title": "Ente", "body": "New activity"},
+				"mutable-content": float64(1), "sound": "default",
+			}}, apns["payload"])
+		} else {
+			require.NotContains(t, message, "apns")
+			require.Equal(t, map[string]any{"priority": "high", "ttl": "86400s"}, message["android"])
+		}
+	}
+	require.ElementsMatch(t, []string{"ios-device", "android-device"}, recipients)
+
+	_, err = db.Exec(`DELETE FROM remote_store WHERE user_id = 8 AND key_name = 'internalUser'`)
+	require.NoError(t, err)
+	controller.NotifyReferral(ctx, 8)
+	require.Len(t, messages, 2)
+}
+
 func TestAlbumShareSendsOnlyEnrolledAndroidDevices(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
@@ -301,6 +381,12 @@ func TestAlbumShareHonorsSilentMode(t *testing.T) {
 	t.Cleanup(func() { viper.Set("internal.silent", previous) })
 	controller := &PushController{fcm: &fcmClient{}}
 	controller.NotifyAlbumShare(context.Background(), []int64{1})
+	controller.NotifyReferral(context.Background(), 1)
+}
+
+func TestReferralWithoutFCMCredentials(t *testing.T) {
+	controller := &PushController{}
+	controller.NotifyReferral(t.Context(), 1)
 }
 
 func captureLogs(t *testing.T) *logtest.Hook {
