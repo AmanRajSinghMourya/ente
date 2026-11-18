@@ -279,6 +279,64 @@ func TestAlbumShareEncryptsForEachEnrolledDevice(t *testing.T) {
 	require.Equal(t, "second-device", messages[0].Message.Token)
 }
 
+func TestFileLikeEncryptsForEachEligibleDevice(t *testing.T) {
+	testutil.WithServerRoot(t)
+	db := testutil.RequireTestDB(t)
+	testutil.ResetTables(t, db)
+	t.Cleanup(func() { testutil.ResetTables(t, db) })
+	testutil.InsertUser(t, db, testutil.UserFixture{UserID: 8, Email: "rollout@photo-like.test", CreationTime: 1})
+	_, err := db.Exec(`INSERT INTO remote_store(user_id,key_name,key_value) VALUES(8,'internalUser','true')`)
+	require.NoError(t, err)
+	require.NoError(t, (&repo.UserAuthRepository{DB: db}).AddToken(8, ente.Photos, "session", "", ""))
+	hash := auth.HashToken("session")
+	c := &PushController{PushRepo: &repo.PushTokenRepository{DB: db}}
+	keys := make(map[string]hpke.PrivateKey)
+	for _, platform := range []string{"android", "ios"} {
+		for _, device := range []string{"first", "second", "keyless"} {
+			key, err := hpke.MLKEM768X25519().GenerateKey()
+			require.NoError(t, err)
+			token := platform + "-" + device
+			keys[token] = key
+			registration := ente.PushTokenRequest{FCMToken: token, Platform: &platform}
+			if device != "keyless" {
+				registration.NotificationKey = key.PublicKey().Bytes()
+			}
+			require.NoError(t, c.AddToken(8, hash[:], registration))
+		}
+	}
+	var messages []wireMsg
+	c.fcm = &fcmClient{projectID: "test-project", httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var message wireMsg
+		require.NoError(t, json.NewDecoder(request.Body).Decode(&message))
+		messages = append(messages, message)
+		return jsonResponse(http.StatusOK, "{}"), nil
+	})}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c.NotifyFileLike(ctx, 8)
+	require.Len(t, messages, 4)
+	for _, envelope := range messages {
+		message := envelope.Message
+		require.Contains(t, []string{"android-first", "android-second", "ios-first", "ios-second"}, message.Token)
+		require.Len(t, message.Data, 1, "only notificationCiphertext is sent")
+		ciphertext, err := base64.StdEncoding.DecodeString(message.Data["notificationCiphertext"])
+		require.NoError(t, err)
+		plaintext, err := hpke.Open(keys[message.Token], hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), ciphertext)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"eventType":"file_liked"}`, string(plaintext))
+		require.Equal(t, "high", message.Android.Priority)
+	}
+
+	_, err = db.Exec(`UPDATE remote_store SET key_value='false' WHERE user_id=8`)
+	require.NoError(t, err)
+	messages = nil
+	c.NotifyFileLike(context.Background(), 8)
+	require.Len(t, messages, 2, "non-internal users receive file-like pushes on Android only")
+	for _, envelope := range messages {
+		require.Contains(t, []string{"android-first", "android-second"}, envelope.Message.Token)
+	}
+}
+
 func TestAlbumSharePrunesOnlyUnregisteredTokens(t *testing.T) {
 	testutil.WithServerRoot(t)
 	db := testutil.RequireTestDB(t)
