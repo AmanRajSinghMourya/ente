@@ -59,6 +59,8 @@ const tokenExpiryDurationInDays = 61
 const fcmSendScope = "https://www.googleapis.com/auth/firebase.messaging"
 
 const fcmSendTimeout = 30 * gotime.Second
+const socialPushCollapseKey = "photos-social-sync"
+const socialPushCollapseWindow = 30 * gotime.Second
 
 func NewPushController(pushRepo *repo.PushTokenRepository, taskLockRepo *repo.TaskLockRepository, hostName string) *PushController {
 	client, err := newFCMClient()
@@ -111,22 +113,22 @@ func (c *PushController) AddToken(userID int64, sessionTokenHash []byte, token e
 }
 
 func (c *PushController) NotifyAlbumShare(ctx context.Context, recipients []int64) {
-	c.notifyEncryptedPush(ctx, recipients, []byte(`{"eventType":"album_shared"}`))
+	c.notifyEncryptedPush(ctx, recipients, []byte(`{"eventType":"album_shared"}`), "")
 }
 
 func (c *PushController) NotifyFileLike(ctx context.Context, recipientID int64) {
-	c.notifyEncryptedPush(ctx, []int64{recipientID}, []byte(`{"eventType":"file_liked"}`))
+	c.notifyEncryptedPush(ctx, []int64{recipientID}, []byte(`{"eventType":"file_liked"}`), socialPushCollapseKey)
 }
 
 func (c *PushController) NotifyFileComment(ctx context.Context, recipientID int64) {
-	c.notifyEncryptedPush(ctx, []int64{recipientID}, []byte(`{"eventType":"file_commented"}`))
+	c.notifyEncryptedPush(ctx, []int64{recipientID}, []byte(`{"eventType":"file_commented"}`), socialPushCollapseKey)
 }
 
 func (c *PushController) NotifyCommentReply(ctx context.Context, recipientID int64) {
-	c.notifyEncryptedPush(ctx, []int64{recipientID}, []byte(`{"eventType":"comment_replied"}`))
+	c.notifyEncryptedPush(ctx, []int64{recipientID}, []byte(`{"eventType":"comment_replied"}`), socialPushCollapseKey)
 }
 
-func (c *PushController) notifyEncryptedPush(ctx context.Context, recipients []int64, payload []byte) {
+func (c *PushController) notifyEncryptedPush(ctx context.Context, recipients []int64, payload []byte, collapseKey string) {
 	if viper.GetBool("internal.silent") || c.fcm == nil || len(recipients) == 0 {
 		return
 	}
@@ -138,10 +140,23 @@ func (c *PushController) notifyEncryptedPush(ctx context.Context, recipients []i
 		log.WithError(err).Warn("encrypted push token lookup failed; saved activity is unchanged")
 		return
 	}
-	c.sendEncryptedPushes(ctx, tokens, payload)
+	c.sendEncryptedPushes(ctx, tokens, payload, collapseKey)
 }
 
-func (c *PushController) sendEncryptedPushes(ctx context.Context, tokens []ente.PushToken, payload []byte) {
+func (c *PushController) sendEncryptedPushes(ctx context.Context, tokens []ente.PushToken, payload []byte, collapseKey string) {
+	now := gotime.Now()
+	android := map[string]string{"priority": "high", "ttl": "86400s"}
+	apnsHeaders := map[string]string{
+		"apns-push-type":  "alert",
+		"apns-priority":   "10",
+		"apns-expiration": strconv.FormatInt(now.Add(24*gotime.Hour).Unix(), 10),
+	}
+	if collapseKey != "" {
+		android["collapse_key"] = collapseKey
+		apnsHeaders["apns-collapse-id"] = collapseKey + "-" +
+			strconv.FormatInt(now.Truncate(socialPushCollapseWindow).Unix(), 10)
+	}
+
 	var unregisteredTokens []string
 	for _, token := range tokens {
 		if token.NotificationPublicKey == nil {
@@ -161,13 +176,9 @@ func (c *PushController) sendEncryptedPushes(ctx context.Context, tokens []ente.
 		err = c.fcm.sendMessage(ctx, map[string]any{
 			"token":   token.FCMToken,
 			"data":    map[string]string{"notificationCiphertext": base64.StdEncoding.EncodeToString(ciphertext)},
-			"android": map[string]string{"priority": "high", "ttl": "86400s"},
+			"android": android,
 			"apns": map[string]any{
-				"headers": map[string]string{
-					"apns-push-type":  "alert",
-					"apns-priority":   "10",
-					"apns-expiration": strconv.FormatInt(gotime.Now().Add(24*gotime.Hour).Unix(), 10),
-				},
+				"headers": apnsHeaders,
 				"payload": map[string]any{"aps": map[string]any{
 					"mutable-content": 1,
 					"alert":           map[string]string{"title": "Ente", "body": "New activity"},

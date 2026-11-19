@@ -43,8 +43,9 @@ type wireMsg struct {
 		Token   string            `json:"token"`
 		Data    map[string]string `json:"data"`
 		Android struct {
-			Priority string `json:"priority"`
-			TTL      string `json:"ttl"`
+			Priority    string `json:"priority"`
+			TTL         string `json:"ttl"`
+			CollapseKey string `json:"collapse_key"`
 		} `json:"android"`
 		APNS struct {
 			Headers map[string]string `json:"headers"`
@@ -219,6 +220,8 @@ func TestAlbumShareSendsEncryptedAlertToInternalIOS(t *testing.T) {
 	plaintext, err := hpke.Open(key, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte("ente-push"), ciphertext)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"eventType":"album_shared"}`, string(plaintext))
+	require.Empty(t, message.Android.CollapseKey)
+	require.NotContains(t, message.APNS.Headers, "apns-collapse-id")
 	require.Equal(t, "alert", message.APNS.Headers["apns-push-type"])
 	require.Equal(t, "10", message.APNS.Headers["apns-priority"])
 	require.NotContains(t, message.APNS.Headers, "apns-topic")
@@ -379,6 +382,11 @@ func TestSocialPushEvents(t *testing.T) {
 			var recipients []string
 			for _, message := range messages {
 				recipients = append(recipients, message.Message.Token)
+				require.Equal(t, "photos-social-sync", message.Message.Android.CollapseKey)
+				expiry, err := strconv.ParseInt(message.Message.APNS.Headers["apns-expiration"], 10, 64)
+				require.NoError(t, err)
+				window := time.Unix(expiry, 0).Add(-24 * time.Hour).Truncate(30 * time.Second).Unix()
+				require.Equal(t, fmt.Sprintf("photos-social-sync-%d", window), message.Message.APNS.Headers["apns-collapse-id"])
 				require.Len(t, message.Message.Data, 1)
 				ciphertext, err := base64.StdEncoding.DecodeString(message.Message.Data["notificationCiphertext"])
 				require.NoError(t, err)
