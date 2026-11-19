@@ -273,6 +273,7 @@ func main() {
 
 	pushController := controller.NewPushController(pushRepo, taskLockingRepo, hostName)
 	mailingListsController := controller.NewMailingListsController(discordController)
+	emailNotificationCtrl.PromotionalMailer = mailingListsController
 
 	storageBonusCtrl := &storagebonus.Controller{
 		UserRepo:                    userRepo,

@@ -73,6 +73,14 @@ func (repo *NotificationHistoryRepository) SetLastNotificationTimeToNow(userID i
 	return repo.SetLastNotificationTimeToNowWithGroup(userID, templateID, "")
 }
 
+func (repo *NotificationHistoryRepository) SetLastNotificationTimeToNowForUsers(userIDs []int64, templateID string) error {
+	_, err := repo.DB.Exec(`
+		INSERT INTO notification_history (user_id, template_id, sent_time)
+		SELECT user_id, $2, $3 FROM UNNEST($1::BIGINT[]) AS recipients(user_id)`,
+		pq.Array(userIDs), templateID, time.Microseconds())
+	return stacktrace.Propagate(err, "record notification attempts")
+}
+
 func (repo *NotificationHistoryRepository) SetLastNotificationTimeToNowWithGroup(userID int64, templateID string, notificationGroup string) error {
 	var groupValue sql.NullString
 	if notificationGroup != "" {

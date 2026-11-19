@@ -37,6 +37,21 @@ type SubscribersPage struct {
 	PerPage int
 }
 
+type PromotionalRecipient struct {
+	Email string          `json:"email"`
+	Data  json.RawMessage `json:"data,omitempty"`
+}
+
+type PromotionalBatch struct {
+	ID         string                 `json:"batch_id"`
+	EmailType  string                 `json:"email_type"`
+	ListID     int                    `json:"list_id"`
+	TemplateID int                    `json:"template_id"`
+	Subject    string                 `json:"subject"`
+	Body       string                 `json:"body"`
+	Recipients []PromotionalRecipient `json:"recipients"`
+}
+
 func GetSubscriberID(endpoint string, username string, password string, subscriberEmail string) (int, error) {
 	type SubscriberResponse struct {
 		Data struct {

@@ -13,9 +13,11 @@ import (
 )
 
 type MailingListsController struct {
-	listmonkListIDs     []int
-	listmonkCredentials listmonk.Credentials
-	discordController   *discord.DiscordController
+	listmonkListIDs       []int
+	listmonkCredentials   listmonk.Credentials
+	promotionalListID     int
+	promotionalTemplateID int
+	discordController     *discord.DiscordController
 }
 
 func NewMailingListsController(discordController *discord.DiscordController) *MailingListsController {
@@ -28,10 +30,26 @@ func NewMailingListsController(discordController *discord.DiscordController) *Ma
 	listmonkListIDs := viper.GetIntSlice("listmonk.list-ids")
 
 	return &MailingListsController{
-		listmonkCredentials: listmonkCredentials,
-		listmonkListIDs:     listmonkListIDs,
-		discordController:   discordController,
+		listmonkCredentials:   listmonkCredentials,
+		listmonkListIDs:       listmonkListIDs,
+		promotionalListID:     viper.GetInt("listmonk.promotional.list-id"),
+		promotionalTemplateID: viper.GetInt("listmonk.promotional.template-id"),
+		discordController:     discordController,
 	}
+}
+
+func (c *MailingListsController) PromotionalEnabled() bool {
+	credentials := c.listmonkCredentials
+	return credentials.BaseURL != "" && credentials.Username != "" && credentials.Password != "" &&
+		c.promotionalListID > 0 && c.promotionalTemplateID > 0
+}
+
+func (c *MailingListsController) SubmitPromotionalBatch(batch listmonk.PromotionalBatch) error {
+	batch.ListID = c.promotionalListID
+	batch.TemplateID = c.promotionalTemplateID
+	credentials := c.listmonkCredentials
+	return listmonk.SendRequest("POST", credentials.BaseURL+"/api/ente/promotional-batches", batch,
+		credentials.Username, credentials.Password)
 }
 
 func (c *MailingListsController) Subscribe(email string) error {
