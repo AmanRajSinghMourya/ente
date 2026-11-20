@@ -244,6 +244,9 @@ func main() {
 	fileCountInitializer := controller.NewFileCountInitializer(usageRepo, trashRepo, lockController)
 	usageRepo.QueueFileCountInitialization = fileCountInitializer.Enqueue
 	go fileCountInitializer.Run()
+	lockerUsageInitializer := controller.NewLockerUsageInitializer(usageRepo, lockController)
+	usageRepo.QueueLockerUsageInitialization = lockerUsageInitializer.Enqueue
+	go lockerUsageInitializer.Run()
 
 	userCache := cache2.NewUserCache()
 	userCacheCtrl := &usercache.Controller{UserCache: userCache, FileRepo: fileRepo,

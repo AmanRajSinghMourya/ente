@@ -154,7 +154,7 @@ func TestInitializeFileCountsRejectsStaleSnapshots(t *testing.T) {
 	}
 	assertReadyFileCounts(t, db, userID, 0, 0, 1)
 	if err := repository.RestoreFiles(t.Context(), userID, collectionID,
-		[]ente.CollectionFileItem{collectionMembershipTestItem(fileID)}); err != nil {
+		[]ente.CollectionFileItem{collectionMembershipTestItem(fileID)}, ente.Photos); err != nil {
 		t.Fatal(err)
 	}
 	assertReadyFileCounts(t, db, userID, 1, 0, 2)
