@@ -375,6 +375,18 @@ func getMailBody(templateName string, templateData map[string]interface{}) (stri
 	return htmlbody.String(), nil
 }
 
+// GetMailContent returns the "content" block of a template, for emails whose
+// layout is added by whoever delivers them.
+func GetMailContent(templateName string) (string, error) {
+	t, err := template.ParseFiles("mail-templates/" + templateName)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "failed to parse template")
+	}
+	content := new(bytes.Buffer)
+	err = t.ExecuteTemplate(content, "content", nil)
+	return content.String(), stacktrace.Propagate(err, "failed to execute template")
+}
+
 func getMailBodyWithBase(baseTemplateName, templateName string, templateData map[string]interface{}) (string, error) {
 	htmlBody := new(bytes.Buffer)
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/ente/museum/pkg/controller/discord"
 	"github.com/ente/museum/pkg/external/listmonk"
@@ -12,10 +13,20 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	productMailsFromEmail      = "Ente <team@ente.com>"
+	productMailsBatchTag       = "product-mails-batch"
+	productMailsBatchRetention = 30 * 24 * time.Hour
+)
+
 type MailingListsController struct {
 	listmonkListIDs     []int
 	listmonkCredentials listmonk.Credentials
-	discordController   *discord.DiscordController
+	// The list that records who accepts product mails, and the campaign
+	// template that wraps them.
+	productMailsListID     int
+	productMailsTemplateID int
+	discordController      *discord.DiscordController
 }
 
 func NewMailingListsController(discordController *discord.DiscordController) *MailingListsController {
@@ -28,10 +39,80 @@ func NewMailingListsController(discordController *discord.DiscordController) *Ma
 	listmonkListIDs := viper.GetIntSlice("listmonk.list-ids")
 
 	return &MailingListsController{
-		listmonkCredentials: listmonkCredentials,
-		listmonkListIDs:     listmonkListIDs,
-		discordController:   discordController,
+		listmonkCredentials:    listmonkCredentials,
+		listmonkListIDs:        listmonkListIDs,
+		productMailsListID:     viper.GetInt("listmonk.product-mails.list-id"),
+		productMailsTemplateID: viper.GetInt("listmonk.product-mails.template-id"),
+		discordController:      discordController,
 	}
+}
+
+func (c *MailingListsController) ProductMailsEnabled() bool {
+	return !c.shouldSkipListmonk() && c.productMailsListID != 0 && c.productMailsTemplateID != 0
+}
+
+// PrepareProductMailBatch creates a list holding those of the given emails
+// that still accept product mails, and returns its ID.
+//
+// A campaign's unsubscribe link only unsubscribes from the campaign's own
+// list, so unsubscribes from earlier batches are first copied to the
+// product mails list.
+func (c *MailingListsController) PrepareProductMailBatch(name string, emails []string) (int, error) {
+	batches, err := listmonk.ListsByTag(c.listmonkCredentials, productMailsBatchTag)
+	if err != nil {
+		return 0, stacktrace.Propagate(err, "")
+	}
+	for _, batch := range batches {
+		err = listmonk.ManageListsByQuery(c.listmonkCredentials, listmonk.ListsByQuery{
+			ListIDs:            []int{batch.ID},
+			SubscriptionStatus: "unsubscribed",
+			Action:             "unsubscribe",
+			TargetListIDs:      []int{c.productMailsListID},
+		})
+		if err != nil {
+			return 0, stacktrace.Propagate(err, "")
+		}
+		if time.Since(batch.CreatedAt) > productMailsBatchRetention {
+			if err = listmonk.DeleteList(c.listmonkCredentials, batch.ID); err != nil {
+				return 0, stacktrace.Propagate(err, "")
+			}
+		}
+	}
+
+	batchID, err := listmonk.CreateList(c.listmonkCredentials, name, []string{productMailsBatchTag})
+	if err != nil {
+		return 0, stacktrace.Propagate(err, "")
+	}
+	for _, status := range []string{"unconfirmed", "confirmed"} {
+		err = listmonk.ManageListsByQuery(c.listmonkCredentials, listmonk.ListsByQuery{
+			Query:              listmonk.EmailsQuery(emails),
+			ListIDs:            []int{c.productMailsListID},
+			SubscriptionStatus: status,
+			Action:             "add",
+			TargetListIDs:      []int{batchID},
+			Status:             "unconfirmed",
+		})
+		if err != nil {
+			return 0, stacktrace.Propagate(err, "")
+		}
+	}
+	return batchID, nil
+}
+
+func (c *MailingListsController) StartProductMailCampaign(batchID int, name string, subject string, body string) error {
+	campaignID, err := listmonk.CreateCampaign(c.listmonkCredentials, listmonk.Campaign{
+		Name:        name,
+		Subject:     subject,
+		FromEmail:   productMailsFromEmail,
+		Body:        body,
+		ContentType: "html",
+		TemplateID:  c.productMailsTemplateID,
+		ListIDs:     []int{batchID},
+	})
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	return stacktrace.Propagate(listmonk.StartCampaign(c.listmonkCredentials, campaignID), "")
 }
 
 func (c *MailingListsController) Subscribe(email string) error {

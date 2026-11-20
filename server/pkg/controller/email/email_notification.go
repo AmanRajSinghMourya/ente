@@ -66,7 +66,16 @@ const (
 
 var lockerIntroRolloutTime = stdtime.Date(2026, stdtime.November, 1, 0, 0, 0, 0, stdtime.UTC).UnixMicro()
 
+// ProductMailer delivers product mails to those of the given recipients who
+// have not unsubscribed from them.
+type ProductMailer interface {
+	ProductMailsEnabled() bool
+	PrepareProductMailBatch(name string, emails []string) (int, error)
+	StartProductMailCampaign(batchID int, name string, subject string, body string) error
+}
+
 type EmailNotificationController struct {
+	ProductMailer                      ProductMailer
 	UserRepo                           *repo.UserRepository
 	UsageRepo                          *repo.UsageRepository
 	BillingRepo                        *repo.BillingRepository
@@ -315,33 +324,62 @@ func (c *EmailNotificationController) NudgePaidSubscriberForFamily() {
 
 func (c *EmailNotificationController) SendLockerIntroMails(now int64) {
 	log.Info("Running SendLockerIntroMails")
+	if !c.ProductMailer.ProductMailsEnabled() {
+		log.Info("Skipping Locker intro mails as product mails are not configured")
+		return
+	}
 	if !c.LockController.TryLock(LockerIntroMailLock, time.MicrosecondsAfterHours(24)) {
 		log.Error("Could not acquire lock to send Locker intro mails")
 		return
 	}
 	defer c.LockController.ReleaseLock(LockerIntroMailLock)
 
-	userIDs, err := c.NotificationHistoryRepo.GetLockerIntroCandidates(lockerIntroRolloutTime, now, LockerIntroTemplateID)
+	candidateIDs, err := c.NotificationHistoryRepo.GetLockerIntroCandidates(lockerIntroRolloutTime, now, LockerIntroTemplateID)
 	if err != nil {
 		log.WithError(err).Error("Could not fetch Locker intro candidates")
 		return
 	}
-	for _, userID := range userIDs {
-		logger := log.WithField("user_id", userID)
+	userIDs := make([]int64, 0, len(candidateIDs))
+	emails := make([]string, 0, len(candidateIDs))
+	for _, userID := range candidateIDs {
 		user, err := c.UserRepo.Get(userID)
 		if err != nil {
-			logger.WithError(err).Error("Could not fetch user for Locker intro")
+			log.WithField("user_id", userID).WithError(err).Error("Could not fetch user for Locker intro")
 			continue
 		}
-		err = c.NotificationHistoryRepo.SetLastNotificationTimeToNow(userID, LockerIntroTemplateID)
-		if err != nil {
-			logger.WithError(err).Error("Could not record Locker intro attempt")
-			continue
-		}
-		err = email.SendTemplatedEmailV2([]string{user.Email}, "Ente", "team@ente.com",
-			LockerIntroSubject, "base_v2.html", LockerIntroTemplate, nil, nil)
-		if err != nil {
-			logger.WithError(err).Error("Could not send Locker intro mail")
-		}
+		userIDs = append(userIDs, userID)
+		emails = append(emails, user.Email)
 	}
+	if len(emails) == 0 {
+		return
+	}
+
+	// Nothing is recorded until the recipients are with the mailer, so a
+	// failure before that is retried on the next run. Once recorded, the
+	// users are never retried, even if the campaign fails to start.
+	name := "Locker intro " + stdtime.UnixMicro(now).UTC().Format(stdtime.DateOnly)
+	body, err := email.GetMailContent(LockerIntroTemplate)
+	if err != nil {
+		c.reportLockerIntroFailure("Could not render Locker intro mail", err)
+		return
+	}
+	batchID, err := c.ProductMailer.PrepareProductMailBatch(name, emails)
+	if err != nil {
+		c.reportLockerIntroFailure("Could not prepare Locker intro recipients", err)
+		return
+	}
+	err = c.NotificationHistoryRepo.SetLastNotificationTimeToNowForUsers(userIDs, LockerIntroTemplateID)
+	if err != nil {
+		c.reportLockerIntroFailure("Could not record Locker intro attempts", err)
+		return
+	}
+	err = c.ProductMailer.StartProductMailCampaign(batchID, name, LockerIntroSubject, body)
+	if err != nil {
+		c.reportLockerIntroFailure(fmt.Sprintf("Could not start the campaign for the Listmonk list %q; start it by hand", name), err)
+	}
+}
+
+func (c *EmailNotificationController) reportLockerIntroFailure(message string, err error) {
+	log.WithError(err).Error(message)
+	c.DiscordController.Notify(fmt.Sprintf("%s: %v", message, err))
 }

@@ -276,3 +276,117 @@ func SendRequest(method string, url string, data interface{}, username string, p
 
 	return nil
 }
+
+type List struct {
+	ID        int       `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ListsByQuery is the body of PUT /api/subscribers/query/lists. Subscribers
+// are selected from ListIDs by SubscriptionStatus and Query, then Action
+// ("add" or "unsubscribe") is applied to them on TargetListIDs.
+type ListsByQuery struct {
+	Query              string `json:"query,omitempty"`
+	ListIDs            []int  `json:"list_ids"`
+	SubscriptionStatus string `json:"subscription_status"`
+	Action             string `json:"action"`
+	TargetListIDs      []int  `json:"target_list_ids"`
+	Status             string `json:"status,omitempty"`
+}
+
+type Campaign struct {
+	Name        string `json:"name"`
+	Subject     string `json:"subject"`
+	FromEmail   string `json:"from_email"`
+	Body        string `json:"body"`
+	ContentType string `json:"content_type"`
+	TemplateID  int    `json:"template_id"`
+	ListIDs     []int  `json:"lists"`
+}
+
+func CreateList(c Credentials, name string, tags []string) (int, error) {
+	var list List
+	err := call(c, http.MethodPost, "/api/lists", map[string]interface{}{
+		"name": name, "type": "private", "optin": "single", "tags": tags,
+	}, &list)
+	return list.ID, err
+}
+
+func ListsByTag(c Credentials, tag string) ([]List, error) {
+	var page struct {
+		Results []List `json:"results"`
+	}
+	err := call(c, http.MethodGet, "/api/lists?per_page=all&tag="+url.QueryEscape(tag), nil, &page)
+	return page.Results, err
+}
+
+func DeleteList(c Credentials, id int) error {
+	return call(c, http.MethodDelete, "/api/lists/"+strconv.Itoa(id), nil, nil)
+}
+
+func ManageListsByQuery(c Credentials, req ListsByQuery) error {
+	return call(c, http.MethodPut, "/api/subscribers/query/lists", req, nil)
+}
+
+func CreateCampaign(c Credentials, campaign Campaign) (int, error) {
+	var created struct {
+		ID int `json:"id"`
+	}
+	err := call(c, http.MethodPost, "/api/campaigns", campaign, &created)
+	return created.ID, err
+}
+
+func StartCampaign(c Credentials, id int) error {
+	return call(c, http.MethodPut, "/api/campaigns/"+strconv.Itoa(id)+"/status", map[string]string{"status": "running"}, nil)
+}
+
+// EmailsQuery returns the SQL expression Listmonk expects for matching
+// subscribers by email.
+func EmailsQuery(emails []string) string {
+	quoted := make([]string, len(emails))
+	for i, email := range emails {
+		quoted[i] = "'" + strings.ReplaceAll(email, "'", "''") + "'"
+	}
+	return "subscribers.email IN (" + strings.Join(quoted, ",") + ")"
+}
+
+// call sends a JSON request and decodes the "data" field of the response
+// into out, unless out is nil.
+func call(c Credentials, method string, path string, in interface{}, out interface{}) error {
+	var body io.Reader
+	if in != nil {
+		jsonData, err := json.Marshal(in)
+		if err != nil {
+			return stacktrace.Propagate(err, "")
+		}
+		body = bytes.NewReader(jsonData)
+	}
+	req, err := http.NewRequest(method, strings.TrimRight(c.BaseURL, "/")+path, body)
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	req.SetBasicAuth(c.Username, c.Password)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: listmonkRequestTimeout}).Do(req)
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return stacktrace.Propagate(
+			fmt.Errorf("listmonk %s %s failed with status %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(respBody))),
+			"",
+		)
+	}
+	if out == nil {
+		return nil
+	}
+	return stacktrace.Propagate(json.Unmarshal(respBody, &struct {
+		Data interface{} `json:"data"`
+	}{Data: out}), "")
+}

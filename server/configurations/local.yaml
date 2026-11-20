@@ -332,6 +332,17 @@ listmonk:
     username:
     password:
     list-ids:
+    # Product mails (optional), like the introduction to Locker. Each is sent
+    # as a campaign to those of its recipients who have not unsubscribed from
+    # the list `list-id`, wrapped in the campaign template `template-id`. Add
+    # `list-id` to `list-ids` above so that new users join it.
+    #
+    # The Listmonk user needs the permissions lists:get_all, lists:manage_all,
+    # subscribers:get, subscribers:manage, subscribers:sql_query,
+    # campaigns:get_all, campaigns:manage_all and campaigns:send.
+    product-mails:
+        list-id:
+        template-id:
 
 # Various low-level configuration options
 internal:
