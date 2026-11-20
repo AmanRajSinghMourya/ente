@@ -86,8 +86,6 @@ func (repo *NotificationHistoryRepository) SetLastNotificationTimeToNowWithGroup
 	return stacktrace.Propagate(err, "")
 }
 
-// SetLastNotificationTimeToNowForUsers records the notification for all the
-// given users, or for none of them.
 func (repo *NotificationHistoryRepository) SetLastNotificationTimeToNowForUsers(userIDs []int64, templateID string) error {
 	_, err := repo.DB.Exec(`INSERT INTO notification_history(user_id, template_id, sent_time) SELECT UNNEST($1::BIGINT[]), $2, $3`,
 		pq.Array(userIDs), templateID, time.Microseconds())

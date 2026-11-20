@@ -375,8 +375,6 @@ func getMailBody(templateName string, templateData map[string]interface{}) (stri
 	return htmlbody.String(), nil
 }
 
-// GetMailContent returns the "content" block of a template, for emails whose
-// layout is added by whoever delivers them.
 func GetMailContent(templateName string) (string, error) {
 	t, err := template.ParseFiles("mail-templates/" + templateName)
 	if err != nil {

@@ -66,10 +66,7 @@ const (
 
 var lockerIntroRolloutTime = stdtime.Date(2026, stdtime.November, 1, 0, 0, 0, 0, stdtime.UTC).UnixMicro()
 
-// ProductMailer delivers product mails to those of the given recipients who
-// have not unsubscribed from them.
 type ProductMailer interface {
-	ProductMailsEnabled() bool
 	PrepareProductMailBatch(name string, emails []string) (int, error)
 	StartProductMailCampaign(batchID int, name string, subject string, body string) error
 }
@@ -324,10 +321,6 @@ func (c *EmailNotificationController) NudgePaidSubscriberForFamily() {
 
 func (c *EmailNotificationController) SendLockerIntroMails(now int64) {
 	log.Info("Running SendLockerIntroMails")
-	if !c.ProductMailer.ProductMailsEnabled() {
-		log.Info("Skipping Locker intro mails as product mails are not configured")
-		return
-	}
 	if !c.LockController.TryLock(LockerIntroMailLock, time.MicrosecondsAfterHours(24)) {
 		log.Error("Could not acquire lock to send Locker intro mails")
 		return
@@ -354,9 +347,6 @@ func (c *EmailNotificationController) SendLockerIntroMails(now int64) {
 		return
 	}
 
-	// Nothing is recorded until the recipients are with the mailer, so a
-	// failure before that is retried on the next run. Once recorded, the
-	// users are never retried, even if the campaign fails to start.
 	name := "Locker intro " + stdtime.UnixMicro(now).UTC().Format(stdtime.DateOnly)
 	body, err := email.GetMailContent(LockerIntroTemplate)
 	if err != nil {

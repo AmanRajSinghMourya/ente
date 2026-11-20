@@ -28,7 +28,13 @@ func TestPrepareProductMailBatchCarriesOverUnsubscribesBeforeFiltering(t *testin
 				recentBatchID, time.Now().Add(-24*time.Hour).Format(time.RFC3339),
 				expiredBatchID, time.Now().Add(-31*24*time.Hour).Format(time.RFC3339))
 		case "PUT /api/subscribers/query/lists":
-			var req listmonk.ListsByQuery
+			var req struct {
+				Query              string `json:"query"`
+				ListIDs            []int  `json:"list_ids"`
+				SubscriptionStatus string `json:"subscription_status"`
+				Action             string `json:"action"`
+				TargetListIDs      []int  `json:"target_list_ids"`
+			}
 			if err := json.Unmarshal(body, &req); err != nil {
 				t.Error(err)
 			}

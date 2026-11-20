@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ente/museum/pkg/controller/discord"
@@ -20,10 +21,8 @@ const (
 )
 
 type MailingListsController struct {
-	listmonkListIDs     []int
-	listmonkCredentials listmonk.Credentials
-	// The list that records who accepts product mails, and the campaign
-	// template that wraps them.
+	listmonkListIDs        []int
+	listmonkCredentials    listmonk.Credentials
 	productMailsListID     int
 	productMailsTemplateID int
 	discordController      *discord.DiscordController
@@ -47,72 +46,87 @@ func NewMailingListsController(discordController *discord.DiscordController) *Ma
 	}
 }
 
-func (c *MailingListsController) ProductMailsEnabled() bool {
-	return !c.shouldSkipListmonk() && c.productMailsListID != 0 && c.productMailsTemplateID != 0
-}
-
-// PrepareProductMailBatch creates a list holding those of the given emails
-// that still accept product mails, and returns its ID.
-//
-// A campaign's unsubscribe link only unsubscribes from the campaign's own
-// list, so unsubscribes from earlier batches are first copied to the
-// product mails list.
 func (c *MailingListsController) PrepareProductMailBatch(name string, emails []string) (int, error) {
-	batches, err := listmonk.ListsByTag(c.listmonkCredentials, productMailsBatchTag)
+	var batches struct {
+		Results []struct {
+			ID        int       `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+		} `json:"results"`
+	}
+	err := c.listmonkRequest("GET", "/api/lists?per_page=all&tag="+productMailsBatchTag, nil, &batches)
 	if err != nil {
 		return 0, stacktrace.Propagate(err, "")
 	}
-	for _, batch := range batches {
-		err = listmonk.ManageListsByQuery(c.listmonkCredentials, listmonk.ListsByQuery{
-			ListIDs:            []int{batch.ID},
-			SubscriptionStatus: "unsubscribed",
-			Action:             "unsubscribe",
-			TargetListIDs:      []int{c.productMailsListID},
-		})
+	for _, batch := range batches.Results {
+		err = c.listmonkRequest("PUT", "/api/subscribers/query/lists", map[string]interface{}{
+			"list_ids":            []int{batch.ID},
+			"subscription_status": "unsubscribed",
+			"action":              "unsubscribe",
+			"target_list_ids":     []int{c.productMailsListID},
+		}, nil)
 		if err != nil {
 			return 0, stacktrace.Propagate(err, "")
 		}
 		if time.Since(batch.CreatedAt) > productMailsBatchRetention {
-			if err = listmonk.DeleteList(c.listmonkCredentials, batch.ID); err != nil {
+			err = c.listmonkRequest("DELETE", "/api/lists/"+strconv.Itoa(batch.ID), nil, nil)
+			if err != nil {
 				return 0, stacktrace.Propagate(err, "")
 			}
 		}
 	}
 
-	batchID, err := listmonk.CreateList(c.listmonkCredentials, name, []string{productMailsBatchTag})
+	var batch struct {
+		ID int `json:"id"`
+	}
+	err = c.listmonkRequest("POST", "/api/lists", map[string]interface{}{
+		"name": name, "type": "private", "optin": "single", "tags": []string{productMailsBatchTag},
+	}, &batch)
 	if err != nil {
 		return 0, stacktrace.Propagate(err, "")
 	}
+	quoted := make([]string, len(emails))
+	for i, email := range emails {
+		quoted[i] = "'" + strings.ReplaceAll(email, "'", "''") + "'"
+	}
 	for _, status := range []string{"unconfirmed", "confirmed"} {
-		err = listmonk.ManageListsByQuery(c.listmonkCredentials, listmonk.ListsByQuery{
-			Query:              listmonk.EmailsQuery(emails),
-			ListIDs:            []int{c.productMailsListID},
-			SubscriptionStatus: status,
-			Action:             "add",
-			TargetListIDs:      []int{batchID},
-			Status:             "unconfirmed",
-		})
+		err = c.listmonkRequest("PUT", "/api/subscribers/query/lists", map[string]interface{}{
+			"query":               "subscribers.email IN (" + strings.Join(quoted, ",") + ")",
+			"list_ids":            []int{c.productMailsListID},
+			"subscription_status": status,
+			"action":              "add",
+			"target_list_ids":     []int{batch.ID},
+			"status":              "unconfirmed",
+		}, nil)
 		if err != nil {
 			return 0, stacktrace.Propagate(err, "")
 		}
 	}
-	return batchID, nil
+	return batch.ID, nil
 }
 
 func (c *MailingListsController) StartProductMailCampaign(batchID int, name string, subject string, body string) error {
-	campaignID, err := listmonk.CreateCampaign(c.listmonkCredentials, listmonk.Campaign{
-		Name:        name,
-		Subject:     subject,
-		FromEmail:   productMailsFromEmail,
-		Body:        body,
-		ContentType: "html",
-		TemplateID:  c.productMailsTemplateID,
-		ListIDs:     []int{batchID},
-	})
+	var campaign struct {
+		ID int `json:"id"`
+	}
+	err := c.listmonkRequest("POST", "/api/campaigns", map[string]interface{}{
+		"name":         name,
+		"subject":      subject,
+		"from_email":   productMailsFromEmail,
+		"body":         body,
+		"content_type": "html",
+		"template_id":  c.productMailsTemplateID,
+		"lists":        []int{batchID},
+	}, &campaign)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	return stacktrace.Propagate(listmonk.StartCampaign(c.listmonkCredentials, campaignID), "")
+	return stacktrace.Propagate(c.listmonkRequest("PUT", "/api/campaigns/"+strconv.Itoa(campaign.ID)+"/status",
+		map[string]string{"status": "running"}, nil), "")
+}
+
+func (c *MailingListsController) listmonkRequest(method string, path string, data interface{}, out interface{}) error {
+	return listmonk.Request(method, c.listmonkCredentials.BaseURL+path, data, out,
+		c.listmonkCredentials.Username, c.listmonkCredentials.Password)
 }
 
 func (c *MailingListsController) Subscribe(email string) error {

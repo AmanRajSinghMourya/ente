@@ -16,14 +16,11 @@ import (
 )
 
 type fakeProductMailer struct {
-	disabled   bool
 	prepareErr error
 	startErr   error
 	prepared   [][]string
 	started    []string
 }
-
-func (m *fakeProductMailer) ProductMailsEnabled() bool { return !m.disabled }
 
 func (m *fakeProductMailer) PrepareProductMailBatch(name string, emails []string) (int, error) {
 	m.prepared = append(m.prepared, emails)
@@ -98,18 +95,6 @@ func TestSendLockerIntroMailsDoesNotStartWhenAttemptsCannotBeRecorded(t *testing
 	assertLockerIntroAttempts(t, db, 0)
 	if len(mailer.started) != 0 {
 		t.Fatalf("started = %v, want none", mailer.started)
-	}
-}
-
-func TestSendLockerIntroMailsSkipsWhenProductMailsAreNotConfigured(t *testing.T) {
-	db, controller, mailer, now := setupLockerIntroTest(t)
-	mailer.disabled = true
-
-	controller.SendLockerIntroMails(now)
-
-	assertLockerIntroAttempts(t, db, 0)
-	if len(mailer.prepared) != 0 {
-		t.Fatalf("prepared = %v, want none", mailer.prepared)
 	}
 }
 
