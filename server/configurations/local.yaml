@@ -333,17 +333,13 @@ listmonk:
     password:
     list-ids:
 
-# Postmark delivery for Product Mails (optional)
 postmark:
     server-token:
     from:
     product-mails-stream:
 
-# Museum unsubscribe links for Product Mails
 email-subscriptions:
-    # Public Museum URL. Use HTTPS outside localhost.
     public-url:
-    # List the active key first. Generate a key with openssl rand -hex 32.
     unsubscribe-signing-keys: []
 
 # Various low-level configuration options
