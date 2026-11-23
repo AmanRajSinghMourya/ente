@@ -1,9 +1,0 @@
-{{- $body := .Tx.Data.Body -}}
-{{- $footer := printf "<p style=\"font-family:system-ui;text-align:center;font-size:13px;margin:24px 0\"><a href=\"%s\">Unsubscribe</a></p>" .Tx.Data.UnsubscribeURL -}}
-{{- if contains "</body>" $body -}}
-  {{- replace "</body>" (printf "%s</body>" $footer) $body | Safe -}}
-{{- else if contains "</html>" $body -}}
-  {{- replace "</html>" (printf "%s</html>" $footer) $body | Safe -}}
-{{- else -}}
-  {{- printf "%s%s" $body $footer | Safe -}}
-{{- end -}}
