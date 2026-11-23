@@ -339,7 +339,9 @@ postmark:
     product-mails-stream:
 
 email-subscriptions:
+    # Public Museum URL. Use HTTPS outside localhost.
     public-url:
+    # List the active key first. Generate a key with openssl rand -hex 32.
     unsubscribe-signing-keys: []
 
 # Various low-level configuration options
