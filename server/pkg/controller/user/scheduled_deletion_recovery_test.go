@@ -46,6 +46,10 @@ func TestMarkAccountDeletedAndScheduleCleanupIsAtomic(t *testing.T) {
 	if err := controller.UserAuthRepo.AddToken(userID, ente.Photos, "deleted-token", "", ""); err != nil {
 		t.Fatalf("failed to insert token: %v", err)
 	}
+	if _, err := db.Exec(`
+		INSERT INTO email_subscriptions VALUES ($1, $2, TRUE)`, userID, ente.ProductMailsEmailType); err != nil {
+		t.Fatal(err)
+	}
 	if err := controller.markAccountDeletedAndScheduleCleanup(t.Context(), userID); err != nil {
 		t.Fatalf("markAccountDeletedAndScheduleCleanup() error = %v", err)
 	}
@@ -55,6 +59,11 @@ func TestMarkAccountDeletedAndScheduleCleanupIsAtomic(t *testing.T) {
 	var activeTokens int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM tokens WHERE user_id = $1 AND is_deleted = FALSE`, userID).Scan(&activeTokens); err != nil || activeTokens != 0 {
 		t.Fatalf("active token count = %d, err = %v", activeTokens, err)
+	}
+
+	var subscriptions int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM email_subscriptions WHERE user_id = $1`, userID).Scan(&subscriptions); err != nil || subscriptions != 0 {
+		t.Fatalf("subscription count after deletion = %d, err = %v", subscriptions, err)
 	}
 
 	expectedHash, err := crypto.GetHash("deleted@example.com", testutil.HashingKey())
@@ -88,6 +97,10 @@ func TestMarkAccountDeletedAndScheduleCleanupIsAtomic(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO data_cleanup(user_id) VALUES($1)`, rollbackUserID); err != nil {
 		t.Fatalf("failed to create conflicting cleanup row: %v", err)
 	}
+	if _, err := db.Exec(`INSERT INTO email_subscriptions VALUES ($1, $2, FALSE)`,
+		rollbackUserID, ente.ProductMailsEmailType); err != nil {
+		t.Fatal(err)
+	}
 	if err := controller.markAccountDeletedAndScheduleCleanup(t.Context(), rollbackUserID); err == nil {
 		t.Fatal("markAccountDeletedAndScheduleCleanup() succeeded with conflicting cleanup row")
 	}
@@ -96,6 +109,11 @@ func TestMarkAccountDeletedAndScheduleCleanupIsAtomic(t *testing.T) {
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM tokens WHERE user_id = $1 AND is_deleted = FALSE`, rollbackUserID).Scan(&activeTokens); err != nil || activeTokens != 1 {
 		t.Fatalf("active token count after rollback = %d, err = %v", activeTokens, err)
+	}
+	var stillSubscribed bool
+	if err := db.QueryRow(`SELECT subscribed FROM email_subscriptions WHERE user_id = $1 AND email_type = $2`,
+		rollbackUserID, ente.ProductMailsEmailType).Scan(&stillSubscribed); err != nil || stillSubscribed {
+		t.Fatalf("rolled-back deletion lost the opt-out: subscribed = %t, err = %v", stillSubscribed, err)
 	}
 }
 
