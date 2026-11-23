@@ -3,6 +3,7 @@ package user
 import (
 	"testing"
 
+	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
 	"github.com/ente/museum/pkg/controller"
 	"github.com/ente/museum/pkg/repo"
@@ -32,6 +33,13 @@ func TestCreateUserInitializesFileCounts(t *testing.T) {
 	}
 	if photos != 0 || locker != 0 || version != 0 {
 		t.Fatalf("file count state = (%d, %d, %d), want (0, 0, 0)", photos, locker, version)
+	}
+	var subscribed bool
+	err = db.QueryRow(`
+		SELECT subscribed FROM email_subscriptions WHERE user_id = $1 AND email_type = $2`,
+		userID, ente.ProductMailsEmailType).Scan(&subscribed)
+	if err != nil || !subscribed {
+		t.Fatalf("new user Product Mails subscription = %t, err = %v", subscribed, err)
 	}
 }
 

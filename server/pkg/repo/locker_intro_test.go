@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ente/museum/ente"
 	"github.com/ente/museum/internal/testutil"
 	"github.com/ente/museum/pkg/utils/time"
 )
@@ -34,12 +35,17 @@ func TestGetLockerIntroCandidates(t *testing.T) {
 		{name: "missing usage", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `DELETE FROM usage WHERE user_id = 1`},
 		{name: "deleted account", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `UPDATE users SET encrypted_email = NULL, email_decryption_nonce = NULL, email_hash = 'deleted+1@ente.io' WHERE user_id = 1`},
 		{name: "previous attempt", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `INSERT INTO notification_history(user_id, template_id, sent_time) VALUES(1, 'locker_intro', 1)`},
+		{name: "not enrolled", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `DELETE FROM email_subscriptions WHERE user_id = 1`},
+		{name: "unsubscribed", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `UPDATE email_subscriptions SET subscribed = FALSE WHERE user_id = 1`},
 		{name: "other notification", signup: eligibleSignup, photos: 1, locker: 0, adjustment: `INSERT INTO notification_history(user_id, template_id, sent_time) VALUES(1, 'first_upload', 1)`, want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			db := getStorageWarningRepoTestDB(t)
 			testutil.InsertUser(t, db, testutil.UserFixture{UserID: 1, Email: "locker-intro@example.com", CreationTime: tt.signup})
 			if _, err := db.Exec(`INSERT INTO usage(user_id, storage_consumed, photos_file_count, locker_file_count) VALUES(1, 0, $1, $2)`, tt.photos, tt.locker); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT INTO email_subscriptions VALUES (1, $1, TRUE)`, ente.ProductMailsEmailType); err != nil {
 				t.Fatal(err)
 			}
 			if tt.adjustment != "" {
@@ -69,13 +75,16 @@ func TestGetLockerIntroCandidates(t *testing.T) {
 func TestGetLockerIntroCandidatesOldestFirstLimit(t *testing.T) {
 	db := getStorageWarningRepoTestDB(t)
 	const cutoff int64 = 1800000000000000
-	for id := int64(1); id <= 1001; id++ {
+	for id := int64(1); id <= 1002; id++ {
 		signup := cutoff + 1
-		if id == 1001 {
+		if id >= 1001 {
 			signup = cutoff
 		}
 		testutil.InsertUser(t, db, testutil.UserFixture{UserID: id, Email: fmt.Sprintf("locker-%d@example.com", id), CreationTime: signup})
 		if _, err := db.Exec(`INSERT INTO usage(user_id, storage_consumed, photos_file_count, locker_file_count) VALUES($1, 0, 1, 0)`, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO email_subscriptions VALUES ($1, $2, $3)`, id, ente.ProductMailsEmailType, id != 1002); err != nil {
 			t.Fatal(err)
 		}
 	}
