@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:photos/core/configuration.dart';
 import 'package:photos/core/event_bus.dart';
+import "package:photos/core/exceptions.dart";
 import "package:photos/events/account_configured_event.dart";
 import 'package:photos/events/signed_in_event.dart';
 import 'package:photos/events/user_details_changed_event.dart';
@@ -248,7 +249,28 @@ class UserService {
     _logger.info("Fetching user details");
     final bool previousEmailMFAStatus = hasEmailMFAEnabled();
     final previousTwoFactorStatus = hasEnabledTwoFactor();
-    final userDetails = await _gateway.getUserDetails(memoryCount: memoryCount);
+    final token = _config.getToken();
+    if (token == null) throw const AccountsError.sessionExpired();
+    final response =
+        await _withAccountsClient(
+          (client) =>
+              client.accountDetails(token: token, memoryCount: memoryCount),
+        ).onError<AccountsError_Network>(
+          (error, stack) => Error.throwWithStackTrace(
+            _AccountDetailsNetworkError(timeout: error.timeout),
+            stack,
+          ),
+        );
+    if (token != _config.getToken()) {
+      throw const AccountsError.sessionExpired();
+    }
+    final userDetails = UserDetails.fromJson(
+      response.json,
+      storage: (
+        totalBytes: response.totalStorage,
+        usedBytes: response.usedStorage,
+      ),
+    );
     if (shouldCache) {
       await _preferences.setString(keyUserDetails, userDetails.toJson());
       bool hasSecurityStatusChanged = false;
@@ -1217,4 +1239,9 @@ class UserService {
 
     return suggestions;
   }
+}
+
+class _AccountDetailsNetworkError extends AccountsError_Network
+    implements LocallyHandledError {
+  const _AccountDetailsNetworkError({required super.timeout});
 }

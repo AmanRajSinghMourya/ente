@@ -1,0 +1,1 @@
+- Match the Photos storage card when showing family storage in `photos usage`.

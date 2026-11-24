@@ -37,6 +37,7 @@ class UserDetails {
   final FamilyData? familyData;
   final ProfileData? profileData;
   final BonusData? bonusData;
+  final ({int totalBytes, int usedBytes})? _storage;
 
   const UserDetails(
     this.email,
@@ -47,8 +48,9 @@ class UserDetails {
     this.subscription,
     this.familyData,
     this.profileData,
-    this.bonusData,
-  );
+    this.bonusData, {
+    ({int totalBytes, int usedBytes})? storage,
+  }) : _storage = storage;
 
   bool isPartOfFamily() {
     return familyData?.members?.isNotEmpty ?? false;
@@ -87,7 +89,8 @@ class UserDetails {
   }
 
   int getFamilyOrPersonalUsage() {
-    return isPartOfFamily() ? familyData!.getTotalUsage() : usage;
+    return _storage?.usedBytes ??
+        (isPartOfFamily() ? familyData!.getTotalUsage() : usage);
   }
 
   int getFreeStorage() {
@@ -99,8 +102,9 @@ class UserDetails {
   }
 
   int getTotalStorage() {
-    return (isPartOfFamily() ? familyData!.storage : subscription.storage) +
-        storageBonus;
+    return _storage?.totalBytes ??
+        (isPartOfFamily() ? familyData!.storage : subscription.storage) +
+            storageBonus;
   }
 
   int? familyMemberStorageLimit() {
@@ -116,7 +120,10 @@ class UserDetails {
         bonusData!.totalAddOnBonus();
   }
 
-  factory UserDetails.fromMap(Map<String, dynamic> map) {
+  factory UserDetails.fromMap(
+    Map<String, dynamic> map, {
+    ({int totalBytes, int usedBytes})? storage,
+  }) {
     final profileData = map['profileData'];
     return UserDetails(
       map['email'] as String,
@@ -128,6 +135,16 @@ class UserDetails {
       map['familyData'] != null ? FamilyData.fromMap(map['familyData']) : null,
       profileData == null ? null : ProfileData.fromJson(profileData),
       BonusData.fromJson(map['bonusData']),
+      storage:
+          storage ??
+          switch (map['storageSummary']) {
+            {
+              'totalBytes': final int totalBytes,
+              'usedBytes': final int usedBytes,
+            } =>
+              (totalBytes: totalBytes, usedBytes: usedBytes),
+            _ => null,
+          },
     );
   }
 
@@ -142,13 +159,20 @@ class UserDetails {
       'familyData': familyData?.toMap(),
       'profileData': profileData?.toJson(),
       'bonusData': bonusData?.toJson(),
+      if (_storage case final storage?)
+        'storageSummary': {
+          'totalBytes': storage.totalBytes,
+          'usedBytes': storage.usedBytes,
+        },
     };
   }
 
   String toJson() => json.encode(toMap());
 
-  factory UserDetails.fromJson(String source) =>
-      UserDetails.fromMap(json.decode(source));
+  factory UserDetails.fromJson(
+    String source, {
+    ({int totalBytes, int usedBytes})? storage,
+  }) => UserDetails.fromMap(json.decode(source), storage: storage);
 }
 
 class FamilyMember {

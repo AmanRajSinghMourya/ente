@@ -2,7 +2,6 @@ import "package:dio/dio.dart";
 import "package:photos/core/network/endpoint_config.dart";
 import "package:photos/gateways/users/models/sessions.dart";
 import "package:photos/gateways/users/models/set_recovery_key_request.dart";
-import "package:photos/models/user_details.dart";
 
 class UsersGateway {
   final Dio _enteDio;
@@ -45,14 +44,6 @@ class UsersGateway {
       throw StateError("Public-key batch response length mismatch");
     }
     return values.map((value) => value as String).toList();
-  }
-
-  Future<UserDetails> getUserDetails({bool memoryCount = true}) async {
-    final response = await _enteDio.get(
-      "/users/details/v2",
-      queryParameters: {"memoryCount": memoryCount},
-    );
-    return UserDetails.fromMap(response.data);
   }
 
   Future<Sessions> getActiveSessions() async {
