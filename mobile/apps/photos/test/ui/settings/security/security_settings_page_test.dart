@@ -1,6 +1,9 @@
+import "dart:async";
+import "dart:convert";
 import "dart:io";
 
 import "package:dio/dio.dart";
+import "package:ente_base/models/accounts.dart";
 import "package:ente_components/ente_components.dart";
 import "package:ente_strings/ente_strings.dart";
 import "package:flutter/material.dart";
@@ -10,9 +13,13 @@ import "package:flutter_test/flutter_test.dart";
 import "package:package_info_plus/package_info_plus.dart";
 import "package:photos/core/configuration.dart";
 import "package:photos/core/error-reporting/super_logging.dart";
+import "package:photos/core/exceptions.dart";
 import "package:photos/ente_theme_data.dart";
 import "package:photos/service_locator.dart";
 import "package:photos/services/account/user_service.dart";
+import "package:photos/src/rust/frb_generated.dart";
+import "package:photos/src/rust/third_party/ente_frb_lib/accounts/types.dart"
+    show AccountDetailsResponse;
 import "package:photos/ui/settings/security/security_settings_page.dart";
 import "package:shared_preferences/shared_preferences.dart";
 
@@ -20,9 +27,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const email = "person@example.com";
-  final requests = <(RequestOptions, RequestInterceptorHandler)>[];
+  final client = _AccountsClient();
+  final requests = client.requests;
 
   setUpAll(() async {
+    EntePhotosRust.initMock(api: _PhotosRustApi(client));
+    addTearDown(EntePhotosRust.dispose);
     const paths = MethodChannel("plugins.flutter.io/path_provider");
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -44,15 +54,9 @@ void main() {
       Configuration.keyKey: "a2V5",
     });
     final preferences = await SharedPreferences.getInstance();
-    final dio = Dio()
-      ..interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) => requests.add((options, handler)),
-        ),
-      );
     ServiceLocator.instance.init(
       preferences,
-      dio,
+      Dio(BaseOptions(headers: {HttpHeaders.userAgentHeader: "Photos"})),
       Dio(),
       Dio(),
       PackageInfo(
@@ -75,11 +79,9 @@ void main() {
   });
 
   void respondWithProfile(Map<String, Object> profile) {
-    final (options, handler) = requests.last;
-    handler.resolve(
-      Response(
-        requestOptions: options,
-        data: {
+    requests.last.response.complete(
+      AccountDetailsResponse(
+        json: jsonEncode({
           "email": email,
           "usage": 0,
           "subscription": {
@@ -92,10 +94,24 @@ void main() {
             "period": "",
           },
           "profileData": profile,
-        },
+        }),
+        totalStorage: 0,
+        usedStorage: 0,
       ),
     );
   }
+
+  test("account details keeps network failures local", () async {
+    final refresh = UserService.instance.getUserDetailsV2();
+    final assertion = expectLater(
+      refresh,
+      throwsA(allOf(isA<AccountsError_Network>(), isA<LocallyHandledError>())),
+    );
+    requests.single.response.completeError(
+      const AccountsError.network(timeout: false),
+    );
+    await assertion;
+  });
 
   testWidgets("2FA shows the cached status until a refresh confirms it", (
     tester,
@@ -127,8 +143,9 @@ void main() {
     expect(tester.widget<ToggleSwitchComponent>(toggle).selected, isTrue);
     expect(tester.widget<ToggleSwitchComponent>(toggle).onChanged, isNull);
 
-    final (options, handler) = requests.single;
-    handler.reject(DioException(requestOptions: options));
+    requests.single.response.completeError(
+      const AccountsError.network(timeout: false),
+    );
     await tester.pumpAndSettle();
     expect(retry, findsOneWidget);
     expect(tester.widget<ToggleSwitchComponent>(toggle).onChanged, isNull);
@@ -152,10 +169,10 @@ void main() {
     expect(tester.widget<ToggleSwitchComponent>(toggle).selected, isFalse);
     expect(tester.widget<ToggleSwitchComponent>(toggle).onChanged, isNotNull);
     expect(userService.hasEnabledTwoFactor(), isFalse);
-    expect(requests.map((request) => request.$1.path), [
-      "/users/details/v2",
-      "/users/details/v2",
-      "/users/details/v2",
+    expect(requests.map((request) => (request.token, request.memoryCount)), [
+      ("token", false),
+      ("token", false),
+      ("token", false),
     ]);
   });
 
@@ -190,8 +207,9 @@ void main() {
     expect(loading, findsOneWidget);
     expect(toggle, findsNothing);
 
-    final (options, handler) = requests.single;
-    handler.reject(DioException(requestOptions: options));
+    requests.single.response.completeError(
+      const AccountsError.network(timeout: false),
+    );
     await tester.pumpAndSettle();
     expect(retry, findsOneWidget);
     expect(loading, findsNothing);
@@ -209,10 +227,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<ToggleSwitchComponent>(toggle).selected, isFalse);
     expect(tester.widget<ToggleSwitchComponent>(toggle).onChanged, isNotNull);
-    expect(requests.map((request) => request.$1.path), [
-      "/users/details/v2",
-      "/users/details/v2",
-      "/users/details/v2",
+    expect(requests.map((request) => (request.token, request.memoryCount)), [
+      ("token", false),
+      ("token", true),
+      ("token", false),
     ]);
   });
+}
+
+class _AccountsClient extends Fake implements AccountsClient {
+  final requests =
+      <
+        ({
+          String token,
+          bool memoryCount,
+          Completer<AccountDetailsResponse> response,
+        })
+      >[];
+
+  @override
+  Future<AccountDetailsResponse> accountDetails({
+    required String token,
+    required bool memoryCount,
+  }) {
+    final response = Completer<AccountDetailsResponse>();
+    requests.add((token: token, memoryCount: memoryCount, response: response));
+    return response.future;
+  }
+}
+
+class _PhotosRustApi extends Fake implements EntePhotosRustApi {
+  _PhotosRustApi(this.client);
+
+  final AccountsClient client;
+
+  @override
+  AccountsClient enteFrbLibAccountsCreateAccountsClient({
+    required AccountsClientConfig config,
+  }) => client;
 }

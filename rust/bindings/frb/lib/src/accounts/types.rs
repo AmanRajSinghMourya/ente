@@ -76,7 +76,31 @@ pub struct AccountsClientConfig {
 #[frb(opaque)]
 pub struct AccountsClient(pub(crate) InnerClient);
 
+#[frb(non_opaque)]
+pub struct AccountDetailsResponse {
+    pub json: String,
+    pub total_storage: i64,
+    pub used_storage: i64,
+}
+
 impl AccountsClient {
+    pub async fn account_details(
+        &self,
+        token: String,
+        memory_count: bool,
+    ) -> Result<AccountDetailsResponse, AccountsError> {
+        let (details, json) = self
+            .0
+            .with_auth_token(token)
+            .account_details_with_json(memory_count)
+            .await?;
+        Ok(AccountDetailsResponse {
+            json,
+            total_storage: details.total_storage(),
+            used_storage: details.used_storage(),
+        })
+    }
+
     pub async fn send_otp(
         &self,
         email: String,

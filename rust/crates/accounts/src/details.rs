@@ -1,8 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ente_core::http::SuccessResponse;
 use serde::Deserialize;
 
-use crate::{AccountsClient, Result, admin::Subscription};
+use crate::{AccountsClient, Error, Result, admin::Subscription};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,8 +78,12 @@ impl AccountDetails {
         self.plan_storage() + self.storage_bonus
     }
 
+    pub fn used_storage(&self) -> i64 {
+        self.family().map_or(self.usage, FamilyData::usage)
+    }
+
     pub fn free_storage(&self) -> i64 {
-        let free = self.total_storage() - self.family().map_or(self.usage, FamilyData::usage);
+        let free = self.total_storage() - self.used_storage();
         match self.family_member().and_then(|member| member.storage_limit) {
             Some(limit) => free.min(limit - self.usage),
             None => free,
@@ -95,15 +100,30 @@ impl FamilyData {
 
 impl AccountsClient {
     pub async fn account_details(&self) -> Result<AccountDetails> {
+        Ok(self.account_details_response(true).await?.json().await?)
+    }
+
+    pub async fn account_details_with_json(
+        &self,
+        memory_count: bool,
+    ) -> Result<(AccountDetails, String)> {
+        let bytes = self
+            .account_details_response(memory_count)
+            .await?
+            .bytes()
+            .await?;
+        let json = String::from_utf8(bytes).map_err(|error| Error::Decode(error.to_string()))?;
+        Ok((serde_json::from_str(&json)?, json))
+    }
+
+    async fn account_details_response(&self, memory_count: bool) -> Result<SuccessResponse> {
         Ok(self
             .api
             .get("/users/details/v2")
-            .query(&[("memoryCount", true)])
+            .query(&[("memoryCount", memory_count)])
             .send()
             .await?
             .error_for_code()
-            .await?
-            .json()
             .await?)
     }
 }
@@ -156,7 +176,7 @@ mod tests {
         assert_eq!(details.plan_storage(), 200 * GB);
         assert!(details.plan_active_at(2));
         assert_eq!(details.total_storage(), 210 * GB);
-        assert_eq!(details.family().unwrap().usage(), 53 * GB);
+        assert_eq!(details.used_storage(), 53 * GB);
         assert_eq!(details.free_storage(), 2 * GB);
         assert!(!details.family_member().unwrap().is_admin);
         let details = details.family_data.unwrap();
@@ -214,5 +234,42 @@ mod tests {
         client.set_auth_token(Some("token".into()));
         assert_eq!(client.account_details().await.unwrap().total_storage(), GB);
         details.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn account_details_can_skip_the_count_and_preserve_other_fields() {
+        let mut server = Server::new_async().await;
+        let payload = json!({
+            "email": "alïce@example.org",
+            "usage": 2 * GB,
+            "storageBonus": GB,
+            "subscription": {
+                "productID": "free", "storage": 10 * GB, "expiryTime": 1,
+                "originalTransactionID": "none", "paymentProvider": "",
+                "attributes": {}, "price": "", "period": ""
+            },
+            "profileData": {"isTwoFactorEnabled": true}
+        });
+        let request = server
+            .mock("GET", "/users/details/v2")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "memoryCount".into(),
+                "false".into(),
+            ))
+            .match_header("x-auth-token", "token")
+            .with_header("content-type", "application/json; charset=iso-8859-1")
+            .with_body(payload.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let client = make_client(server.url()).with_auth_token("token".into());
+        let (details, json) = client.account_details_with_json(false).await.unwrap();
+        assert_eq!(details.email, "alïce@example.org");
+        assert_eq!(details.file_count, None);
+        assert_eq!(details.used_storage(), 2 * GB);
+        assert_eq!(details.total_storage(), 11 * GB);
+        assert_eq!(serde_json::from_str::<Value>(&json).unwrap(), payload);
+        request.assert_async().await;
     }
 }

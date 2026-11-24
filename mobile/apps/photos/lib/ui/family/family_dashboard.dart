@@ -215,8 +215,7 @@ class _FamilyStorageCard extends StatelessWidget {
     final colors = context.componentColors;
     final l10n = context.strings;
     final totalStorage = userDetails.getTotalStorage();
-    final totalUsed =
-        userDetails.familyData?.getTotalUsage() ?? userDetails.usage;
+    final totalUsed = userDetails.getFamilyOrPersonalUsage();
     Color memberColor(FamilyMember member) =>
         avatarComponentColorValue(context, avatarColorFor(member));
 
