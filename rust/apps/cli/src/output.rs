@@ -643,10 +643,17 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
             "family": family,
         }));
     }
+    let member_limit = details
+        .family_member()
+        .and_then(|member| member.storage_limit);
+    let (display_total, display_used) = match member_limit {
+        Some(limit) => (limit, details.usage),
+        None => (details.total_storage(), details.used_storage()),
+    };
     let mut fields = vec![
         ("Email", escape_controls(&details.email)),
-        ("Total", size(details.total_storage())),
-        ("Used", size(details.usage)),
+        ("Total", size(display_total)),
+        ("Used", size(display_used)),
         ("Free", size(details.free_storage())),
         ("Plan", size(details.plan_storage())),
         (
@@ -681,7 +688,7 @@ pub fn usage(details: &AccountDetails, as_json: bool) -> Result<()> {
                 ("Family used", size(family.usage())),
                 ("Family storage", size(details.total_storage())),
             ]);
-            if let Some(limit) = details.family_member().and_then(|m| m.storage_limit) {
+            if let Some(limit) = member_limit {
                 fields.push(("Your limit", size(limit)));
             }
         }

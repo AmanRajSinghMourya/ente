@@ -166,7 +166,7 @@ Files   339
 Family  none
 ```
 
-`Total` is the plan plus bonuses such as referrals, `Used` and `Files` are what Photos holds, and `Status` says whether the plan is active or expired. In a family the plan and total are the family admin's, and `Family` lists its members, followed by the shared totals and your own limit when the admin has set one.
+`Total` and `Used` show your storage and usage on an individual plan and shared storage and usage on a family plan. If you have a family storage limit, they show your limit and personal Photos usage. Individual and shared plan totals include bonuses such as referrals. `Files` counts your Photos files, and `Status` says whether the plan is active or expired. In a family, `Plan` shows the admin's plan and `Family` lists the members, shared totals, and your limit if one is set.
 
 ## Read as JSON
 

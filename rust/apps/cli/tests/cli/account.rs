@@ -786,9 +786,10 @@ fn family_usage_free_space_respects_both_quotas() {
         let mut server = mockito::Server::new();
         let home = TestHome::new();
         home.seed(&server.url());
+        let member_usage = 4 * GB;
         let family = json!({"storage": 200 * GB, "expiryTime": 4942020944746699i64, "members": [
-            {"email": "admin@example.org", "status": "ACCEPTED", "usage": (family_used - 3) * GB, "isAdmin": true},
-            {"email": "fixture@example.org", "status": "ACCEPTED", "usage": 3 * GB,
+            {"email": "admin@example.org", "status": "ACCEPTED", "usage": family_used * GB - member_usage, "isAdmin": true},
+            {"email": "fixture@example.org", "status": "ACCEPTED", "usage": member_usage,
                 "storageLimit": member_limit.map(|limit| limit * GB)}
         ]});
         let details = server
@@ -798,12 +799,21 @@ fn family_usage_free_space_respects_both_quotas() {
             .expect(2)
             .create();
         let usage = home.json(&["photos", "usage"]);
+        assert_eq!(usage["totalBytes"], 210 * GB);
+        assert_eq!(usage["usedBytes"], 3 * GB);
         assert_eq!(
             usage["freeBytes"],
             free * GB,
             "family used: {family_used} GB; member limit: {member_limit:?} GB"
         );
         let plain = String::from_utf8(success(home.run(&["photos", "usage"])).stdout).unwrap();
+        let (total, used) = member_limit.map_or((210, family_used), |limit| (limit, 3));
+        assert!(
+            plain.contains(&format!(
+                "Total           {total} GB\nUsed            {used} GB\n"
+            )),
+            "{plain}"
+        );
         let free_line = plain
             .lines()
             .find(|line| line.starts_with("Free "))
