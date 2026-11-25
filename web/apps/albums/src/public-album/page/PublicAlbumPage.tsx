@@ -205,6 +205,7 @@ export default function PublicAlbumPage() {
 
     // TODO: Can we convert these to state
     const credentials = useRef<PublicAlbumsCredentials | undefined>(undefined);
+    const guestIdentity = useRef<AnonIdentity | undefined>(undefined);
     const collectionKey = useRef<string | undefined>(undefined);
     const collectionID = useRef<number | undefined>(undefined);
     const latestCollection = useRef<Collection | undefined>(undefined);
@@ -339,17 +340,40 @@ export default function PublicAlbumPage() {
                 collectionKey.current = ck;
                 const collection = await savedPublicCollectionByKey(ck);
                 const currentAPIOrigin = await apiOrigin();
-                let accessTokenJWT: string | undefined;
                 const linkDeviceToken =
                     await savedPublicCollectionLinkDeviceToken(
                         currentAPIOrigin,
                         accessToken,
                     );
+                collectionID.current = collection?.id;
+                credentials.current = {
+                    get anonUserToken() {
+                        const current = guestIdentity.current;
+                        if (
+                            current?.expiresAt &&
+                            Date.now() * 1000 >= current.expiresAt
+                        ) {
+                            const id = collectionID.current;
+                            setAnonIdentity(
+                                id ? getStoredAnonIdentity(id) : undefined,
+                            );
+                        }
+                        return guestIdentity.current?.token;
+                    },
+                    accessToken,
+                    accessTokenJWT: collection
+                        ? await savedPublicCollectionAccessTokenJWT(accessToken)
+                        : undefined,
+                    linkDeviceToken,
+                };
+                setPublicAlbumsCredentials(credentials.current);
+                setAnonIdentity(
+                    collection
+                        ? getStoredAnonIdentity(collection.id)
+                        : undefined,
+                );
                 if (collection) {
                     setPublicCollection(collection);
-                    setAnonUserID(
-                        getStoredAnonIdentity(collection.id)?.anonUserID,
-                    );
                     setIsPasswordProtected(
                         !!collection.publicURLs[0]?.passwordEnabled,
                     );
@@ -359,15 +383,7 @@ export default function PublicAlbumPage() {
                             collection,
                         ),
                     );
-                    accessTokenJWT =
-                        await savedPublicCollectionAccessTokenJWT(accessToken);
                 }
-                credentials.current = {
-                    accessToken,
-                    accessTokenJWT,
-                    linkDeviceToken,
-                };
-                setPublicAlbumsCredentials(credentials.current);
                 await publicAlbumsRemotePull();
             } finally {
                 if (
@@ -406,9 +422,7 @@ export default function PublicAlbumPage() {
     }, [dragAndDropFiles.length, isUploadInProgress, uploadTypeSelectorView]);
 
     const setAnonIdentity = useCallback((identity?: AnonIdentity) => {
-        const currentCredentials = credentials.current!;
-        currentCredentials.anonUserToken = identity?.token;
-        setPublicAlbumsCredentials(currentCredentials);
+        guestIdentity.current = identity;
         setAnonUserID(identity?.anonUserID);
     }, []);
 
@@ -644,26 +658,26 @@ export default function PublicAlbumPage() {
                 ? latestCollection.current
                 : uploadCollection;
         const publicURL = collection.publicURLs[0];
-        if (!publicURL?.requireApproval && !publicURL?.enableComment) return;
+        if (!publicURL?.requireApproval && !publicURL?.enableComment)
+            return credentials.current?.anonUserToken;
         const stored = getStoredAnonIdentity(collection.id);
         if (stored) {
             setAnonIdentity(stored);
             const { isGuestIdentityValid } =
                 await loadPublicCollectionService();
             if (await isGuestIdentityValid(credentials.current!, collection)) {
-                return;
+                return stored.token;
             }
         }
         if (!name) throw new Error("Missing public album uploader name");
-        // Keep concurrent upload requests identified until the replacement is ready.
-        setAnonIdentity(
-            await createAnonIdentity(
-                { ...credentials.current!, anonUserToken: undefined },
-                collection.id,
-                name,
-                collection.key,
-            ),
+        const identity = await createAnonIdentity(
+            credentials.current!,
+            collection.id,
+            name,
+            collection.key,
         );
+        setAnonIdentity(identity);
+        return identity.token;
     };
 
     const downloadFilesHelper = async () => {

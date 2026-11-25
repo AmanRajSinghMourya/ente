@@ -140,6 +140,8 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         FileViewerPhotoSwipe<FileViewerAnnotatedFile> | undefined
     >(undefined);
     const handleCloseRef = useRef<() => void>(() => undefined);
+    const pendingFileIDsRef = useRef(pendingFileIDs);
+    pendingFileIDsRef.current = pendingFileIDs;
     const browserBackStateRef = useRef<string | undefined>(undefined);
 
     // This is the last action target, not necessarily the visible slide.
@@ -649,12 +651,14 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         (file: EnteFile, itemData: ItemData): FileViewerAnnotatedFile => {
             const fileID = file.id;
             const showDownload =
-                disableDownload || !onDownload || pendingFileIDs?.has(file.id)
+                disableDownload ||
+                !onDownload ||
+                pendingFileIDsRef.current?.has(file.id)
                     ? undefined
                     : "bar";
 
             const showCopyImage = (() => {
-                if (disableDownload || pendingFileIDs?.has(file.id))
+                if (disableDownload || pendingFileIDsRef.current?.has(file.id))
                     return false;
                 switch (file.metadata.fileType) {
                     case FileType.image:
@@ -678,11 +682,12 @@ export const FileViewer: React.FC<FileViewerProps> = ({
             setActiveAnnotatedFile(annotatedFile);
             return annotatedFile;
         },
-        [disableDownload, onDownload, pendingFileIDs],
+        [disableDownload, onDownload],
     );
     const showSocialButtons = useCallback(
-        ({ file }: FileViewerAnnotatedFile) => !pendingFileIDs?.has(file.id),
-        [pendingFileIDs],
+        ({ file }: FileViewerAnnotatedFile) =>
+            !pendingFileIDsRef.current?.has(file.id),
+        [],
     );
 
     const shouldShowSocialButtons_ = useCallback((): boolean => false, []);

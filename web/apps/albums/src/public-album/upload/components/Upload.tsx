@@ -69,7 +69,7 @@ export interface UploadProps {
     onEnsureUploadAnonIdentity: (
         collection: Collection,
         name: string | undefined,
-    ) => Promise<void>;
+    ) => Promise<string | undefined>;
     onUploadFile: (file: EnteFile) => void;
     onShowSessionExpiredDialog: () => void;
     onUploadInProgressChange?: (value: boolean) => void;
@@ -320,8 +320,6 @@ export const Upload: React.FC<UploadProps> = ({
     };
 
     const preUploadAction = async (
-        collection: Collection,
-        uploaderName: string | undefined,
         parsedMetadataJSONMap?: Map<string, ParsedMetadataJSON>,
     ) => {
         props.setShouldDisableDropzone(true);
@@ -329,7 +327,6 @@ export const Upload: React.FC<UploadProps> = ({
         uploadManager.prepareForNewUpload(parsedMetadataJSONMap);
         setUploadProgressView(true);
         await onRemotePull({ silent: true });
-        await onEnsureUploadAnonIdentity(collection, uploaderName);
     };
 
     const postUploadAction = () => {
@@ -344,7 +341,7 @@ export const Upload: React.FC<UploadProps> = ({
     ) => {
         reportUploadInProgress(true);
         try {
-            await preUploadAction(collections[0]!, uploaderName);
+            await preUploadAction();
             const wereFilesProcessed = await uploadManager.uploadItems(
                 uploadItemsWithCollection,
                 collections,
@@ -369,11 +366,7 @@ export const Upload: React.FC<UploadProps> = ({
             const { items, collections, parsedMetadataJSONMap } =
                 uploadManager.failedItemState();
             const uploaderName = uploadManager.getUploaderName();
-            await preUploadAction(
-                collections[0]!,
-                uploaderName,
-                parsedMetadataJSONMap,
-            );
+            await preUploadAction(parsedMetadataJSONMap);
             await uploadManager.uploadItems(
                 items,
                 collections,
