@@ -39,7 +39,7 @@ export const getStoredAnonIdentity = (
         const identity = JSON.parse(stored) as AnonIdentity;
         // expiresAt is in microseconds.
         const nowMicroseconds = Date.now() * 1000;
-        if (identity.expiresAt && nowMicroseconds > identity.expiresAt) {
+        if (identity.expiresAt && nowMicroseconds >= identity.expiresAt) {
             clearAnonIdentity(collectionID);
             return undefined;
         }
@@ -76,7 +76,10 @@ export const createAnonIdentity = async (
     const res = await fetch(await apiURL("/public-collection/anon-identity"), {
         method: "POST",
         headers: {
-            ...authenticatedPublicAlbumsRequestHeaders(credentials),
+            ...authenticatedPublicAlbumsRequestHeaders({
+                ...credentials,
+                anonUserToken: undefined,
+            }),
             "Content-Type": "application/json",
         },
         body: JSON.stringify({ cipher, nonce }),
