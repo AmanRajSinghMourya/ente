@@ -21,6 +21,7 @@ export interface AnonIdentity {
     anonUserID: string;
     token: string;
     expiresAt: number;
+    name?: string;
 }
 
 const ANON_IDENTITY_STORAGE_KEY_PREFIX = "ente_anon_identity";
@@ -56,7 +57,7 @@ const storeAnonIdentity = (
     localStorage.setItem(getStorageKey(collectionID), JSON.stringify(identity));
 };
 
-const clearAnonIdentity = (collectionID: number): void => {
+export const clearAnonIdentity = (collectionID: number): void => {
     if (typeof window === "undefined") return;
     localStorage.removeItem(getStorageKey(collectionID));
 };
@@ -81,7 +82,10 @@ export const createAnonIdentity = async (
         body: JSON.stringify({ cipher, nonce }),
     });
     ensureOk(res);
-    const identity = AnonIdentityResponse.parse(await res.json());
+    const identity = {
+        ...AnonIdentityResponse.parse(await res.json()),
+        name: userName,
+    };
 
     storeAnonIdentity(collectionID, identity);
 

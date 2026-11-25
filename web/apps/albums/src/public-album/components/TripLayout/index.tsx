@@ -46,6 +46,7 @@ export interface TripLayoutProps {
     credentials?: React.RefObject<PublicAlbumsCredentials | undefined>;
     enableComment?: boolean;
     enableJoin?: boolean;
+    moderated?: boolean;
 }
 
 export const TripLayout: React.FC<TripLayoutProps> = ({
@@ -60,6 +61,7 @@ export const TripLayout: React.FC<TripLayoutProps> = ({
     credentials,
     enableComment = true,
     enableJoin = false,
+    moderated,
 }) => {
     const collectionTitle = collection?.name || albumTitle || "Trip";
     const albumDescription = collection?.pubMagicMetadata?.data.caption?.trim();
@@ -368,6 +370,7 @@ export const TripLayout: React.FC<TripLayoutProps> = ({
                                     albumTitle={collectionTitle}
                                     albumDescription={albumDescription}
                                     coverImageUrl={coverImageUrl}
+                                    moderated={moderated}
                                 />
                             </MobileCoverOverlay>
                         )}
@@ -469,6 +472,7 @@ export const TripLayout: React.FC<TripLayoutProps> = ({
                                         albumTitle={collectionTitle}
                                         albumDescription={albumDescription}
                                         coverImageUrl={coverImageUrl}
+                                        moderated={moderated}
                                     />
 
                                     {isLoadingLocations ? (

@@ -42,6 +42,7 @@ import {
 } from "@mui/material";
 import { SpacedRow } from "ente-base/components/containers";
 import { ContextMenu, ContextMenuItem } from "ente-base/components/ContextMenu";
+import { ModeratedAlbumShield } from "ente-base/components/ModeratedAlbumShield";
 import { ActivityIndicator } from "ente-base/components/mui/ActivityIndicator";
 import { useIsSmallWidth } from "ente-base/components/utils/hooks";
 import { useModalVisibility } from "ente-base/components/utils/modal";
@@ -184,6 +185,11 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = (props) => {
                         </Box>
                     )}
                     <GalleryItemsSummary
+                        nameEndIcon={
+                            activeCollection?.publicURLs[0]?.requireApproval ? (
+                                <ModeratedAlbumShield />
+                            ) : undefined
+                        }
                         nameProps={
                             isAlbum ? { noWrap: true, title: name } : undefined
                         }

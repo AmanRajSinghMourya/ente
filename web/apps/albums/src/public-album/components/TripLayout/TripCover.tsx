@@ -1,5 +1,6 @@
 import { Box, Skeleton, styled, Typography } from "@mui/material";
 import { EnteLogo } from "ente-base/components/EnteLogo";
+import { ModeratedAlbumShield } from "ente-base/components/ModeratedAlbumShield";
 import { AlbumDescription } from "ente-new/photos/components/gallery/ListHeader";
 import { memo } from "react";
 import type { JourneyPoint } from "./types";
@@ -9,10 +10,17 @@ interface TripCoverProps {
     albumTitle?: string;
     albumDescription?: string;
     coverImageUrl?: string | null;
+    moderated?: boolean;
 }
 
 export const TripCover = memo<TripCoverProps>(
-    ({ journeyData, albumTitle, albumDescription, coverImageUrl }) => {
+    ({
+        journeyData,
+        albumTitle,
+        albumDescription,
+        coverImageUrl,
+        moderated,
+    }) => {
         const sortedData = [...journeyData].sort(
             (a, b) => a.timestamp - b.timestamp,
         );
@@ -71,7 +79,17 @@ export const TripCover = memo<TripCoverProps>(
                     <ContentContainer>
                         {coverImageUrl ? (
                             <>
-                                <TripTitle>{albumTitle || "Trip"}</TripTitle>
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <TripTitle>
+                                        {albumTitle || "Trip"}
+                                    </TripTitle>
+                                    {moderated && <ModeratedAlbumShield />}
+                                </Box>
                                 <TripSubtitle>
                                     {monthYear} • {diffDays} days •{" "}
                                     {locationCount} locations

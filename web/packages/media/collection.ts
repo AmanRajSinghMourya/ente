@@ -86,6 +86,7 @@ export interface PublicURL {
     enableJoin: boolean;
     enableCollect: boolean;
     enableComment: boolean;
+    requireApproval?: boolean;
     passwordEnabled: boolean;
     nonce?: string;
     opsLimit?: number;
@@ -100,6 +101,7 @@ export const RemotePublicURL = z.looseObject({
     enableJoin: z.boolean().nullish().transform(nullishToFalse),
     enableCollect: z.boolean().nullish().transform(nullishToFalse),
     enableComment: z.boolean().nullish().transform(nullishToFalse),
+    requireApproval: z.boolean().optional(),
     passwordEnabled: z.boolean().nullish().transform(nullishToFalse),
     nonce: z.string().nullish().transform(nullToUndefined),
     memLimit: z.number().nullish().transform(nullToUndefined),

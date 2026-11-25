@@ -20,6 +20,7 @@ export interface PublicAlbumsCredentials {
     accessToken: string;
     accessTokenJWT?: string | undefined;
     linkDeviceToken?: string | undefined;
+    anonUserToken?: string | undefined;
 }
 
 export const linkDeviceTokenRequestHeader = "X-Auth-Link-Device-Token";
@@ -32,9 +33,11 @@ export const linkDeviceTokenFromResponse = (res: Response) =>
 export const authenticatedPublicAlbumsRequestHeaders = ({
     accessToken,
     accessTokenJWT,
+    anonUserToken,
 }: PublicAlbumsCredentials) => ({
     "X-Auth-Access-Token": accessToken,
     ...(accessTokenJWT && { "X-Auth-Access-Token-JWT": accessTokenJWT }),
+    ...(anonUserToken && { "X-Anon-User-Token": anonUserToken }),
     "X-Client-Package": clientPackageName,
 });
 

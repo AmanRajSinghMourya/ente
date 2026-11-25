@@ -4,6 +4,10 @@ import {
     savedPublicCollectionUploaderName,
     savePublicCollectionUploaderName,
 } from "@/public-album/data/storage/public-albums-fdb";
+import {
+    getPublicAnonProfiles,
+    getStoredAnonIdentity,
+} from "@/public-album/social/api/public-reaction";
 import { UploaderNameInput } from "@/public-album/upload/components/UploaderNameInput";
 import {
     uploadPathPrefix,
@@ -62,6 +66,10 @@ export interface UploadProps {
     setLoading: (loading: boolean) => void;
     setShouldDisableDropzone: (value: boolean) => void;
     onRemotePull: (opts?: RemotePullOpts) => Promise<void>;
+    onEnsureUploadAnonIdentity: (
+        collection: Collection,
+        name: string | undefined,
+    ) => Promise<void>;
     onUploadFile: (file: EnteFile) => void;
     onShowSessionExpiredDialog: () => void;
     onUploadInProgressChange?: (value: boolean) => void;
@@ -75,6 +83,7 @@ export const Upload: React.FC<UploadProps> = ({
     dragAndDropFiles,
     uploadCollection,
     onRemotePull,
+    onEnsureUploadAnonIdentity,
     onUploadFile,
     onShowSessionExpiredDialog,
     onUploadInProgressChange,
@@ -103,7 +112,6 @@ export const Upload: React.FC<UploadProps> = ({
         useState<SegregatedFinishedUploads>(new Map());
     const [percentComplete, setPercentComplete] = useState(0);
     const [hasLivePhotos, setHasLivePhotos] = useState(false);
-    const [uploaderName, setUploaderName] = useState("");
     const [pendingUploadFileCount, setPendingUploadFileCount] = useState(0);
     const {
         show: showUploaderNameInput,
@@ -255,12 +263,18 @@ export const Upload: React.FC<UploadProps> = ({
 
         void (async () => {
             try {
-                setUploaderName(
-                    (await savedPublicCollectionUploaderName(
-                        publicAlbumsCredentials.accessToken,
-                    )) ?? "",
+                const name = await knownUploaderName(
+                    publicAlbumsCredentials,
+                    uploadCollection,
                 );
-                showUploaderNameInput();
+                if (name) {
+                    await uploadFilesToExistingCollection(
+                        uploadCollection,
+                        name,
+                    );
+                } else {
+                    showUploaderNameInput();
+                }
             } catch (e) {
                 uploadItemsAndPaths.current = [];
                 onGenericError(e);
@@ -306,6 +320,8 @@ export const Upload: React.FC<UploadProps> = ({
     };
 
     const preUploadAction = async (
+        collection: Collection,
+        uploaderName: string | undefined,
         parsedMetadataJSONMap?: Map<string, ParsedMetadataJSON>,
     ) => {
         props.setShouldDisableDropzone(true);
@@ -313,6 +329,7 @@ export const Upload: React.FC<UploadProps> = ({
         uploadManager.prepareForNewUpload(parsedMetadataJSONMap);
         setUploadProgressView(true);
         await onRemotePull({ silent: true });
+        await onEnsureUploadAnonIdentity(collection, uploaderName);
     };
 
     const postUploadAction = () => {
@@ -327,11 +344,12 @@ export const Upload: React.FC<UploadProps> = ({
     ) => {
         reportUploadInProgress(true);
         try {
-            await preUploadAction();
+            await preUploadAction(collections[0]!, uploaderName);
             const wereFilesProcessed = await uploadManager.uploadItems(
                 uploadItemsWithCollection,
                 collections,
                 uploaderName,
+                (name) => onEnsureUploadAnonIdentity(collections[0]!, name),
             );
             if (!wereFilesProcessed) closeUploadProgress();
         } catch (e) {
@@ -351,8 +369,17 @@ export const Upload: React.FC<UploadProps> = ({
             const { items, collections, parsedMetadataJSONMap } =
                 uploadManager.failedItemState();
             const uploaderName = uploadManager.getUploaderName();
-            await preUploadAction(parsedMetadataJSONMap);
-            await uploadManager.uploadItems(items, collections, uploaderName);
+            await preUploadAction(
+                collections[0]!,
+                uploaderName,
+                parsedMetadataJSONMap,
+            );
+            await uploadManager.uploadItems(
+                items,
+                collections,
+                uploaderName,
+                (name) => onEnsureUploadAnonIdentity(collections[0]!, name),
+            );
         } catch (e) {
             log.error("Retrying failed uploads failed", e);
             closeUploadProgress();
@@ -461,12 +488,43 @@ export const Upload: React.FC<UploadProps> = ({
             <UploaderNameInput
                 open={uploaderNameInputVisibilityProps.open}
                 onClose={handleUploaderNameInputClose}
-                uploaderName={uploaderName}
                 uploadFileCount={pendingUploadFileCount}
                 onSubmit={handlePublicUpload}
             />
         </>
     );
+};
+
+const knownUploaderName = async (
+    credentials: PublicAlbumsCredentials,
+    collection: Collection,
+) => {
+    const identity = getStoredAnonIdentity(collection.id);
+    if (identity?.name) return identity.name;
+
+    const savedName = await savedPublicCollectionUploaderName(
+        credentials.accessToken,
+    );
+    if (savedName || !identity || !collection.publicURLs[0]?.enableComment)
+        return savedName;
+
+    // Older comment-only guests have an ID, but their name is only in the encrypted profile.
+    try {
+        const { anonUserNames } = await getPublicAnonProfiles(
+            credentials,
+            collection.key,
+        );
+        const name = anonUserNames.get(identity.anonUserID);
+        if (name)
+            await savePublicCollectionUploaderName(
+                credentials.accessToken,
+                name,
+            );
+        return name;
+    } catch (e) {
+        log.warn("Could not recover the guest's uploader name", e);
+        return undefined;
+    }
 };
 
 type GetInputProps = () => React.HTMLAttributes<HTMLInputElement>;
