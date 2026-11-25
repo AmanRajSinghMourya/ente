@@ -98,6 +98,7 @@ export interface FileListProps {
     height: number;
     width: number;
     annotatedFiles: FileListAnnotatedFile[];
+    pendingFileIDs?: Set<number>;
     layout?: "grid" | "masonry";
     disableGrouping?: boolean;
     header?: FileListHeaderOrFooter;
@@ -120,6 +121,7 @@ export const FileList: React.FC<FileListProps> = ({
     header,
     footer,
     annotatedFiles,
+    pendingFileIDs,
     enableSelect,
     selected,
     setSelected,
@@ -280,7 +282,7 @@ export const FileList: React.FC<FileListProps> = ({
 
     useEffect(() => {
         const notSelectedFiles = annotatedFiles.filter(
-            (af) => !selected[af.file.id],
+            (af) => !pendingFileIDs?.has(af.file.id) && !selected[af.file.id],
         );
 
         const unselectedDates = new Set(
@@ -288,7 +290,9 @@ export const FileList: React.FC<FileListProps> = ({
         );
 
         const localSelectedFiles = annotatedFiles.filter(
-            (af) => !unselectedDates.has(af.timelineDateString),
+            (af) =>
+                !pendingFileIDs?.has(af.file.id) &&
+                !unselectedDates.has(af.timelineDateString),
         );
 
         const localSelectedDates = new Set(
@@ -301,7 +305,7 @@ export const FileList: React.FC<FileListProps> = ({
             localSelectedDates.forEach((date) => checked.add(date));
             return checked;
         });
-    }, [annotatedFiles, selected]);
+    }, [annotatedFiles, selected, pendingFileIDs]);
 
     const handleSelectMulti = useMemo(
         () => handleSelectCreatorMulti(setSelected),
@@ -325,15 +329,27 @@ export const FileList: React.FC<FileListProps> = ({
                 (af) => af.timelineDateString === date,
             );
 
-            handleSelectMulti(filesOnADay.map((af) => af.file))(isDateSelected);
+            handleSelectMulti(
+                filesOnADay
+                    .filter((af) => !pendingFileIDs?.has(af.file.id))
+                    .map((af) => af.file),
+            )(isDateSelected);
         },
-        [annotatedFiles, checkedTimelineDateStrings, handleSelectMulti],
+        [
+            annotatedFiles,
+            checkedTimelineDateStrings,
+            handleSelectMulti,
+            pendingFileIDs,
+        ],
     );
 
-    const handleSelect = useMemo(
-        () => handleSelectCreator(setSelected, setRangeStartIndex),
-        [setSelected],
-    );
+    const handleSelect = useMemo(() => {
+        const select = handleSelectCreator(setSelected, setRangeStartIndex);
+        return (file: EnteFile, index?: number) =>
+            pendingFileIDs?.has(file.id)
+                ? () => undefined
+                : select(file, index);
+    }, [setSelected, pendingFileIDs]);
 
     const isFileSelected = useCallback(
         (file: EnteFile) => !!selected[file.id],
@@ -411,20 +427,25 @@ export const FileList: React.FC<FileListProps> = ({
                         item.groups,
                         ({ date, dateSpan }) => [
                             <DateListItem key={date} span={dateSpan}>
-                                {haveSelection && (
-                                    <Checkbox
-                                        key={date}
-                                        name={date}
-                                        checked={checkedTimelineDateStrings.has(
-                                            date,
-                                        )}
-                                        onChange={() =>
-                                            onChangeSelectAllCheckBox(date)
-                                        }
-                                        size="small"
-                                        sx={{ pl: 0 }}
-                                    />
-                                )}
+                                {haveSelection &&
+                                    annotatedFiles.some(
+                                        (af) =>
+                                            af.timelineDateString === date &&
+                                            !pendingFileIDs?.has(af.file.id),
+                                    ) && (
+                                        <Checkbox
+                                            key={date}
+                                            name={date}
+                                            checked={checkedTimelineDateStrings.has(
+                                                date,
+                                            )}
+                                            onChange={() =>
+                                                onChangeSelectAllCheckBox(date)
+                                            }
+                                            size="small"
+                                            sx={{ pl: 0 }}
+                                        />
+                                    )}
                                 {date}
                             </DateListItem>,
                         ],
@@ -440,10 +461,17 @@ export const FileList: React.FC<FileListProps> = ({
                                 return (
                                     <FileThumbnail
                                         key={`tile-${file.id}-selected-${selected[file.id] ?? false}`}
-                                        enableSelect={!!enableSelect}
+                                        enableSelect={
+                                            !!enableSelect &&
+                                            !pendingFileIDs?.has(file.id)
+                                        }
                                         file={file}
+                                        pending={pendingFileIDs?.has(file.id)}
                                         selected={isFileSelected(file)}
-                                        selectOnClick={haveSelection}
+                                        selectOnClick={
+                                            haveSelection &&
+                                            !pendingFileIDs?.has(file.id)
+                                        }
                                         isRangeSelectActive={
                                             isShiftKeyPressed && haveSelection
                                         }
@@ -474,6 +502,7 @@ export const FileList: React.FC<FileListProps> = ({
             }
         },
         [
+            annotatedFiles,
             checkedTimelineDateStrings,
             handleRangeSelect,
             handleSelect,
@@ -482,6 +511,7 @@ export const FileList: React.FC<FileListProps> = ({
             isFileSelected,
             onChangeSelectAllCheckBox,
             onItemClick,
+            pendingFileIDs,
             rangeStartIndex,
             enableSelect,
             selected,
@@ -729,10 +759,15 @@ export const FileList: React.FC<FileListProps> = ({
                 >
                     <FileThumbnail
                         key={`tile-${file.id}-selected-${selected[file.id] ?? false}`}
-                        enableSelect={!!enableSelect}
+                        enableSelect={
+                            !!enableSelect && !pendingFileIDs?.has(file.id)
+                        }
                         file={file}
+                        pending={pendingFileIDs?.has(file.id)}
                         selected={isFileSelected(file)}
-                        selectOnClick={haveSelection}
+                        selectOnClick={
+                            haveSelection && !pendingFileIDs?.has(file.id)
+                        }
                         isRangeSelectActive={isShiftKeyPressed && haveSelection}
                         isInSelectRange={
                             rangeStartIndex !== undefined &&
@@ -765,6 +800,7 @@ export const FileList: React.FC<FileListProps> = ({
             masonryViewportBottom,
             masonryViewportTop,
             onItemClick,
+            pendingFileIDs,
             rangeStartIndex,
             selected,
         ],
@@ -1114,6 +1150,7 @@ const FileListRow = memo(
 
 type FileThumbnailProps = {
     file: EnteFile;
+    pending?: boolean;
     selected: boolean;
     isRangeSelectActive: boolean;
     selectOnClick: boolean;
@@ -1129,6 +1166,7 @@ type FileThumbnailProps = {
 
 const FileThumbnail: React.FC<FileThumbnailProps> = ({
     file,
+    pending,
     enableSelect,
     selected,
     selectOnClick,
@@ -1215,7 +1253,7 @@ const FileThumbnail: React.FC<FileThumbnailProps> = ({
             onMouseEnter={handleHover}
             disabled={!imageURL}
             $disableBottomMargin={!!isMasonry}
-            style={style}
+            style={{ ...style, opacity: pending ? 0.4 : undefined }}
             {...(enableSelect && longPressHandlers)}
         >
             {enableSelect && (

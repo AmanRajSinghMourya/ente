@@ -88,7 +88,10 @@ export const fetchPublicCollectionFile = async (
         );
     }
     return fetch(await apiURL(path), {
-        headers: authenticatedPublicAlbumsRequestHeaders(credentials),
+        headers: authenticatedPublicAlbumsRequestHeaders({
+            ...credentials,
+            anonUserToken: undefined,
+        }),
     });
 };
 

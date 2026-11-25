@@ -1,4 +1,10 @@
-import type { PublicAlbumsCredentials } from "ente-base/http";
+import {
+    authenticatedPublicAlbumsRequestHeaders,
+    ensureOk,
+    isHTTP401Error,
+    type PublicAlbumsCredentials,
+} from "ente-base/http";
+import { apiURL } from "ente-base/origins";
 import {
     decryptRemoteCollection,
     type Collection,
@@ -12,13 +18,25 @@ import {
     removePublicCollectionAccessTokenJWT,
     removePublicCollectionFiles,
     removePublicCollectionLastSyncTime,
-    savedPublicCollectionFiles,
-    savedPublicCollectionLastSyncTime,
+    savedPublicCollectionFileState,
     saveLastPublicCollectionReferralCode,
     savePublicCollection,
     savePublicCollectionFiles,
-    savePublicCollectionLastSyncTime,
 } from "../storage/public-albums-fdb";
+
+export const removePendingFile = async (
+    credentials: PublicAlbumsCredentials,
+    fileID: number,
+) => {
+    const res = await fetch(
+        await apiURL(`/public-collection/pending-files/${fileID}`),
+        {
+            method: "DELETE",
+            headers: authenticatedPublicAlbumsRequestHeaders(credentials),
+        },
+    );
+    ensureOk(res);
+};
 
 export const pullCollection = async (
     credentials: PublicAlbumsCredentials,
@@ -51,15 +69,18 @@ export const pullPublicCollectionFiles = async (
     collection: Collection,
     // Files passed here have no defined order.
     onSetFiles: (files: EnteFile[]) => void,
+    anonUserID?: string,
 ) => {
     const { accessToken } = credentials;
 
-    let sinceTime = (await savedPublicCollectionLastSyncTime(accessToken)) ?? 0;
+    const saved = await savedPublicCollectionFileState(accessToken);
+    const sameIdentity = saved.anonUserID === anonUserID;
+    let sinceTime = sameIdentity ? saved.sinceTime : 0;
 
     // Remote advances collection.updationTime whenever a file changes.
     if (sinceTime == collection.updationTime) return;
 
-    const files = await savedPublicCollectionFiles(accessToken);
+    const files = sameIdentity ? saved.files : [];
     const filesByID = new Map(files.map((f) => [f.id, f]));
     let callbackInvoked = false;
 
@@ -71,6 +92,14 @@ export const pullPublicCollectionFiles = async (
         if (!diff.length) {
             // An empty first page must still publish the cached files.
             if (!callbackInvoked) {
+                if (!sameIdentity) {
+                    await savePublicCollectionFiles(
+                        accessToken,
+                        files,
+                        sinceTime,
+                        anonUserID,
+                    );
+                }
                 onSetFiles(files);
             }
             break;
@@ -88,12 +117,47 @@ export const pullPublicCollectionFiles = async (
         }
 
         const updatedFiles = [...filesByID.values()];
-        await savePublicCollectionFiles(accessToken, updatedFiles);
-        await savePublicCollectionLastSyncTime(accessToken, sinceTime);
+        await savePublicCollectionFiles(
+            accessToken,
+            updatedFiles,
+            sinceTime,
+            anonUserID,
+        );
         onSetFiles(updatedFiles);
         callbackInvoked = true;
 
         if (!hasMore) break;
+    }
+};
+
+export const isGuestIdentityRejected = async (
+    credentials: PublicAlbumsCredentials,
+    collection: Collection,
+) => {
+    try {
+        await getPublicCollectionDiff(
+            { ...credentials, anonUserToken: undefined },
+            collection.updationTime,
+        );
+        return true;
+    } catch (e) {
+        if (isHTTP401Error(e)) return false;
+        throw e;
+    }
+};
+
+export const isGuestIdentityValid = async (
+    credentials: PublicAlbumsCredentials,
+    collection: Collection,
+) => {
+    try {
+        await getPublicCollectionDiff(credentials, collection.updationTime);
+        return true;
+    } catch (e) {
+        if (isHTTP401Error(e)) {
+            return !(await isGuestIdentityRejected(credentials, collection));
+        }
+        throw e;
     }
 };
 

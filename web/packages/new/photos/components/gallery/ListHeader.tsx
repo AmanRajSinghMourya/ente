@@ -17,6 +17,7 @@ interface GalleryItemsSummaryProps {
     fileCount?: number;
     countLabel?: string;
     endIcon?: React.ReactNode;
+    nameEndIcon?: React.ReactNode;
     // This cannot be the only way to invoke the action; it is mouse-only.
     onNameClick?: () => void;
     onDescriptionHeightChange?: (height: number) => void;
@@ -30,30 +31,35 @@ export const GalleryItemsSummary: React.FC<GalleryItemsSummaryProps> = ({
     fileCount,
     countLabel,
     endIcon,
+    nameEndIcon,
     onNameClick,
     onDescriptionHeightChange,
 }) => (
     <Box sx={{ minWidth: 0 }}>
-        <Typography
-            variant="h3"
-            {...(nameProps ?? {})}
-            sx={[
-                {
-                    fontFamily: '"Outfit Variable", Outfit, sans-serif',
-                    fontWeight: 600,
-                    fontSize: "24px",
-                    lineHeight: "32px",
-                },
-                ...(nameProps?.sx
-                    ? isSxArray(nameProps.sx)
-                        ? nameProps.sx
-                        : [nameProps.sx]
-                    : []),
-            ]}
-            onClick={onNameClick}
-        >
-            {name}
-        </Typography>
+        <Stack direction="row" sx={{ alignItems: "center", minWidth: 0 }}>
+            <Typography
+                variant="h3"
+                {...(nameProps ?? {})}
+                sx={[
+                    {
+                        fontFamily: '"Outfit Variable", Outfit, sans-serif',
+                        fontWeight: 600,
+                        fontSize: "24px",
+                        lineHeight: "32px",
+                        minWidth: 0,
+                    },
+                    ...(nameProps?.sx
+                        ? isSxArray(nameProps.sx)
+                            ? nameProps.sx
+                            : [nameProps.sx]
+                        : []),
+                ]}
+                onClick={onNameClick}
+            >
+                {name}
+            </Typography>
+            {nameEndIcon}
+        </Stack>
 
         {(fileCount !== undefined || countLabel !== undefined) && (
             <Stack

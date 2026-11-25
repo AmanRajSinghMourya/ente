@@ -23,7 +23,10 @@ export const fetchPublicAlbumsUploadURLWithMetadata = async (
     credentials: PublicAlbumsCredentials,
 ) => {
     const headers = new Headers(
-        authenticatedPublicAlbumsRequestHeaders(credentials),
+        authenticatedPublicAlbumsRequestHeaders({
+            ...credentials,
+            anonUserToken: undefined,
+        }),
     );
     headers.set("Content-Type", "application/json");
     const res = await fetch(
@@ -47,7 +50,10 @@ export const fetchPublicAlbumsMultipartUploadURLsWithMetadata = async (
     credentials: PublicAlbumsCredentials,
 ) => {
     const headers = new Headers(
-        authenticatedPublicAlbumsRequestHeaders(credentials),
+        authenticatedPublicAlbumsRequestHeaders({
+            ...credentials,
+            anonUserToken: undefined,
+        }),
     );
     headers.set("Content-Type", "application/json");
     const res = await fetch(

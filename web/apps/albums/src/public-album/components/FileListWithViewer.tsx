@@ -24,6 +24,8 @@ import {
 export type FileListWithViewerProps = {
     files: EnteFile[];
     enableDownload?: boolean;
+    pendingFileIDs?: Set<number>;
+    onRemovePendingFile?: (fileID: number) => Promise<void>;
     pendingFileIndex?: number;
     pendingFileSidebar?: FileViewerInitialSidebar;
     pendingHighlightCommentID?: string;
@@ -58,6 +60,8 @@ export const FileListWithViewer: React.FC<FileListWithViewerProps> = ({
     footer,
     files,
     enableDownload,
+    pendingFileIDs,
+    onRemovePendingFile,
     enableSelect,
     selected,
     setSelected,
@@ -166,6 +170,7 @@ export const FileListWithViewer: React.FC<FileListWithViewerProps> = ({
                             setSelected,
                             activeCollectionID,
                             emptyStateAction,
+                            pendingFileIDs,
                         }}
                         onItemClick={handleThumbnailClick}
                     />
@@ -190,6 +195,8 @@ export const FileListWithViewer: React.FC<FileListWithViewerProps> = ({
                     }}
                     onDownload={handleDownload}
                     activeCollectionID={activeCollectionID}
+                    pendingFileIDs={pendingFileIDs}
+                    onRemovePendingFile={onRemovePendingFile}
                 />
             )}
         </Container>

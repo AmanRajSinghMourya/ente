@@ -18,7 +18,7 @@ const handleOPTIONS = () =>
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, OPTIONS",
             "Access-Control-Allow-Headers":
-                "X-Auth-Access-Token, X-Auth-Access-Token-JWT, X-Client-Package, X-Client-Version",
+                "X-Auth-Access-Token, X-Auth-Access-Token-JWT, X-Anon-User-Token, X-Client-Package, X-Client-Version",
             "Access-Control-Max-Age": "86400",
         },
     });

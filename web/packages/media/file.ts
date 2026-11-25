@@ -33,6 +33,8 @@ export interface EnteFile {
     magicMetadata?: MagicMetadata<FilePrivateMagicMetadataData>;
     // Visible to everyone with whom the file is shared.
     pubMagicMetadata?: MagicMetadata<FilePublicMagicMetadataData>;
+    moderationStatus?: string;
+    anonUserID?: string;
 }
 
 interface FileObjectAttributes {

@@ -225,6 +225,9 @@ class UploadManager {
     private uploadInProgress = false;
     private publicAlbumsCredentials: PublicAlbumsCredentials | undefined;
     private uploaderName: string | undefined;
+    private ensureAnonIdentity:
+        ((uploaderName: string | undefined) => Promise<void>) | undefined;
+    private anonIdentityRefresh: Promise<void> | undefined;
     private shouldUploadBeCancelled = false;
 
     private uiService = new UIService();
@@ -262,6 +265,9 @@ class UploadManager {
         itemsWithCollection: UploadItemWithCollection[],
         collections: Collection[],
         uploaderName?: string,
+        ensureAnonIdentity?: (
+            uploaderName: string | undefined,
+        ) => Promise<void>,
     ) {
         if (this.uploadInProgress)
             throw new Error("Cannot run multiple uploads at once");
@@ -269,6 +275,7 @@ class UploadManager {
         log.info(`Uploading ${itemsWithCollection.length} files`);
         this.uploadInProgress = true;
         this.uploaderName = uploaderName;
+        this.ensureAnonIdentity = ensureAnonIdentity;
 
         try {
             await this.updateExistingFilesAndCollections(collections);
@@ -380,6 +387,24 @@ class UploadManager {
         await Promise.all(uploadProcesses);
     }
 
+    private async refreshAnonIdentity(failedToken: string | undefined) {
+        const credentials = this.publicAlbumsCredentials;
+        const ensureAnonIdentity = this.ensureAnonIdentity;
+        if (!failedToken || !credentials || !ensureAnonIdentity) return false;
+        if (credentials.anonUserToken === failedToken) {
+            this.anonIdentityRefresh ??= ensureAnonIdentity(
+                this.uploaderName,
+            ).finally(() => (this.anonIdentityRefresh = undefined));
+            try {
+                await this.anonIdentityRefresh;
+            } catch (e) {
+                log.error("Failed to refresh upload identity", e);
+                return false;
+            }
+        }
+        return credentials.anonUserToken !== failedToken;
+    }
+
     private async uploadNextItemInQueue(worker: CryptoWorker) {
         const uiService = this.uiService;
         const uploadContext = {
@@ -388,6 +413,7 @@ class UploadManager {
             abortIfCancelled: this.abortIfCancelled.bind(this),
             updateUploadProgress:
                 uiService.updateUploadProgress.bind(uiService),
+            refreshAnonIdentity: this.refreshAnonIdentity.bind(this),
         };
 
         while (this.itemsToBeUploaded.length > 0) {

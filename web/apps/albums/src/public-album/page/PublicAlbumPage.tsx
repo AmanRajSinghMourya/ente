@@ -19,6 +19,12 @@ import { setPublicAlbumsCredentials } from "@/public-album/data/auth/public-link
 import { ActiveDownloadStatusNotifications } from "@/public-album/download/components/ActiveDownloadStatusNotifications";
 import { downloadManager } from "@/public-album/download/services/download-manager";
 import { thumbnailManager } from "@/public-album/media/thumbnails/thumbnail-manager";
+import {
+    clearAnonIdentity,
+    createAnonIdentity,
+    getStoredAnonIdentity,
+    type AnonIdentity,
+} from "@/public-album/social/api/public-reaction";
 import type { UploadProps } from "@/public-album/upload/components/Upload";
 import {
     getSelectedFiles,
@@ -29,6 +35,7 @@ import type { PublicAlbumSingleFileViewerProps } from "@/public-album/viewer/com
 import type { PublicFeedItemClickInfo } from "@/public-album/viewer/components/PublicFeedSidebar";
 import { LazyPublicFeedSidebar } from "@/public-album/viewer/lib/lazy";
 import { Tick02Icon } from "@hugeicons/core-free-icons";
+import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import {
     Box,
@@ -46,6 +53,7 @@ import {
     LoadingIndicator,
     TranslucentLoadingOverlay,
 } from "ente-base/components/loaders";
+import { ModeratedAlbumShield } from "ente-base/components/ModeratedAlbumShield";
 import { FocusVisibleButton } from "ente-base/components/mui/FocusVisibleButton";
 import { NavbarBase } from "ente-base/components/Navbar";
 import { useModalVisibility } from "ente-base/components/utils/modal";
@@ -148,8 +156,39 @@ export default function PublicAlbumPage() {
     const [publicCollection, setPublicCollection] = useState<
         Collection | undefined
     >(undefined);
-    const [publicFiles, setPublicFiles] = useState<EnteFile[] | undefined>(
+    const [syncedFiles, setPublicFiles] = useState<EnteFile[] | undefined>(
         undefined,
+    );
+    const [anonUserID, setAnonUserID] = useState<string | undefined>(undefined);
+    const publicFiles = useMemo(
+        () =>
+            syncedFiles?.some((file) => file.moderationStatus === "PENDING")
+                ? syncedFiles.filter(
+                      (file) => file.moderationStatus !== "PENDING",
+                  )
+                : syncedFiles,
+        [syncedFiles],
+    );
+    const pendingFiles = useMemo(
+        () =>
+            (syncedFiles ?? []).filter(
+                (file) =>
+                    file.moderationStatus === "PENDING" &&
+                    !!anonUserID &&
+                    file.anonUserID === anonUserID,
+            ),
+        [syncedFiles, anonUserID],
+    );
+    const displayFiles = useMemo(
+        () =>
+            pendingFiles.length && publicFiles
+                ? [...pendingFiles, ...publicFiles]
+                : publicFiles,
+        [pendingFiles, publicFiles],
+    );
+    const pendingFileIDs = useMemo(
+        () => new Set(pendingFiles.map((file) => file.id)),
+        [pendingFiles],
     );
     const [errorMessage, setErrorMessage] = useState<string>("");
     const [loading, setLoading] = useState(true);
@@ -167,6 +206,8 @@ export default function PublicAlbumPage() {
     // TODO: Can we convert these to state
     const credentials = useRef<PublicAlbumsCredentials | undefined>(undefined);
     const collectionKey = useRef<string | undefined>(undefined);
+    const collectionID = useRef<number | undefined>(undefined);
+    const latestCollection = useRef<Collection | undefined>(undefined);
 
     const isRedirectingToAlbumsAppRef = useRef<boolean>(false);
 
@@ -200,8 +241,9 @@ export default function PublicAlbumPage() {
     const handleFeedItemClick = (info: PublicFeedItemClickInfo) => {
         if (!publicFiles) return;
 
-        const fileIndex = publicFiles.findIndex((f) => f.id === info.fileID);
-        if (fileIndex === -1) return;
+        const publicIndex = publicFiles.findIndex((f) => f.id === info.fileID);
+        if (publicIndex === -1) return;
+        const fileIndex = pendingFiles.length + publicIndex;
 
         publicFeedVisibilityProps.onClose();
 
@@ -305,6 +347,9 @@ export default function PublicAlbumPage() {
                     );
                 if (collection) {
                     setPublicCollection(collection);
+                    setAnonUserID(
+                        getStoredAnonIdentity(collection.id)?.anonUserID,
+                    );
                     setIsPasswordProtected(
                         !!collection.publicURLs[0]?.passwordEnabled,
                     );
@@ -360,13 +405,20 @@ export default function PublicAlbumPage() {
         }
     }, [dragAndDropFiles.length, isUploadInProgress, uploadTypeSelectorView]);
 
+    const setAnonIdentity = useCallback((identity?: AnonIdentity) => {
+        const currentCredentials = credentials.current!;
+        currentCredentials.anonUserToken = identity?.token;
+        setPublicAlbumsCredentials(currentCredentials);
+        setAnonUserID(identity?.anonUserID);
+    }, []);
+
     const publicAlbumsRemotePull = useCallback(async () => {
-        const accessToken = credentials.current!.accessToken;
-        showLoadingBar();
-        setLoading(true);
-        try {
+        const currentCredentials = credentials.current!;
+        const { accessToken } = currentCredentials;
+        const pull = async () => {
             const [
                 {
+                    isGuestIdentityRejected,
                     pullCollection,
                     pullPublicCollectionFiles,
                     removePublicCollectionFileData,
@@ -380,7 +432,7 @@ export default function PublicAlbumPage() {
                 loadPublicAlbumsFDB(),
             ]);
             const { collection, linkDeviceToken } = await pullCollection(
-                credentials.current!,
+                { ...currentCredentials, anonUserToken: undefined },
                 collectionKey.current!,
             );
             if (linkDeviceToken) {
@@ -397,7 +449,11 @@ export default function PublicAlbumPage() {
                 return;
             }
 
+            collectionID.current = collection.id;
+            latestCollection.current = collection;
             setPublicCollection(collection);
+            const identity = getStoredAnonIdentity(collection.id);
+            setAnonIdentity(identity);
             const isPasswordProtected =
                 !!collection.publicURLs[0]?.passwordEnabled;
             setIsPasswordProtected(isPasswordProtected);
@@ -411,27 +467,44 @@ export default function PublicAlbumPage() {
 
             if (isPasswordProtected && !credentials.current?.accessTokenJWT) {
                 await removePublicCollectionFileData(accessToken);
-            } else {
-                try {
-                    await pullPublicCollectionFiles(
-                        credentials.current!,
-                        collection,
-                        (files) =>
-                            setPublicFiles(
-                                sortFilesForCollection(files, collection),
-                            ),
-                    );
-                } catch (e) {
-                    // Collection access already succeeded.
-                    // A 401 here means the password JWT is invalid.
-                    if (isHTTP401Error(e)) {
-                        credentials.current!.accessTokenJWT = undefined;
-                        setPublicAlbumsCredentials(credentials.current);
-                    } else {
-                        throw e;
-                    }
-                }
+                return;
             }
+
+            const pullFiles = (anonUserID?: string) =>
+                pullPublicCollectionFiles(
+                    currentCredentials,
+                    collection,
+                    (files) =>
+                        setPublicFiles(
+                            sortFilesForCollection(files, collection),
+                        ),
+                    anonUserID,
+                );
+            try {
+                await pullFiles(identity?.anonUserID);
+            } catch (e) {
+                if (!isHTTP401Error(e)) throw e;
+                if (
+                    identity &&
+                    (await isGuestIdentityRejected(
+                        currentCredentials,
+                        collection,
+                    ))
+                ) {
+                    clearAnonIdentity(collection.id);
+                    setAnonIdentity(undefined);
+                    await pullFiles();
+                    return;
+                }
+                currentCredentials.accessTokenJWT = undefined;
+                setPublicAlbumsCredentials(currentCredentials);
+            }
+        };
+
+        showLoadingBar();
+        setLoading(true);
+        try {
+            await pull();
         } catch (e) {
             const isDeviceLimitExceeded = await isMuseumHTTPError(
                 e,
@@ -470,7 +543,7 @@ export default function PublicAlbumPage() {
                 setLoading(false);
             }
         }
-    }, [showLoadingBar, hideLoadingBar, onGenericError]);
+    }, [showLoadingBar, hideLoadingBar, onGenericError, setAnonIdentity]);
 
     // Briefly show the loading bar when an action has no other visible effect.
     const handleVisualFeedback = useCallback(() => {
@@ -542,8 +615,56 @@ export default function PublicAlbumPage() {
 
     const handleUploadFile = (file: EnteFile) =>
         setPublicFiles(
-            sortFilesForCollection([...publicFiles!, file], publicCollection),
+            sortFilesForCollection([...syncedFiles!, file], publicCollection),
         );
+
+    const handleRemovePendingFile = async (fileID: number) => {
+        try {
+            const { removePendingFile } = await loadPublicCollectionService();
+            await removePendingFile(credentials.current!, fileID);
+            setPublicFiles((files) =>
+                files?.filter((file) => file.id !== fileID),
+            );
+        } catch (e) {
+            if (isHTTP401Error(e)) {
+                await publicAlbumsRemotePull();
+            } else {
+                onGenericError(e);
+            }
+            throw e;
+        }
+    };
+
+    const ensureUploadAnonIdentity = async (
+        uploadCollection: Collection,
+        name: string | undefined,
+    ) => {
+        const collection =
+            latestCollection.current?.id == uploadCollection.id
+                ? latestCollection.current
+                : uploadCollection;
+        const publicURL = collection.publicURLs[0];
+        if (!publicURL?.requireApproval && !publicURL?.enableComment) return;
+        const stored = getStoredAnonIdentity(collection.id);
+        if (stored) {
+            setAnonIdentity(stored);
+            const { isGuestIdentityValid } =
+                await loadPublicCollectionService();
+            if (await isGuestIdentityValid(credentials.current!, collection)) {
+                return;
+            }
+        }
+        if (!name) throw new Error("Missing public album uploader name");
+        // Keep concurrent upload requests identified until the replacement is ready.
+        setAnonIdentity(
+            await createAnonIdentity(
+                { ...credentials.current!, anonUserToken: undefined },
+                collection.id,
+                name,
+                collection.key,
+            ),
+        );
+    };
 
     const downloadFilesHelper = async () => {
         try {
@@ -611,7 +732,8 @@ export default function PublicAlbumPage() {
                 ? mobileMasonryFileListHeaderHeight(viewportWidth)
                 : fileListHeaderHeightMobile
             : fileListHeaderHeight) +
-        (hasSummaryDescription ? descriptionHeight : 0);
+        (hasSummaryDescription ? descriptionHeight : 0) +
+        (pendingFiles.length > 0 ? 56 : 0);
 
     const fileListHeader = useMemo<FileListHeaderOrFooter | undefined>(
         () =>
@@ -631,6 +753,7 @@ export default function PublicAlbumPage() {
                                   addPhotosDisabled: isUploadInProgress,
                                   hasSelection,
                                   showMobileMasonryCover,
+                                  pendingCount: pendingFiles.length,
                               }}
                               onDescriptionHeightChange={setDescriptionHeight}
                           />
@@ -649,6 +772,7 @@ export default function PublicAlbumPage() {
             isUploadInProgress,
             hasSelection,
             showMobileMasonryCover,
+            pendingFiles.length,
             fileListHeaderHeightForViewport,
         ],
     );
@@ -708,7 +832,8 @@ export default function PublicAlbumPage() {
                     publicCollection.name,
                     fileCreationTime(publicFiles[0]!),
                 )));
-    const shouldShowSingleFileViewer = isQuickLinkAlbum && isSingleFileAlbum;
+    const shouldShowSingleFileViewer =
+        isQuickLinkAlbum && isSingleFileAlbum && pendingFiles.length === 0;
 
     if (shouldShowSingleFileViewer) {
         return (
@@ -735,6 +860,10 @@ export default function PublicAlbumPage() {
             {layout === "trip" ? (
                 <LazyTripLayout
                     files={publicFiles}
+                    moderated={
+                        !!publicCollection?.publicURLs[0]?.requireApproval ||
+                        pendingFiles.length > 0
+                    }
                     collection={publicCollection}
                     onAddPhotos={onAddPhotos}
                     enableDownload={downloadEnabled}
@@ -788,7 +917,9 @@ export default function PublicAlbumPage() {
                         )}
                     </NavbarBase>
                     <FileListWithViewer
-                        files={publicFiles}
+                        files={displayFiles!}
+                        pendingFileIDs={pendingFileIDs}
+                        onRemovePendingFile={handleRemovePendingFile}
                         disableGrouping={disableGrouping}
                         layout={layout === "masonry" ? "masonry" : "grid"}
                         header={fileListHeader}
@@ -828,6 +959,7 @@ export default function PublicAlbumPage() {
                     setShouldDisableDropzone={setShouldDisableDropzone}
                     uploadTypeSelectorView={uploadTypeSelectorView}
                     onRemotePull={publicAlbumsRemotePull}
+                    onEnsureUploadAnonIdentity={ensureUploadAnonIdentity}
                     onUploadFile={handleUploadFile}
                     closeUploadTypeSelector={closeUploadTypeSelectorView}
                     onShowSessionExpiredDialog={showPublicLinkExpiredMessage}
@@ -1123,6 +1255,7 @@ interface FileListHeaderProps {
     addPhotosDisabled: boolean;
     hasSelection: boolean;
     showMobileMasonryCover: boolean;
+    pendingCount: number;
     onDescriptionHeightChange?: (height: number) => void;
 }
 
@@ -1140,6 +1273,7 @@ const FileListHeader: React.FC<FileListHeaderProps> = ({
     addPhotosDisabled,
     hasSelection,
     showMobileMasonryCover,
+    pendingCount,
     onDescriptionHeightChange,
 }) => {
     const [showCopiedMessage, setShowCopiedMessage] = useState(false);
@@ -1231,6 +1365,10 @@ const FileListHeader: React.FC<FileListHeaderProps> = ({
                     <PublicAlbumCoverHero
                         coverFile={coverFile}
                         title={publicCollection.name}
+                        moderated={
+                            !!publicCollection.publicURLs[0]?.requireApproval ||
+                            pendingCount > 0
+                        }
                         description={albumDescription}
                         fileCount={publicFiles.length}
                         dateRange={
@@ -1260,6 +1398,13 @@ const FileListHeader: React.FC<FileListHeaderProps> = ({
                         >
                             <GalleryItemsSummary
                                 name={publicCollection.name}
+                                nameEndIcon={
+                                    publicCollection.publicURLs[0]
+                                        ?.requireApproval ||
+                                    pendingCount > 0 ? (
+                                        <ModeratedAlbumShield />
+                                    ) : undefined
+                                }
                                 description={albumDescription}
                                 onDescriptionHeightChange={
                                     onDescriptionHeightChange
@@ -1284,15 +1429,32 @@ const FileListHeader: React.FC<FileListHeaderProps> = ({
                                         </Typography>
                                     ) : undefined
                                 }
-                                nameProps={{
-                                    noWrap: true,
-                                    sx: { width: "100%", maxWidth: "100%" },
-                                }}
+                                nameProps={{ noWrap: true }}
                             />
                         </Box>
                         {actions}
                     </SpacedRow>
                 </GalleryItemsHeaderAdapter>
+            )}
+            {pendingCount > 0 && (
+                <Box
+                    sx={{
+                        mx: showMobileMasonryCover ? 3 : 0,
+                        mt: 1,
+                        px: 1.5,
+                        py: 1.5,
+                        bgcolor: "background.paper",
+                        borderRadius: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                    }}
+                >
+                    <AccessTimeOutlinedIcon sx={{ fontSize: 18 }} />
+                    <Typography variant="small">
+                        {t("pending_uploads_count", { count: pendingCount })}
+                    </Typography>
+                </Box>
             )}
             {showCopiedMessage && (
                 <LazyNotification
@@ -1410,6 +1572,7 @@ const actionButtonSx = (variant: "default" | "cover") =>
 interface PublicAlbumCoverHeroProps {
     coverFile: EnteFile | undefined;
     title: string;
+    moderated?: boolean;
     description?: string;
     fileCount: number;
     dateRange?: string;
@@ -1419,6 +1582,7 @@ interface PublicAlbumCoverHeroProps {
 const PublicAlbumCoverHero: React.FC<PublicAlbumCoverHeroProps> = ({
     coverFile,
     title,
+    moderated,
     description,
     fileCount,
     dateRange,
@@ -1540,7 +1704,10 @@ const PublicAlbumCoverHero: React.FC<PublicAlbumCoverHeroProps> = ({
             )}
             <MobileMasonryCoverGradient $isPlaceholder={isPlaceholder} />
             <MobileMasonryCoverContent>
-                <MobileMasonryCoverTitle>{title}</MobileMasonryCoverTitle>
+                <Stack direction="row" sx={{ alignItems: "center" }}>
+                    <MobileMasonryCoverTitle>{title}</MobileMasonryCoverTitle>
+                    {moderated && <ModeratedAlbumShield />}
+                </Stack>
                 <AlbumDescription
                     description={description}
                     sx={{
