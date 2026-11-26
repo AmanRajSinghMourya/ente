@@ -146,21 +146,6 @@ export const isGuestIdentityRejected = async (
     }
 };
 
-export const isGuestIdentityValid = async (
-    credentials: PublicAlbumsCredentials,
-    collection: Collection,
-) => {
-    try {
-        await getPublicCollectionDiff(credentials, collection.updationTime);
-        return true;
-    } catch (e) {
-        if (isHTTP401Error(e)) {
-            return !(await isGuestIdentityRejected(credentials, collection));
-        }
-        throw e;
-    }
-};
-
 export const removePublicCollectionFileData = async (accessToken: string) => {
     await Promise.all([
         removePublicCollectionAccessTokenJWT(accessToken),

@@ -355,7 +355,6 @@ interface UploadContext {
     publicAlbumsCredentials: PublicAlbumsCredentials | undefined;
     abortIfCancelled: () => void;
     updateUploadProgress: (fileLocalID: number, percentage: number) => void;
-    refreshAnonIdentity: (failedToken: string | undefined) => Promise<boolean>;
 }
 
 export const upload = async (
@@ -1316,27 +1315,11 @@ const createRemoteFile = async (
     if (!publicAlbumsCredentials) {
         throw new Error("Missing public album credentials");
     }
-    const anonUserToken = publicAlbumsCredentials.anonUserToken;
-    try {
-        return await retriedPostPublicAlbumsEnteFile(
-            newFileRequest,
-            publicAlbumsCredentials,
-            uploadContext,
-        );
-    } catch (e) {
-        if (
-            e instanceof Error &&
-            e.message == sessionExpiredErrorMessage &&
-            (await uploadContext.refreshAnonIdentity(anonUserToken))
-        ) {
-            return retriedPostPublicAlbumsEnteFile(
-                newFileRequest,
-                publicAlbumsCredentials,
-                uploadContext,
-            );
-        }
-        throw e;
-    }
+    return retriedPostPublicAlbumsEnteFile(
+        newFileRequest,
+        publicAlbumsCredentials,
+        uploadContext,
+    );
 };
 
 const retriedPostPublicAlbumsEnteFile = async (

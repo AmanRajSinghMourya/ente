@@ -312,7 +312,9 @@ export class FileViewerPhotoSwipe<
         const currentFile = () => delegate.getFiles()[pswp.currIndex]!;
 
         if (onActiveFileChange) {
-            pswp.on("change", () => onActiveFileChange(currentFile().id));
+            const reportActiveFile = () => onActiveFileChange(currentFile().id);
+            pswp.on("afterInit", reportActiveFile);
+            pswp.on("change", reportActiveFile);
         }
 
         const currentAnnotatedFile = (): T => {

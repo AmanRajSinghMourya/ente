@@ -224,12 +224,7 @@ class UploadManager {
     private collections = new Map<number, Collection>();
     private uploadInProgress = false;
     private publicAlbumsCredentials: PublicAlbumsCredentials | undefined;
-    private batchCredentials: PublicAlbumsCredentials | undefined;
     private uploaderName: string | undefined;
-    private ensureAnonIdentity:
-        | ((uploaderName: string | undefined) => Promise<string | undefined>)
-        | undefined;
-    private anonIdentityRefresh: Promise<void> | undefined;
     private shouldUploadBeCancelled = false;
 
     private uiService = new UIService();
@@ -267,9 +262,6 @@ class UploadManager {
         itemsWithCollection: UploadItemWithCollection[],
         collections: Collection[],
         uploaderName?: string,
-        ensureAnonIdentity?: (
-            uploaderName: string | undefined,
-        ) => Promise<string | undefined>,
     ) {
         if (this.uploadInProgress)
             throw new Error("Cannot run multiple uploads at once");
@@ -277,22 +269,9 @@ class UploadManager {
         log.info(`Uploading ${itemsWithCollection.length} files`);
         this.uploadInProgress = true;
         this.uploaderName = uploaderName;
-        this.ensureAnonIdentity = ensureAnonIdentity;
 
         try {
-            const credentials = this.publicAlbumsCredentials;
-            if (!credentials)
-                throw new Error("Missing public album credentials");
-            // Keep the batch identified if the live guest token expires during upload.
-            this.batchCredentials = { ...credentials };
-            if (ensureAnonIdentity) {
-                this.batchCredentials.anonUserToken =
-                    await ensureAnonIdentity(uploaderName);
-            }
-            await this.updateExistingFilesAndCollections(
-                collections,
-                credentials.accessToken,
-            );
+            await this.updateExistingFilesAndCollections(collections);
 
             const namedItems = itemsWithCollection.map(
                 makeUploadItemWithCollectionIDAndName,
@@ -334,7 +313,6 @@ class UploadManager {
             for (let i = 0; i < maxConcurrentUploads; i++) {
                 this.comlinkCryptoWorkers[i]?.terminate();
             }
-            this.batchCredentials = undefined;
             this.uploadInProgress = false;
         }
 
@@ -347,11 +325,15 @@ class UploadManager {
         }
     };
 
-    private async updateExistingFilesAndCollections(
-        collections: Collection[],
-        accessToken: string,
-    ) {
-        this.existingFiles = await savedPublicCollectionFiles(accessToken);
+    private async updateExistingFilesAndCollections(collections: Collection[]) {
+        const credentials = this.publicAlbumsCredentials;
+        if (!credentials) {
+            throw new Error("Missing public album credentials");
+        }
+
+        this.existingFiles = await savedPublicCollectionFiles(
+            credentials.accessToken,
+        );
         this.collections = new Map(
             collections.map((collection) => [collection.id, collection]),
         );
@@ -398,35 +380,14 @@ class UploadManager {
         await Promise.all(uploadProcesses);
     }
 
-    private async refreshAnonIdentity(failedToken: string | undefined) {
-        const credentials = this.batchCredentials;
-        const ensureAnonIdentity = this.ensureAnonIdentity;
-        if (!failedToken || !credentials || !ensureAnonIdentity) return false;
-        if (credentials.anonUserToken === failedToken) {
-            this.anonIdentityRefresh ??= ensureAnonIdentity(this.uploaderName)
-                .then((token) => {
-                    if (token) credentials.anonUserToken = token;
-                })
-                .finally(() => (this.anonIdentityRefresh = undefined));
-            try {
-                await this.anonIdentityRefresh;
-            } catch (e) {
-                log.error("Failed to refresh upload identity", e);
-                return false;
-            }
-        }
-        return credentials.anonUserToken !== failedToken;
-    }
-
     private async uploadNextItemInQueue(worker: CryptoWorker) {
         const uiService = this.uiService;
         const uploadContext = {
             isCFUploadProxyDisabled: shouldDisableCFUploadProxy(),
-            publicAlbumsCredentials: this.batchCredentials,
+            publicAlbumsCredentials: this.publicAlbumsCredentials,
             abortIfCancelled: this.abortIfCancelled.bind(this),
             updateUploadProgress:
                 uiService.updateUploadProgress.bind(uiService),
-            refreshAnonIdentity: this.refreshAnonIdentity.bind(this),
         };
 
         while (this.itemsToBeUploaded.length > 0) {

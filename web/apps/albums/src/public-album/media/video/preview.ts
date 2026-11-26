@@ -30,7 +30,10 @@ export const hlsPlaylistDataForFile = async (
 ): Promise<HLSPlaylistDataForFile> => {
     ensurePrecondition(file.metadata.fileType == FileType.video);
 
-    if (file.pubMagicMetadata?.data.sv == 1) {
+    if (
+        file.pubMagicMetadata?.data.sv == 1 ||
+        file.moderationStatus == "PENDING"
+    ) {
         return "skip";
     }
 

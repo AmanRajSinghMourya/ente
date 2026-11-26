@@ -11,13 +11,14 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import FullscreenExitOutlinedIcon from "@mui/icons-material/FullscreenExitOutlined";
 import FullscreenOutlinedIcon from "@mui/icons-material/FullscreenOutlined";
 import {
-    Box,
     Button,
     Dialog,
     DialogContent,
     DialogTitle,
+    GlobalStyles,
     Menu,
     MenuItem,
+    Stack,
     styled,
     Typography,
 } from "@mui/material";
@@ -127,7 +128,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
     enableComment = true,
     enableJoin = true,
 }) => {
-    const { onGenericError } = useBaseContext();
+    const { onGenericError, showMiniDialog } = useBaseContext();
     const shouldCloseOnBrowserBack = shouldCloseOnBrowserBackOverride ?? true;
 
     // PhotoSwipe keeps one delegate for its lifetime.
@@ -148,9 +149,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({
     const [activeAnnotatedFile, setActiveAnnotatedFile] = useState<
         FileViewerAnnotatedFile | undefined
     >(undefined);
-    const [activeViewerFileID, setActiveViewerFileID] = useState(
-        files[initialIndex]?.id,
-    );
+    const [activeViewerFileID, setActiveViewerFileID] = useState<
+        number | undefined
+    >(undefined);
 
     const [activeFileExif, setActiveFileExif] = useState<
         FileInfoExif | undefined
@@ -164,25 +165,8 @@ export const FileViewer: React.FC<FileViewerProps> = ({
     const [moreMenuAnchorEl, setMoreMenuAnchorEl] =
         useState<HTMLElement | null>(null);
     const [openShortcuts, setOpenShortcuts] = useState(false);
-    const [confirmRemovePendingFile, setConfirmRemovePendingFile] =
-        useState(false);
-    const [removingPendingFile, setRemovingPendingFile] = useState(false);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
-
-    const handleRemovePendingFile = async () => {
-        if (!activeViewerFileID || !onRemovePendingFile) return;
-        setRemovingPendingFile(true);
-        try {
-            await onRemovePendingFile(activeViewerFileID);
-            setConfirmRemovePendingFile(false);
-            handleCloseRef.current();
-        } catch {
-            return;
-        } finally {
-            setRemovingPendingFile(false);
-        }
-    };
 
     const [fileComments, setFileComments] = useState<
         Map<number, Map<number, Comment[]>>
@@ -1265,83 +1249,58 @@ export const FileViewer: React.FC<FileViewerProps> = ({
 
     useEffect(updateFullscreenStatus, [updateFullscreenStatus]);
 
-    const pendingControls = (
-        <>
-            {open &&
-                activeViewerFileID &&
-                pendingFileIDs?.has(activeViewerFileID) &&
-                onRemovePendingFile && (
-                    <Box
-                        sx={{
-                            position: "fixed",
-                            zIndex: 1700,
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            minHeight: 64,
-                            px: 2,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            bgcolor: "black",
-                            color: "white",
-                        }}
-                    >
-                        <Typography variant="small">
-                            {t("awaiting_moderator_review")}
-                        </Typography>
-                        <Button
-                            color="inherit"
-                            onClick={() => setConfirmRemovePendingFile(true)}
-                        >
-                            {t("remove_upload")}
-                        </Button>
-                    </Box>
-                )}
-            <Dialog
-                open={confirmRemovePendingFile}
-                onClose={() => setConfirmRemovePendingFile(false)}
+    const pendingControls = open &&
+        activeViewerFileID &&
+        pendingFileIDs?.has(activeViewerFileID) &&
+        onRemovePendingFile && (
+            <Stack
+                direction="row"
                 sx={{
-                    zIndex: 1800,
-                    "@media (width < 720px)": {
-                        "& .MuiDialog-container": { alignItems: "flex-end" },
-                        "& .MuiDialog-paper": {
-                            m: 0,
-                            width: "100%",
-                            borderRadius: "20px 20px 0 0",
-                        },
-                    },
+                    position: "fixed",
+                    zIndex: "drawer",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 64,
+                    px: 2,
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    bgcolor: "black",
+                    color: "white",
                 }}
             >
-                <DialogTitle
-                    sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
+                <GlobalStyles
+                    styles={{
+                        ".pswp-ente .pswp__media-controls": { bottom: 64 },
                     }}
+                />
+                <Typography variant="small">
+                    {t("awaiting_moderator_review")}
+                </Typography>
+                <Button
+                    variant="text"
+                    color="critical"
+                    onClick={() =>
+                        showMiniDialog({
+                            title: t("remove_upload_question"),
+                            message: t("remove_upload_explanation"),
+                            continue: {
+                                text: t("remove_upload"),
+                                color: "critical",
+                                action: async () => {
+                                    await onRemovePendingFile(
+                                        activeViewerFileID,
+                                    );
+                                    handleCloseRef.current();
+                                },
+                            },
+                        })
+                    }
                 >
-                    {t("remove_upload_question")}
-                    <DialogCloseIconButton
-                        onClose={() => setConfirmRemovePendingFile(false)}
-                    />
-                </DialogTitle>
-                <DialogContent>
-                    <Typography>{t("remove_upload_explanation")}</Typography>
-                </DialogContent>
-                <Box sx={{ px: 3, pb: 3 }}>
-                    <Button
-                        variant="contained"
-                        color="critical"
-                        fullWidth
-                        disabled={removingPendingFile}
-                        onClick={() => void handleRemovePendingFile()}
-                    >
-                        {t("remove_upload")}
-                    </Button>
-                </Box>
-            </Dialog>
-        </>
-    );
+                    {t("remove_upload")}
+                </Button>
+            </Stack>
+        );
 
     if (!activeAnnotatedFile) return pendingControls;
 
