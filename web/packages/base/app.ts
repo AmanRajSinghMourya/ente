@@ -2,6 +2,7 @@ import {
     buildEnvAppName,
     buildEnvDesktopAppVersion,
     buildEnvIsDesktop,
+    buildEnvIsExtension,
 } from "./env";
 
 export const appNames = [
@@ -28,6 +29,8 @@ export const appName: AppName = buildEnvAppName as AppName;
 // Unlike globalThis.electron, this also works inside workers.
 // A browser pointed at the desktop dev server can produce a false positive.
 export const isDesktop = buildEnvIsDesktop;
+
+export const isExtension = buildEnvIsExtension;
 
 export const desktopAppVersion = buildEnvDesktopAppVersion;
 
