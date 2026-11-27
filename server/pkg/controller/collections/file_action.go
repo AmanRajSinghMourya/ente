@@ -44,7 +44,7 @@ func (c *CollectionController) AddFiles(ctx *gin.Context, userID int64, files []
 		return stacktrace.Propagate(err, "Failed to verify fileOwnership")
 	}
 
-	err = c.CollectionRepo.AddFiles(ctx.Request.Context(), cID, collectionOwnerID, files, filesOwnerID)
+	err = c.CollectionRepo.AddFiles(ctx.Request.Context(), cID, collectionOwnerID, files, filesOwnerID, ente.App(resp.Collection.App))
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
@@ -55,7 +55,7 @@ func (c *CollectionController) RestoreFiles(ctx *gin.Context, userID int64, cID 
 	if err := validateCollectionFileItems(files); err != nil {
 		return err
 	}
-	_, err := c.AccessCtrl.GetCollection(ctx, &access.GetCollectionParams{
+	resp, err := c.AccessCtrl.GetCollection(ctx, &access.GetCollectionParams{
 		CollectionID:   cID,
 		ActorUserID:    userID,
 		IncludeDeleted: false,
@@ -75,7 +75,7 @@ func (c *CollectionController) RestoreFiles(ctx *gin.Context, userID int64, cID 
 	if err != nil {
 		return stacktrace.Propagate(err, "failed to verify file ownership")
 	}
-	err = c.CollectionRepo.RestoreFiles(ctx.Request.Context(), userID, cID, files)
+	err = c.CollectionRepo.RestoreFiles(ctx.Request.Context(), userID, cID, files, ente.App(resp.Collection.App))
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
@@ -126,7 +126,7 @@ func (c *CollectionController) MoveFiles(ctx *gin.Context, req ente.MoveFilesReq
 		return stacktrace.Propagate(err, "Failed to verify fileOwnership")
 	}
 
-	err = c.CollectionRepo.MoveFiles(ctx.Request.Context(), req.ToCollectionID, req.FromCollectionID, req.Files, userID, userID)
+	err = c.CollectionRepo.MoveFiles(ctx.Request.Context(), req.ToCollectionID, req.FromCollectionID, req.Files, userID, userID, ente.App(r2.Collection.App))
 	return stacktrace.Propagate(err, "")
 }
 
