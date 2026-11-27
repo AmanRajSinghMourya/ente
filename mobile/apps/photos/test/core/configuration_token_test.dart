@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ente_lock_screen/lock_screen_settings.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photos/app_mode.dart';
 import 'package:photos/core/configuration.dart';
+import 'package:photos/services/notification_key_service.dart';
 import 'package:photos/settings/local_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,6 +106,7 @@ void main() {
           LockScreenSettings.pin: 'pin-hash',
           LockScreenSettings.saltKey: 'c2FsdA==',
         });
+        await NotificationKeyService.setNotificationPrivateKey(Uint8List(32));
         final preferences = await SharedPreferences.getInstance();
         final settings = LocalSettings(preferences);
         await settings.setAppMode(AppMode.localGallery);

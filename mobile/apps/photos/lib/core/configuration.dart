@@ -148,6 +148,7 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
           await _secureStorage.delete(key: tokenKey);
           await setKey(null);
           await setSecretKey(null);
+          await _clearNotificationKey();
         } else {
           _logger.info(
             "(for debugging) Token not found, deleting all secure storage data",
@@ -247,12 +248,7 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
     }
 
     if (Platform.isIOS) {
-      try {
-        await NotificationKeyService.setNotificationPrivateKey(null);
-      } on PlatformException catch (e, s) {
-        if (e.code != 'notification_key_store') rethrow;
-        _logger.warning("Could not delete notification key", e, s);
-      }
+      await _clearNotificationKey();
     }
     await _clearTempFolderOnLogout();
 
@@ -347,6 +343,15 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       Bus.instance.fire(UserLoggedOutEvent());
     } else {
       await _preferences.setBool("auto_logout", true);
+    }
+  }
+
+  Future<void> _clearNotificationKey() async {
+    try {
+      await NotificationKeyService.setNotificationPrivateKey(null);
+    } on PlatformException catch (e, s) {
+      if (e.code != 'notification_key_store') rethrow;
+      _logger.warning("Could not delete notification key", e, s);
     }
   }
 
