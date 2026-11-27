@@ -1,5 +1,10 @@
 import { masterKeyFromSession } from "@/services/account-keys";
 import { generateOTPs, type Code } from "@/services/code";
+import {
+    extensionMasterKey,
+    isExtensionPopup,
+    openExtensionSignIn,
+} from "@/services/extension";
 import { getAuthCodesAndTimeOffset } from "@/services/remote";
 import { prettyFormatCode } from "@/utils/format";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
@@ -40,11 +45,21 @@ const Page: React.FC = () => {
     const [timeOffset, setTimeOffset] = useState(0);
     const [hasFetched, setHasFetched] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [isPopup, setIsPopup] = useState(false);
+    const [isLocked, setIsLocked] = useState(false);
 
     useEffect(() => {
+        const popup = isExtensionPopup();
+        setIsPopup(popup);
         const fetchCodes = async () => {
-            const masterKey = await masterKeyFromSession();
+            const masterKey = await (popup
+                ? extensionMasterKey()
+                : masterKeyFromSession());
             if (!masterKey) {
+                if (popup) {
+                    setIsLocked(true);
+                    return;
+                }
                 stashRedirect("/auth");
                 void router.push("/");
                 return;
@@ -73,12 +88,26 @@ const Page: React.FC = () => {
             code.codeDisplay?.note?.toLowerCase().includes(lcSearch),
     );
 
+    if (isLocked) {
+        return (
+            <Stack sx={{ width: 400, p: 3, gap: 3, alignItems: "center" }}>
+                <EnteLogo />
+                <Button
+                    variant="contained"
+                    onClick={() => void openExtensionSignIn()}
+                >
+                    {t("login")}
+                </Button>
+            </Stack>
+        );
+    }
+
     if (!hasFetched) {
         return <LoadingIndicator />;
     }
 
     return (
-        <Stack>
+        <Stack sx={{ width: isPopup ? 400 : undefined }}>
             <AuthNavbar />
             <Stack
                 sx={{

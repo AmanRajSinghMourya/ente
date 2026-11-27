@@ -27,6 +27,7 @@ import {
     getSRPAttributes,
 } from "ente-accounts/services/srp";
 import { sendOTT, verifyEmail } from "ente-accounts/services/user";
+import { isExtension } from "ente-base/app";
 import { LoadingIndicator } from "ente-base/components/loaders";
 import type { SingleInputFormProps } from "ente-base/components/SingleInputForm";
 import { useBaseContext } from "ente-base/context";
@@ -163,7 +164,7 @@ const Page: React.FC = () => {
         // navigating to the passkey verification URL. Show a spinner on web
         // so that the VerifyingPasskey component does not flash before the
         // redirect completes.
-        if (!globalThis.electron) {
+        if (!globalThis.electron && !isExtension) {
             return <LoadingIndicator />;
         }
 

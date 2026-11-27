@@ -6,7 +6,7 @@ import {
     resetSavedLocalUserTokens,
     TwoFactorAuthorizationResponse,
 } from "ente-accounts/services/user";
-import { clientPackageName, isDesktop } from "ente-base/app";
+import { clientPackageName, isDesktop, isExtension } from "ente-base/app";
 import { httpOrHTTPSURL } from "ente-base/safe-navigation";
 import { ensureAuthToken } from "ente-base/token";
 import {
@@ -22,7 +22,9 @@ export const passkeyVerificationRedirectURL = (
 ) => {
     // In the desktop app, window.location.origin is the custom app protocol
     // origin, which doubles as the deeplink back into the app.
-    const redirect = `${window.location.origin}/passkeys/finish`;
+    const redirect = isExtension
+        ? accountsURL
+        : `${window.location.origin}/passkeys/finish`;
     // The desktop app's own waiting screen already shows a recovery option, so
     // it does not ask the accounts app to show one.
     const recoverOption: Record<string, string> = isDesktop
@@ -58,7 +60,7 @@ export const openPasskeyVerificationURL = ({
     // inflight value saved here.
     sessionStorage.setItem("inflightPasskeySessionID", passkeySessionID);
 
-    if (globalThis.electron) window.open(destination);
+    if (globalThis.electron || isExtension) window.open(destination);
     else window.location.href = destination;
 };
 

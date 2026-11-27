@@ -4,6 +4,7 @@ declare const process: {
         readonly NODE_ENV: "development" | "production" | "test";
         readonly NEXT_PUBLIC_ENSU_DESKTOP_VERSION?: string;
         readonly NEXT_PUBLIC_ENTE_ENDPOINT?: string;
+        readonly NEXT_PUBLIC_ENTE_IS_EXTENSION?: string;
         readonly appName: string;
         readonly desktopAppVersion?: string;
         readonly gitSHA?: string;
@@ -19,6 +20,8 @@ export const buildEnvEnsuDesktopVersion =
     process.env.NEXT_PUBLIC_ENSU_DESKTOP_VERSION;
 export const buildEnvAppName = process.env.appName;
 export const buildEnvIsDesktop = process.env.isDesktop == "1";
+export const buildEnvIsExtension =
+    process.env.NEXT_PUBLIC_ENTE_IS_EXTENSION == "1";
 export const buildEnvDesktopAppVersion = process.env.desktopAppVersion;
 export const buildEnvGitSHA = process.env.gitSHA;
 
