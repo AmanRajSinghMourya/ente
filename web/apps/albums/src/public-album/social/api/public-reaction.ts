@@ -21,6 +21,7 @@ export interface AnonIdentity {
     anonUserID: string;
     token: string;
     expiresAt: number;
+    name?: string;
 }
 
 const ANON_IDENTITY_STORAGE_KEY_PREFIX = "ente_anon_identity";
@@ -38,7 +39,7 @@ export const getStoredAnonIdentity = (
         const identity = JSON.parse(stored) as AnonIdentity;
         // expiresAt is in microseconds.
         const nowMicroseconds = Date.now() * 1000;
-        if (identity.expiresAt && nowMicroseconds > identity.expiresAt) {
+        if (identity.expiresAt && nowMicroseconds >= identity.expiresAt) {
             clearAnonIdentity(collectionID);
             return undefined;
         }
@@ -56,7 +57,7 @@ const storeAnonIdentity = (
     localStorage.setItem(getStorageKey(collectionID), JSON.stringify(identity));
 };
 
-const clearAnonIdentity = (collectionID: number): void => {
+export const clearAnonIdentity = (collectionID: number): void => {
     if (typeof window === "undefined") return;
     localStorage.removeItem(getStorageKey(collectionID));
 };
@@ -75,13 +76,19 @@ export const createAnonIdentity = async (
     const res = await fetch(await apiURL("/public-collection/anon-identity"), {
         method: "POST",
         headers: {
-            ...authenticatedPublicAlbumsRequestHeaders(credentials),
+            ...authenticatedPublicAlbumsRequestHeaders({
+                ...credentials,
+                anonUserToken: undefined,
+            }),
             "Content-Type": "application/json",
         },
         body: JSON.stringify({ cipher, nonce }),
     });
     ensureOk(res);
-    const identity = AnonIdentityResponse.parse(await res.json());
+    const identity = {
+        ...AnonIdentityResponse.parse(await res.json()),
+        name: userName,
+    };
 
     storeAnonIdentity(collectionID, identity);
 

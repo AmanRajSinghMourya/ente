@@ -54,15 +54,31 @@ export const saveLastPublicCollectionReferralCode = async (
 interface LocalSavedPublicCollectionFilesEntry {
     collectionUID: string;
     files: z.infer<typeof LocalEnteFiles>;
+    anonUserID?: string;
+    sinceTime?: number;
 }
 
 export const savedPublicCollectionFiles = async (
     accessToken: string,
-): Promise<EnteFile[]> => {
+): Promise<EnteFile[]> =>
+    (await savedPublicCollectionFileState(accessToken)).files;
+
+export const savedPublicCollectionFileState = async (accessToken: string) => {
     const entry = (await pcfEntries()).find(
         (e) => e.collectionUID == accessToken,
     );
-    return transformFilesIfNeeded(entry ? entry.files : []);
+    return {
+        files: transformFilesIfNeeded(entry ? entry.files : []),
+        anonUserID: entry?.anonUserID,
+        // Older caches kept the cursor separately. It is usable only with its files.
+        sinceTime: entry
+            ? (entry.sinceTime ??
+              LocalTimestamp.parse(
+                  await localForage.getItem(`public-${accessToken}-time`),
+              ) ??
+              0)
+            : 0,
+    };
 };
 
 const pcfEntries = async () => {
@@ -76,9 +92,11 @@ const pcfEntries = async () => {
 export const savePublicCollectionFiles = async (
     accessToken: string,
     files: EnteFile[],
+    sinceTime: number,
+    anonUserID?: string,
 ): Promise<void> => {
     await localForage.setItem("public-collection-files", [
-        { collectionUID: accessToken, files },
+        { collectionUID: accessToken, files, sinceTime, anonUserID },
         ...(await pcfEntries()).filter((e) => e.collectionUID != accessToken),
     ]);
 };
@@ -89,18 +107,6 @@ export const removePublicCollectionFiles = async (
     await localForage.setItem("public-collection-files", [
         ...(await pcfEntries()).filter((e) => e.collectionUID != accessToken),
     ]);
-};
-
-export const savedPublicCollectionLastSyncTime = async (accessToken: string) =>
-    LocalTimestamp.parse(
-        await localForage.getItem(`public-${accessToken}-time`),
-    );
-
-export const savePublicCollectionLastSyncTime = async (
-    accessToken: string,
-    time: number,
-) => {
-    await localForage.setItem(`public-${accessToken}-time`, time);
 };
 
 export const removePublicCollectionLastSyncTime = async (

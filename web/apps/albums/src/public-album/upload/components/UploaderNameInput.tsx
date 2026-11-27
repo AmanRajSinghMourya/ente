@@ -20,7 +20,6 @@ const ENTER_NAME_ILLUSTRATION_SRC = new URL(
 ).toString();
 
 type UploaderNameInputProps = ModalVisibilityProps & {
-    uploaderName: string;
     uploadFileCount: number;
     onSubmit: (name: string) => void | Promise<void>;
 };
@@ -28,7 +27,6 @@ type UploaderNameInputProps = ModalVisibilityProps & {
 export const UploaderNameInput: React.FC<UploaderNameInputProps> = ({
     open,
     onClose,
-    uploaderName,
     uploadFileCount,
     onSubmit,
 }) => {
@@ -53,12 +51,7 @@ export const UploaderNameInput: React.FC<UploaderNameInputProps> = ({
                     </TitleSection>
 
                     <UploaderNameInputForm
-                        {...{
-                            onClose,
-                            uploaderName,
-                            uploadFileCount,
-                            onSubmit,
-                        }}
+                        {...{ onClose, uploadFileCount, onSubmit }}
                     />
                 </ContentContainer>
             </DialogWrapper>
@@ -68,12 +61,11 @@ export const UploaderNameInput: React.FC<UploaderNameInputProps> = ({
 
 const UploaderNameInputForm: React.FC<Omit<UploaderNameInputProps, "open">> = ({
     onClose,
-    uploaderName,
     uploadFileCount,
     onSubmit,
 }) => {
     const formik = useFormik({
-        initialValues: { value: uploaderName },
+        initialValues: { value: "" },
         onSubmit: async (values, { setFieldError }) => {
             const value = values.value;
             const setValueFieldError = (message: string) =>

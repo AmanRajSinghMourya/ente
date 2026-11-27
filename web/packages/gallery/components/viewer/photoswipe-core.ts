@@ -87,10 +87,11 @@ export interface FileViewerPhotoSwipeCoreOptions<
     haveUser: boolean;
     isPublicAlbum?: boolean;
     publicAlbumLogoHTML?: string;
-    showSocialButtons: boolean;
+    showSocialButtons: boolean | ((annotatedFile: T) => boolean);
     enableComment: boolean;
     delegate: FileViewerPhotoSwipeDelegate<T>;
     onClose: () => void;
+    onActiveFileChange?: (fileID: number) => void;
     onAnnotate: (file: EnteFile, itemData: ItemData) => T;
     onViewInfo: (annotatedFile: T) => void;
     onViewComments: () => void;
@@ -133,6 +134,7 @@ export class FileViewerPhotoSwipe<
         dataSource,
         delegate,
         onClose,
+        onActiveFileChange,
         onAnnotate,
         onViewInfo,
         onViewComments,
@@ -308,6 +310,12 @@ export class FileViewerPhotoSwipe<
         const currSlideData = () => asItemData(pswp.currSlide?.data);
 
         const currentFile = () => delegate.getFiles()[pswp.currIndex]!;
+
+        if (onActiveFileChange) {
+            const reportActiveFile = () => onActiveFileChange(currentFile().id);
+            pswp.on("afterInit", reportActiveFile);
+            pswp.on("change", reportActiveFile);
+        }
 
         const currentAnnotatedFile = (): T => {
             const file = currentFile();
@@ -1496,7 +1504,9 @@ export class FileViewerPhotoSwipe<
                         if (!_currentAnnotatedFile) return;
                         const af = currentAnnotatedFile();
                         const baseShow =
-                            showSocialButtons ||
+                            (typeof showSocialButtons == "function"
+                                ? showSocialButtons(af)
+                                : showSocialButtons) ||
                             delegate.shouldShowSocialButtons(af);
                         const shouldShow = baseShow && enableComment;
                         actionButtonsEl.style.display = shouldShow

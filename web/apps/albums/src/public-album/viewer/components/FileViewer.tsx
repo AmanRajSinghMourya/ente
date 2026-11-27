@@ -11,11 +11,14 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import FullscreenExitOutlinedIcon from "@mui/icons-material/FullscreenExitOutlined";
 import FullscreenOutlinedIcon from "@mui/icons-material/FullscreenOutlined";
 import {
+    Button,
     Dialog,
     DialogContent,
     DialogTitle,
+    GlobalStyles,
     Menu,
     MenuItem,
+    Stack,
     styled,
     Typography,
 } from "@mui/material";
@@ -86,6 +89,8 @@ export type FileViewerProps = ModalVisibilityProps & {
     highlightCommentID?: string;
     initialAnonUserNames?: Map<string, string>;
     disableDownload?: boolean;
+    pendingFileIDs?: Set<number>;
+    onRemovePendingFile?: (fileID: number) => Promise<void>;
     showFullscreenButton?: boolean;
     onDownload?: (file: EnteFile) => void;
     activeCollectionID?: number;
@@ -109,6 +114,8 @@ export const FileViewer: React.FC<FileViewerProps> = ({
     highlightCommentID,
     initialAnonUserNames,
     disableDownload,
+    pendingFileIDs,
+    onRemovePendingFile,
     showFullscreenButton,
     onDownload,
     activeCollectionID,
@@ -121,7 +128,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
     enableComment = true,
     enableJoin = true,
 }) => {
-    const { onGenericError } = useBaseContext();
+    const { onGenericError, showMiniDialog } = useBaseContext();
     const shouldCloseOnBrowserBack = shouldCloseOnBrowserBackOverride ?? true;
 
     // PhotoSwipe keeps one delegate for its lifetime.
@@ -134,11 +141,16 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         FileViewerPhotoSwipe<FileViewerAnnotatedFile> | undefined
     >(undefined);
     const handleCloseRef = useRef<() => void>(() => undefined);
+    const pendingFileIDsRef = useRef(pendingFileIDs);
+    pendingFileIDsRef.current = pendingFileIDs;
     const browserBackStateRef = useRef<string | undefined>(undefined);
 
     // This is the last action target, not necessarily the visible slide.
     const [activeAnnotatedFile, setActiveAnnotatedFile] = useState<
         FileViewerAnnotatedFile | undefined
+    >(undefined);
+    const [activeViewerFileID, setActiveViewerFileID] = useState<
+        number | undefined
     >(undefined);
 
     const [activeFileExif, setActiveFileExif] = useState<
@@ -623,10 +635,15 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         (file: EnteFile, itemData: ItemData): FileViewerAnnotatedFile => {
             const fileID = file.id;
             const showDownload =
-                disableDownload || !onDownload ? undefined : "bar";
+                disableDownload ||
+                !onDownload ||
+                pendingFileIDsRef.current?.has(file.id)
+                    ? undefined
+                    : "bar";
 
             const showCopyImage = (() => {
-                if (disableDownload) return false;
+                if (disableDownload || pendingFileIDsRef.current?.has(file.id))
+                    return false;
                 switch (file.metadata.fileType) {
                     case FileType.image:
                     case FileType.livePhoto:
@@ -651,7 +668,11 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         },
         [disableDownload, onDownload],
     );
-    const showSocialButtons = true;
+    const showSocialButtons = useCallback(
+        ({ file }: FileViewerAnnotatedFile) =>
+            !pendingFileIDsRef.current?.has(file.id),
+        [],
+    );
 
     const shouldShowSocialButtons_ = useCallback((): boolean => false, []);
 
@@ -860,6 +881,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         open &&
         enableComment &&
         !!activeFileID &&
+        !pendingFileIDs?.has(activeFileID) &&
         !!publicAlbumsCredentials &&
         !!collectionKey;
     const isInitialPublicSocialDataLoading =
@@ -872,6 +894,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
             !open ||
             !enableComment ||
             !activeFileID ||
+            pendingFileIDs?.has(activeFileID) ||
             !publicAlbumsCredentials ||
             !collectionKey
         )
@@ -1003,6 +1026,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         open,
         enableComment,
         activeFileID,
+        pendingFileIDs,
         publicAlbumsCredentials,
         collectionKey,
         files,
@@ -1021,6 +1045,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
     const refreshPublicSocialData = useCallback(async () => {
         if (
             !activeFileID ||
+            pendingFileIDs?.has(activeFileID) ||
             !publicAlbumsCredentials ||
             !collectionKey ||
             !enableComment
@@ -1114,6 +1139,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
         }
     }, [
         activeFileID,
+        pendingFileIDs,
         publicAlbumsCredentials,
         collectionKey,
         enableComment,
@@ -1145,6 +1171,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
                 onClose: () => {
                     if (psRef.current) handleClose();
                 },
+                onActiveFileChange: setActiveViewerFileID,
                 onAnnotate: handleAnnotate,
                 onViewInfo: handleViewInfo,
                 onViewComments: handleViewComments,
@@ -1222,12 +1249,64 @@ export const FileViewer: React.FC<FileViewerProps> = ({
 
     useEffect(updateFullscreenStatus, [updateFullscreenStatus]);
 
-    if (!activeAnnotatedFile) {
-        return <></>;
-    }
+    const pendingControls = open &&
+        activeViewerFileID &&
+        pendingFileIDs?.has(activeViewerFileID) &&
+        onRemovePendingFile && (
+            <Stack
+                direction="row"
+                sx={{
+                    position: "fixed",
+                    zIndex: "drawer",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 64,
+                    px: 2,
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    bgcolor: "black",
+                    color: "white",
+                }}
+            >
+                <GlobalStyles
+                    styles={{
+                        ".pswp-ente .pswp__media-controls": { bottom: 64 },
+                    }}
+                />
+                <Typography variant="small">
+                    {t("awaiting_moderator_review")}
+                </Typography>
+                <Button
+                    variant="text"
+                    color="critical"
+                    onClick={() =>
+                        showMiniDialog({
+                            title: t("remove_upload_question"),
+                            message: t("remove_upload_explanation"),
+                            continue: {
+                                text: t("remove_upload"),
+                                color: "critical",
+                                action: async () => {
+                                    await onRemovePendingFile(
+                                        activeViewerFileID,
+                                    );
+                                    handleCloseRef.current();
+                                },
+                            },
+                        })
+                    }
+                >
+                    {t("remove_upload")}
+                </Button>
+            </Stack>
+        );
+
+    if (!activeAnnotatedFile) return pendingControls;
 
     return (
         <>
+            {pendingControls}
             <FileInfo
                 open={openFileInfo}
                 onClose={handleFileInfoClose}

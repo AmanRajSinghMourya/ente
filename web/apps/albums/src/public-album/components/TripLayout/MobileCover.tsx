@@ -1,4 +1,5 @@
 import { Box, Skeleton, styled, Typography } from "@mui/material";
+import { ModeratedAlbumShield } from "ente-base/components/ModeratedAlbumShield";
 import { AlbumDescription } from "ente-new/photos/components/gallery/ListHeader";
 import { memo } from "react";
 import type { JourneyPoint } from "./types";
@@ -8,10 +9,17 @@ interface MobileCoverProps {
     albumTitle?: string;
     albumDescription?: string;
     coverImageUrl?: string | null;
+    moderated?: boolean;
 }
 
 export const MobileCover = memo<MobileCoverProps>(
-    ({ journeyData, albumTitle, albumDescription, coverImageUrl }) => {
+    ({
+        journeyData,
+        albumTitle,
+        albumDescription,
+        coverImageUrl,
+        moderated,
+    }) => {
         const sortedData = [...journeyData].sort(
             (a, b) => a.timestamp - b.timestamp,
         );
@@ -65,7 +73,10 @@ export const MobileCover = memo<MobileCoverProps>(
                 <ContentContainer>
                     {coverImageUrl ? (
                         <>
-                            <TripTitle>{albumTitle || "Trip"}</TripTitle>
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                                <TripTitle>{albumTitle || "Trip"}</TripTitle>
+                                {moderated && <ModeratedAlbumShield />}
+                            </Box>
                             <TripSubtitle
                                 sx={{ pb: albumDescription ? 0 : undefined }}
                             >
