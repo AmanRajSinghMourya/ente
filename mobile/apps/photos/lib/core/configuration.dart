@@ -51,6 +51,7 @@ import 'package:photos/services/photos_contacts_service.dart';
 import 'package:photos/services/search_service.dart';
 import 'package:photos/services/sync/sync_service.dart';
 import 'package:photos/services/video_preview_service.dart';
+import 'package:photos/settings/local_settings.dart';
 import 'package:photos/src/rust/third_party/ente_frb_lib/account_deletion.dart'
     as account_deletion;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -115,6 +116,7 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
       _sharedDocumentsMediaDirectory =
           _documentsDirectory + "/ente-shared-media";
       Directory(_sharedDocumentsMediaDirectory).createSync(recursive: true);
+      final isLocalGallery = LocalSettings(preferences).isLocalGalleryMode;
       _cachedToken = _preferences.getString(tokenKey);
       if (_cachedToken != null) {
         try {
@@ -133,14 +135,25 @@ class Configuration implements LockScreenHost, AccountDeletionHost {
         _cachedToken = await _secureStorage.read(key: tokenKey);
         if (_cachedToken == null) {
           _logger.warning("No token found in secure storage");
-          await logout(autoLogout: true);
+          if (isLocalGallery) {
+            await _preferences.remove(hasSecureTokenKey);
+          } else {
+            await logout(autoLogout: true);
+          }
         }
       }
       if (_cachedToken == null) {
-        _logger.info(
-          "(for debugging) Token not found, deleting all secure storage data",
-        );
-        await _secureStorage.deleteAll();
+        if (isLocalGallery) {
+          // Sign-in can write account credentials before it saves the session.
+          await _secureStorage.delete(key: tokenKey);
+          await setKey(null);
+          await setSecretKey(null);
+        } else {
+          _logger.info(
+            "(for debugging) Token not found, deleting all secure storage data",
+          );
+          await _secureStorage.deleteAll();
+        }
       } else {
         _logger.info(
           "(for debugging) Token found, loading secure storage data",

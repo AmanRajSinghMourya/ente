@@ -1,0 +1,1 @@
+- Fixed App Lock losing its PIN or password when Photos restarted in Local Gallery mode.
